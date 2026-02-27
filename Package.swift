@@ -13,13 +13,18 @@ let package = Package(
         .package(
             url: "https://github.com/twilio/twilio-voice-ios",
             from: "6.10.0"
+        ),
+        .package(
+            url: "https://github.com/twilio/twilio-conversations-ios",
+            from: "4.0.0"
         )
     ],
     targets: [
         .executableTarget(
             name: "BorealDialer",
             dependencies: [
-                .product(name: "TwilioVoice", package: "twilio-voice-ios")
+                .product(name: "TwilioVoice", package: "twilio-voice-ios"),
+                .product(name: "TwilioConversationsClient", package: "twilio-conversations-ios")
             ],
             path: ".",
             sources: [

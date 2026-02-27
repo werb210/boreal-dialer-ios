@@ -10,7 +10,7 @@ struct RootTabView: View {
 
             MessagesView()
                 .tabItem {
-                    Label("Messages", systemImage: "bubble.left.and.bubble.right.fill")
+                    Label("Messages", systemImage: "message")
                 }
 
             CallHistoryView()

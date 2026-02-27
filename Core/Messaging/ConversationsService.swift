@@ -10,15 +10,22 @@ final class ConversationsService: NSObject, ObservableObject {
     private var client: TwilioConversationsClient?
     private var conversation: TCHConversation?
 
-    func initialize(with token: String) {
-
-        TwilioConversationsClient.conversationsClient(withToken: token) { result, client in
-
+    func initialize(for lineId: String, with token: String) {
+        // token is already line-specific
+        TwilioConversationsClient.conversationsClient(
+            withToken: token
+        ) { result, client in
             if let client = client {
                 self.client = client
                 client.delegate = self
             }
         }
+    }
+
+    func reset() {
+        messages.removeAll()
+        conversation = nil
+        client = nil
     }
 
     func joinConversation(named name: String) {

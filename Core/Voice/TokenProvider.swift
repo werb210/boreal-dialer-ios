@@ -1,17 +1,20 @@
 import Foundation
 
 protocol TokenProvider {
-    func fetchAccessToken() async throws -> String
+    func fetchAccessToken(forLine lineId: String) async throws -> String
 }
 
 final class BFTokenProvider: TokenProvider {
 
-    func fetchAccessToken() async throws -> String {
+    func fetchAccessToken(forLine lineId: String) async throws -> String {
 
         let url = URL(string: "https://YOUR-BF-SERVER/api/voice/token")!
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+
+        let body = ["lineId": lineId]
+        request.httpBody = try JSONEncoder().encode(body)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let (data, _) = try await URLSession.shared.data(for: request)
@@ -20,8 +23,6 @@ final class BFTokenProvider: TokenProvider {
             let token: String
         }
 
-        let decoded = try JSONDecoder().decode(Response.self, from: data)
-
-        return decoded.token
+        return try JSONDecoder().decode(Response.self, from: data).token
     }
 }

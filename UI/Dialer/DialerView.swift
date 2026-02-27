@@ -4,6 +4,7 @@ struct DialerView: View {
 
     @State private var number = ""
     @ObservedObject private var callState = VoiceService.shared.getCallState()
+    @ObservedObject private var duration = CallDurationManager.shared
 
     var body: some View {
         VStack(spacing: 20) {
@@ -32,6 +33,9 @@ struct DialerView: View {
         case .active:
             VStack {
                 Text("On call with \(callState.activeNumber ?? "")")
+                Text(duration.formattedDuration)
+                    .font(.system(size: 28, weight: .medium, design: .monospaced))
+                    .foregroundColor(.white)
                 Button("End Call") {
                     VoiceService.shared.endCall()
                 }

@@ -4,6 +4,10 @@ import SwiftUI
 struct BorealDialerApp: App {
     @StateObject private var authManager = AuthManager.shared
 
+    init() {
+        _ = VoIPPushManager.shared
+    }
+
     var body: some Scene {
         WindowGroup {
             if authManager.isSignedIn {

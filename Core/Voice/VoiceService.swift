@@ -30,7 +30,16 @@ final class VoiceService: NSObject, VoiceServiceProtocol {
 
         Task {
             do {
-                let token = try await tokenProvider.fetchAccessToken()
+                let activeLine = LineManager.shared.activeLine
+
+                guard let line = activeLine else {
+                    callState.status = .failed("No active line")
+                    return
+                }
+
+                let token = try await tokenProvider.fetchAccessToken(
+                    forLine: line.id
+                )
 
                 let options = ConnectOptions(accessToken: token) { builder in
                     builder.params = ["To": number]
@@ -49,6 +58,13 @@ final class VoiceService: NSObject, VoiceServiceProtocol {
     func endCall() {
         activeCall?.disconnect()
         callState.status = .ended
+        callState.activeNumber = nil
+    }
+
+    func reset() {
+        activeCall?.disconnect()
+        activeCall = nil
+        callState.status = .idle
         callState.activeNumber = nil
     }
 

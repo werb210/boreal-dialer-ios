@@ -17,6 +17,13 @@ struct RootTabView: View {
                 .tabItem {
                     Label("History", systemImage: "clock.fill")
                 }
+
+            NavigationView {
+                LineSwitcherView()
+            }
+            .tabItem {
+                Label("Lines", systemImage: "square.stack")
+            }
         }
     }
 }

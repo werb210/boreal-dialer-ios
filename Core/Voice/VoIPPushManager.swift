@@ -1,10 +1,14 @@
 import Foundation
 import PushKit
 import CallKit
+import Combine
 
-final class VoIPPushManager: NSObject {
+final class VoIPPushManager: NSObject, ObservableObject {
 
     static let shared = VoIPPushManager()
+
+    @Published var incomingCaller: String?
+    @Published var showIncomingUI = false
 
     private let registry = PKPushRegistry(queue: .main)
 
@@ -46,8 +50,12 @@ extension VoIPPushManager: PKPushRegistryDelegate {
             return
         }
 
-        let uuid = UUID()
         let caller = payload.dictionaryPayload["caller"] as? String ?? "Unknown"
+
+        DispatchQueue.main.async {
+            self.incomingCaller = caller
+            self.showIncomingUI = true
+        }
 
         CallKitManager.shared.startCall(to: caller)
 

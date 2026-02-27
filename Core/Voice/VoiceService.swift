@@ -67,6 +67,16 @@ final class VoiceService: NSObject, VoiceServiceProtocol {
         callState.activeNumber = nil
     }
 
+    func answerIncomingCall() {
+        activeCall?.accept()
+        callState.status = .active
+    }
+
+    func rejectIncomingCall() {
+        activeCall?.reject()
+        callState.status = .ended
+    }
+
     func reset() {
         activeCall?.disconnect()
         activeCall = nil

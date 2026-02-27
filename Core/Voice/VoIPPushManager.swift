@@ -1,20 +1,17 @@
 import Foundation
 import PushKit
-import CallKit
-import Combine
+import TwilioVoice
 
 final class VoIPPushManager: NSObject, ObservableObject {
 
     static let shared = VoIPPushManager()
 
-    @Published var incomingCaller: String?
-    @Published var showIncomingUI = false
+    private var registry: PKPushRegistry!
 
-    private let registry = PKPushRegistry(queue: .main)
-
-    private override init() {
+    override init() {
         super.init()
 
+        registry = PKPushRegistry(queue: DispatchQueue.main)
         registry.delegate = self
         registry.desiredPushTypes = [.voIP]
     }
@@ -26,18 +23,14 @@ extension VoIPPushManager: PKPushRegistryDelegate {
                       didUpdate pushCredentials: PKPushCredentials,
                       for type: PKPushType) {
 
-        let deviceToken = pushCredentials.token.map { String(format: "%02x", $0) }.joined()
-
-        print("VoIP Push Token: \(deviceToken)")
-
-        // TODO: send token to BF server
-        // POST /api/voice/register-voip
-    }
-
-    func pushRegistry(_ registry: PKPushRegistry,
-                      didInvalidatePushTokenFor type: PKPushType) {
-
-        print("VoIP token invalidated")
+        TwilioVoiceSDK.register(
+            accessToken: "TEMP_TOKEN",
+            deviceToken: pushCredentials.token
+        ) { error in
+            if let error = error {
+                print("VoIP register error:", error)
+            }
+        }
     }
 
     func pushRegistry(_ registry: PKPushRegistry,
@@ -45,19 +38,11 @@ extension VoIPPushManager: PKPushRegistryDelegate {
                       for type: PKPushType,
                       completion: @escaping () -> Void) {
 
-        guard type == .voIP else {
-            completion()
-            return
-        }
-
-        let caller = payload.dictionaryPayload["caller"] as? String ?? "Unknown"
-
-        DispatchQueue.main.async {
-            self.incomingCaller = caller
-            self.showIncomingUI = true
-        }
-
-        CallKitManager.shared.startCall(to: caller)
+        TwilioVoiceSDK.handleNotification(
+            payload.dictionaryPayload,
+            delegate: VoiceService.shared,
+            delegateQueue: DispatchQueue.main
+        )
 
         completion()
     }

@@ -1,19 +1,49 @@
 import SwiftUI
 
 struct DialerView: View {
+
     @State private var number = ""
+    @ObservedObject private var callState = VoiceService.shared.getCallState()
 
     var body: some View {
-        VStack {
+        VStack(spacing: 20) {
+
             TextField("Enter phone number", text: $number)
                 .keyboardType(.phonePad)
                 .textFieldStyle(.roundedBorder)
-                .padding()
 
             Button("Call") {
-                TwilioManager.shared.makeCall(to: number)
+                VoiceService.shared.startCall(to: number)
             }
-            .padding()
+
+            callStatusView()
+
+        }
+        .padding()
+    }
+
+    @ViewBuilder
+    private func callStatusView() -> some View {
+        switch callState.status {
+        case .idle:
+            EmptyView()
+        case .connecting:
+            Text("Connecting...")
+        case .active:
+            VStack {
+                Text("On call with \(callState.activeNumber ?? "")")
+                Button("End Call") {
+                    VoiceService.shared.endCall()
+                }
+                .foregroundColor(.red)
+            }
+        case .ended:
+            Text("Call Ended")
+        case .failed(let error):
+            Text("Error: \(error)")
+                .foregroundColor(.red)
+        case .ringing:
+            Text("Ringing...")
         }
     }
 }

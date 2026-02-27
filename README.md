@@ -23,3 +23,24 @@ This is the initial scaffold for the Boreal native iOS dialer app.
 - Server must expose `POST /api/voice/token`
 - Twilio App SID required
 - TwiML App configured with Voice URL
+
+## VoIP Setup Requirements (Future Production)
+
+- Enable "Push Notifications"
+- Enable "Background Modes"
+- Enable "Voice over IP"
+- Add PushKit entitlement
+- Upload APNs VoIP certificate to Twilio Console
+
+Server must support:
+
+`POST /api/voice/register-voip`
+
+Body:
+
+```
+{
+  deviceToken: string,
+  userId: string
+}
+```

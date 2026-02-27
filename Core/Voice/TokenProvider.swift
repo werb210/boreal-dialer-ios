@@ -17,6 +17,11 @@ final class BFTokenProvider: TokenProvider {
         request.httpBody = try JSONEncoder().encode(body)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
+        let accessToken = try await AuthService.shared.getValidAccessToken()
+
+        request.setValue("Bearer \(accessToken)",
+                         forHTTPHeaderField: "Authorization")
+
         let (data, _) = try await URLSession.shared.data(for: request)
 
         struct Response: Decodable {

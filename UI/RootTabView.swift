@@ -1,6 +1,9 @@
 import SwiftUI
+import SwiftData
 
 struct RootTabView: View {
+    @Environment(\.modelContext) private var modelContext
+
     var body: some View {
         TabView {
             DialerView()
@@ -13,10 +16,12 @@ struct RootTabView: View {
                     Label("Messages", systemImage: "message")
                 }
 
-            CallHistoryView()
-                .tabItem {
-                    Label("History", systemImage: "clock.fill")
-                }
+            NavigationView {
+                CallHistoryView()
+            }
+            .tabItem {
+                Label("Calls", systemImage: "phone.fill")
+            }
 
             NavigationView {
                 LineSwitcherView()
@@ -24,6 +29,10 @@ struct RootTabView: View {
             .tabItem {
                 Label("Lines", systemImage: "square.stack")
             }
+        }
+        .onAppear {
+            VoiceService.shared.configureContext(modelContext)
+            ConversationsService.shared.configureContext(modelContext)
         }
     }
 }

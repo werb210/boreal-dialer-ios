@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import TwilioVoice
 
 protocol VoiceServiceProtocol {
@@ -12,6 +13,7 @@ final class VoiceService: NSObject, VoiceServiceProtocol {
 
     private let tokenProvider: TokenProvider
     private let callState = CallState()
+    private var modelContext: ModelContext?
 
     private var activeCall: Call?
     private var activeUUID: UUID?
@@ -19,6 +21,10 @@ final class VoiceService: NSObject, VoiceServiceProtocol {
     init(tokenProvider: TokenProvider = BFTokenProvider()) {
         self.tokenProvider = tokenProvider
         super.init()
+    }
+
+    func configureContext(_ context: ModelContext) {
+        modelContext = context
     }
 
     func startCall(to number: String) {
@@ -89,6 +95,20 @@ extension VoiceService: CallDelegate {
             callState.status = .failed(error.localizedDescription)
         } else {
             callState.status = .ended
+        }
+
+        if let line = LineManager.shared.activeLine,
+           let modelContext {
+
+            let log = CallLog(
+                lineId: line.id,
+                phoneNumber: callState.activeNumber ?? "Unknown",
+                direction: "outbound",
+                status: error == nil ? "completed" : "failed",
+                duration: nil
+            )
+
+            modelContext.insert(log)
         }
 
         activeCall = nil

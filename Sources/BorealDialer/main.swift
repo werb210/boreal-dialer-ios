@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 @main
 struct BorealDialerApp: App {
@@ -16,5 +17,9 @@ struct BorealDialerApp: App {
                 LoginView()
             }
         }
+        .modelContainer(for: [
+            CallLog.self,
+            StoredMessage.self
+        ])
     }
 }

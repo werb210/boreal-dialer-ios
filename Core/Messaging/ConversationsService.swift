@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import TwilioConversationsClient
 
 final class ConversationsService: NSObject, ObservableObject {
@@ -7,8 +8,14 @@ final class ConversationsService: NSObject, ObservableObject {
 
     @Published var messages: [MessageModel] = []
 
+    var modelContext: ModelContext?
+
     private var client: TwilioConversationsClient?
     private var conversation: TCHConversation?
+
+    func configureContext(_ context: ModelContext) {
+        self.modelContext = context
+    }
 
     func initialize(for lineId: String, with token: String) {
         // token is already line-specific
@@ -71,6 +78,21 @@ extension ConversationsService: TCHConversationDelegate {
             author: message.author ?? "",
             timestamp: message.dateCreated ?? Date()
         )
+
+        if let line = LineManager.shared.activeLine,
+           let context = modelContext {
+
+            let stored = StoredMessage(
+                id: message.sid ?? UUID().uuidString,
+                lineId: line.id,
+                conversationId: conversation.sid ?? "unknown",
+                body: message.body ?? "",
+                author: message.author ?? "",
+                timestamp: message.dateCreated ?? Date()
+            )
+
+            context.insert(stored)
+        }
 
         DispatchQueue.main.async {
             self.messages.append(model)

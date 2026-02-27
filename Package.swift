@@ -10,13 +10,17 @@ let package = Package(
         .executable(name: "BorealDialer", targets: ["BorealDialer"])
     ],
     dependencies: [
-        // Add Swift Package dependencies here.
-        // TwilioVoice SDK will be added via Xcode later.
+        .package(
+            url: "https://github.com/twilio/twilio-voice-ios",
+            from: "6.10.0"
+        )
     ],
     targets: [
         .executableTarget(
             name: "BorealDialer",
-            dependencies: [],
+            dependencies: [
+                .product(name: "TwilioVoice", package: "twilio-voice-ios")
+            ],
             path: ".",
             sources: [
                 "Sources/BorealDialer",

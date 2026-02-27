@@ -3,7 +3,7 @@ import SwiftData
 
 @main
 struct BorealDialerApp: App {
-    @StateObject private var authManager = AuthManager.shared
+    @StateObject var auth = AuthService.shared
 
     init() {
         _ = VoIPPushManager.shared
@@ -11,7 +11,7 @@ struct BorealDialerApp: App {
 
     var body: some Scene {
         WindowGroup {
-            if authManager.isSignedIn {
+            if auth.isAuthenticated {
                 RootTabView()
             } else {
                 LoginView()

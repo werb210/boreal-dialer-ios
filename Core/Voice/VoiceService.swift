@@ -1,13 +1,14 @@
 import Foundation
 import SwiftData
 import TwilioVoice
+import CallKit
 
 protocol VoiceServiceProtocol {
     func startCall(to number: String)
     func endCall()
 }
 
-final class VoiceService: NSObject, VoiceServiceProtocol {
+final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
 
     static let shared = VoiceService()
 
@@ -15,24 +16,34 @@ final class VoiceService: NSObject, VoiceServiceProtocol {
     private let callState = CallState()
     private var modelContext: ModelContext?
 
-    private var activeCall: Call?
-    private var activeUUID: UUID?
+    private var callKitProvider: CXProvider!
+    private var callKitController = CXCallController()
+
+    private(set) var activeCall: Call?
 
     init(tokenProvider: TokenProvider = BFTokenProvider()) {
         self.tokenProvider = tokenProvider
         super.init()
+
+        let config = CXProviderConfiguration(localizedName: "Boreal")
+        config.supportsVideo = false
+        config.maximumCallsPerCallGroup = 1
+        config.supportedHandleTypes = [.phoneNumber]
+
+        callKitProvider = CXProvider(configuration: config)
+        callKitProvider.setDelegate(self, queue: nil)
     }
 
     func configureContext(_ context: ModelContext) {
         modelContext = context
     }
 
+    // MARK: - Outgoing
+
     func startCall(to number: String) {
 
         callState.status = .connecting
         callState.activeNumber = number
-
-        activeUUID = UUID()
 
         Task {
             do {
@@ -52,11 +63,31 @@ final class VoiceService: NSObject, VoiceServiceProtocol {
                 }
 
                 activeCall = TwilioVoiceSDK.connect(options: options, delegate: self)
-
                 CallKitManager.shared.startCall(to: number)
 
             } catch {
                 callState.status = .failed("Token fetch failed")
+            }
+        }
+    }
+
+    // MARK: - Incoming
+
+    func handleIncomingCall(_ call: Call) {
+        activeCall = call
+        activeCall?.delegate = self
+
+        let update = CXCallUpdate()
+        update.remoteHandle = CXHandle(type: .phoneNumber,
+                                       value: call.from ?? "Unknown")
+        update.hasVideo = false
+
+        callKitProvider.reportNewIncomingCall(
+            with: UUID(),
+            update: update
+        ) { error in
+            if let error = error {
+                print("CallKit report error:", error)
             }
         }
     }
@@ -89,10 +120,19 @@ final class VoiceService: NSObject, VoiceServiceProtocol {
     }
 }
 
+extension VoiceService: CXProviderDelegate {
+
+    func providerDidReset(_ provider: CXProvider) {
+        activeCall?.disconnect()
+        activeCall = nil
+        callState.status = .idle
+    }
+}
+
 extension VoiceService: CallDelegate {
 
     func callDidStartRinging(_ call: Call) {
-        callState.status = .ringing
+        print("Call ringing")
     }
 
     func callDidConnect(_ call: Call) {
@@ -112,7 +152,7 @@ extension VoiceService: CallDelegate {
 
             let log = CallLog(
                 lineId: line.id,
-                phoneNumber: callState.activeNumber ?? "Unknown",
+                phoneNumber: callState.activeNumber ?? (call.from ?? "Unknown"),
                 direction: "outbound",
                 status: error == nil ? "completed" : "failed",
                 duration: nil
@@ -122,5 +162,18 @@ extension VoiceService: CallDelegate {
         }
 
         activeCall = nil
+    }
+
+    func callDidFailToConnect(_ call: Call, error: Error) {
+        callState.status = .failed(error.localizedDescription)
+        activeCall = nil
+    }
+}
+
+extension VoiceService: NotificationDelegate {
+
+    func callInviteReceived(_ callInvite: CallInvite) {
+        let call = callInvite.accept(with: self)
+        handleIncomingCall(call)
     }
 }

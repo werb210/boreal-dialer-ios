@@ -1,0 +1,17 @@
+# iOS / Xcode
+.DS_Store
+build/
+DerivedData/
+xcuserdata/
+*.xcworkspace
+*.xcuserstate
+*.xcodeproj/project.xcworkspace/
+
+# Swift Package
+/.build
+/.swiftpm
+
+# Secrets
+*.p8
+*.pem
+.env

@@ -13,6 +13,7 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
     static let shared = VoiceService()
 
     private let tokenProvider: TokenProvider
+    private let durationManager = CallDurationManager.shared
     private let callState = CallState()
     private var modelContext: ModelContext?
 
@@ -125,6 +126,7 @@ extension VoiceService: CXProviderDelegate {
     func providerDidReset(_ provider: CXProvider) {
         activeCall?.disconnect()
         activeCall = nil
+        durationManager.stop()
         callState.status = .idle
     }
 }
@@ -137,6 +139,7 @@ extension VoiceService: CallDelegate {
 
     func callDidConnect(_ call: Call) {
         callState.status = .active
+        durationManager.start()
     }
 
     func callDidDisconnect(_ call: Call, error: Error?) {
@@ -146,6 +149,8 @@ extension VoiceService: CallDelegate {
         } else {
             callState.status = .ended
         }
+
+        durationManager.stop()
 
         if let line = LineManager.shared.activeLine,
            let modelContext {
@@ -166,6 +171,7 @@ extension VoiceService: CallDelegate {
 
     func callDidFailToConnect(_ call: Call, error: Error) {
         callState.status = .failed(error.localizedDescription)
+        durationManager.stop()
         activeCall = nil
     }
 }

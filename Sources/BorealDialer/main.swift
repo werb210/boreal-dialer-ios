@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 @main
 struct BorealDialerApp: App {
@@ -11,10 +12,17 @@ struct BorealDialerApp: App {
 
     var body: some Scene {
         WindowGroup {
-            if auth.isAuthenticated {
-                RootTabView()
-            } else {
-                LoginView()
+            Group {
+                if auth.isAuthenticated {
+                    RootTabView()
+                } else {
+                    LoginView()
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(
+                for: UIApplication.willEnterForegroundNotification
+            )) { _ in
+                CallDurationManager.shared.resumeIfNeeded()
             }
         }
         .modelContainer(for: [

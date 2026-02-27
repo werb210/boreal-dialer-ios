@@ -11,6 +11,7 @@ final class VoiceService: VoiceServiceProtocol {
 
     private let tokenProvider: TokenProvider
     private let callState = CallState()
+    private var activeUUID: UUID?
 
     init(tokenProvider: TokenProvider = MockTokenProvider()) {
         self.tokenProvider = tokenProvider
@@ -19,6 +20,10 @@ final class VoiceService: VoiceServiceProtocol {
     func startCall(to number: String) {
         callState.status = .connecting
         callState.activeNumber = number
+
+        activeUUID = UUID()
+
+        CallKitManager.shared.startCall(to: number)
 
         Task {
             do {
@@ -32,6 +37,10 @@ final class VoiceService: VoiceServiceProtocol {
     }
 
     func endCall() {
+        if let uuid = activeUUID {
+            CallKitManager.shared.endCall(uuid: uuid)
+        }
+
         callState.status = .ended
         callState.activeNumber = nil
     }

@@ -1,5 +1,4 @@
 import Foundation
-import SwiftData
 import TwilioVoice
 import CallKit
 
@@ -15,7 +14,8 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
     private let tokenProvider: TokenProvider
     private let durationManager = CallDurationManager.shared
     private let callState = CallState()
-    private var modelContext: ModelContext?
+    private var callStartDate: Date?
+    private var currentDirection: CallDirection = .outbound
 
     private var callKitProvider: CXProvider!
     private var callKitController = CXCallController()
@@ -35,13 +35,12 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
         callKitProvider.setDelegate(self, queue: nil)
     }
 
-    func configureContext(_ context: ModelContext) {
-        modelContext = context
-    }
-
     // MARK: - Outgoing
 
     func startCall(to number: String) {
+
+        currentDirection = .outbound
+        callStartDate = Date()
 
         callState.status = .connecting
         callState.activeNumber = number
@@ -75,6 +74,9 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
     // MARK: - Incoming
 
     func handleIncomingCall(_ call: Call) {
+        currentDirection = .inbound
+        callStartDate = Date()
+
         activeCall = call
         activeCall?.delegate = self
 
@@ -144,34 +146,53 @@ extension VoiceService: CallDelegate {
 
     func callDidDisconnect(_ call: Call, error: Error?) {
 
-        if let error = error {
-            callState.status = .failed(error.localizedDescription)
-        } else {
-            callState.status = .ended
-        }
+        let end = Date()
+        let start = callStartDate ?? end
+        let duration = Int(end.timeIntervalSince(start))
+
+        let result: CallResult = {
+            if error != nil { return .failed }
+            if duration == 0 && currentDirection == .inbound {
+                return .missed
+            }
+            return .completed
+        }()
+
+        let log = CallLog(
+            id: UUID(),
+            phoneNumber: call.from ?? call.to ?? "Unknown",
+            direction: currentDirection,
+            result: result,
+            startedAt: start,
+            endedAt: end,
+            durationSeconds: duration
+        )
+
+        CallLogStore.shared.add(log)
 
         durationManager.stop()
-
-        if let line = LineManager.shared.activeLine,
-           let modelContext {
-
-            let log = CallLog(
-                lineId: line.id,
-                phoneNumber: callState.activeNumber ?? (call.from ?? "Unknown"),
-                direction: "outbound",
-                status: error == nil ? "completed" : "failed",
-                duration: nil
-            )
-
-            modelContext.insert(log)
-        }
-
+        callState.status = .ended
         activeCall = nil
     }
 
     func callDidFailToConnect(_ call: Call, error: Error) {
-        callState.status = .failed(error.localizedDescription)
+
+        let now = Date()
+
+        let log = CallLog(
+            id: UUID(),
+            phoneNumber: call.from ?? call.to ?? "Unknown",
+            direction: currentDirection,
+            result: .failed,
+            startedAt: callStartDate ?? now,
+            endedAt: now,
+            durationSeconds: 0
+        )
+
+        CallLogStore.shared.add(log)
+
         durationManager.stop()
+        callState.status = .failed(error.localizedDescription)
         activeCall = nil
     }
 }

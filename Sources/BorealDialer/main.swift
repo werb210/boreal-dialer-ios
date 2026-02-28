@@ -26,7 +26,6 @@ struct BorealDialerApp: App {
             }
         }
         .modelContainer(for: [
-            CallLog.self,
             StoredMessage.self
         ])
     }

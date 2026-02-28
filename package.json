@@ -1,0 +1,15 @@
+{
+  "name": "boreal-dialer-backend",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test backend/tests/*.test.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "twilio": "^5.4.0"
+  },
+  "devDependencies": {
+    "supertest": "^7.1.0"
+  }
+}

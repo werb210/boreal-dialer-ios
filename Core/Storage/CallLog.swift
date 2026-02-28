@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 @Model
-final class CallLog {
+final class PersistedCallLog {
 
     var id: UUID
     var lineId: String

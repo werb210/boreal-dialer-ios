@@ -30,7 +30,8 @@ let package = Package(
             sources: [
                 "Sources/BorealDialer",
                 "Core",
-                "UI"
+                "UI",
+                "Features"
             ]
         ),
         .testTarget(

@@ -1,10 +1,10 @@
 import SwiftUI
 import SwiftData
 
-struct CallHistoryView: View {
+struct LegacyCallHistoryView: View {
 
-    @Query(sort: \CallLog.timestamp, order: .reverse)
-    var calls: [CallLog]
+    @Query(sort: \PersistedCallLog.timestamp, order: .reverse)
+    var calls: [PersistedCallLog]
 
     var body: some View {
         List(calls) { call in

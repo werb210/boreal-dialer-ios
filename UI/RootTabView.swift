@@ -31,7 +31,6 @@ struct RootTabView: View {
             }
         }
         .onAppear {
-            VoiceService.shared.configureContext(modelContext)
             ConversationsService.shared.configureContext(modelContext)
         }
     }

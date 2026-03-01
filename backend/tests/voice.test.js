@@ -23,10 +23,86 @@ test('token auth/role and success with request id', async () => {
     .set('Authorization', auth('u1', 'staff'))
     .set('x-request-id', 'rid-token')
     .expect(200);
-  assert.equal(ok.body.identity, 'u1');
+  assert.equal(ok.body.identity, 'staff:u1');
   assert.ok(ok.body.token);
   assert.equal(ok.body.requestId, 'rid-token');
   assert.equal(ok.headers['x-request-id'], 'rid-token');
+});
+
+test('presence heartbeat and /api/voice/call rings assigned first then fallback', async () => {
+  const ringAttempts = [];
+  const app = createApp(env, {
+    findAssignedStaffId: async () => 'a1',
+    ringStaffLeg: async ({ staffId }) => {
+      const sid = `CA_${staffId}_${ringAttempts.length}`;
+      ringAttempts.push(staffId);
+      return { sid };
+    },
+  });
+
+  await request(app)
+    .post('/api/voice/presence/heartbeat')
+    .set('Authorization', auth('a1', 'staff'))
+    .send({ source: 'dialer', status: 'online' })
+    .expect(200);
+
+  await request(app)
+    .post('/api/voice/presence/heartbeat')
+    .set('Authorization', auth('a2', 'staff'))
+    .send({ source: 'portal', status: 'online' })
+    .expect(200);
+
+  const started = await request(app)
+    .post('/api/voice/call')
+    .set('Authorization', auth('dispatcher', 'admin'))
+    .send({ fromIdentity: 'client:c-1', toClientId: 'c-1' })
+    .expect(200);
+
+  assert.equal(started.body.callSession.assignedStaffId, 'a1');
+  assert.deepEqual(ringAttempts, ['a1']);
+});
+
+test('answered status cancels other ringing legs', async () => {
+  const canceledSids = [];
+  let sidCount = 0;
+  const app = createApp(env, {
+    findAssignedStaffId: async () => null,
+    ringStaffLeg: async ({ staffId }) => ({ sid: `CA_${staffId}_${++sidCount}` }),
+    cancelRingLeg: async ({ sid }) => {
+      canceledSids.push(sid);
+      return true;
+    },
+  });
+
+  await request(app)
+    .post('/api/voice/presence/heartbeat')
+    .set('Authorization', auth('a1', 'staff'))
+    .send({ source: 'dialer', status: 'online' })
+    .expect(200);
+
+  await request(app)
+    .post('/api/voice/presence/heartbeat')
+    .set('Authorization', auth('a2', 'staff'))
+    .send({ source: 'portal', status: 'online' })
+    .expect(200);
+
+  await request(app)
+    .post('/api/voice/call')
+    .set('Authorization', auth('dispatcher', 'admin'))
+    .send({ fromIdentity: 'client:c-2', toClientId: 'c-2' })
+    .expect(200);
+
+  const body = { CallSid: 'CA_a1_1', CallStatus: 'answered' };
+  const url = 'http://127.0.0.1/api/voice/status';
+  const sig = twilio.getExpectedTwilioSignature(env.TWILIO_AUTH_TOKEN, url, body);
+  await request(app)
+    .post('/api/voice/status')
+    .set('Host', '127.0.0.1')
+    .set('X-Twilio-Signature', sig)
+    .send(body)
+    .expect(200);
+
+  assert.deepEqual(canceledSids, ['CA_a2_2']);
 });
 
 test('503 when voice disabled except webhook', async () => {

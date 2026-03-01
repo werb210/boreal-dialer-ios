@@ -106,6 +106,7 @@ function createApp(env = process.env, deps = {}) {
   const callsRepo = deps.callsRepo || createInMemoryCallsRepo();
   const startTwilioCall = deps.startTwilioCall || defaultTwilioStartCall;
   const logger = deps.logger || console;
+  const recordingsByCallSid = new Map();
 
   const voiceEnabled = env.VOICE_ENABLED !== 'false';
 
@@ -282,6 +283,43 @@ function createApp(env = process.env, deps = {}) {
   app.all('/api/twilio/voice', (_req, res) => {
     res.set('Content-Type', 'text/xml');
     return res.status(200).send('<Response><Dial><Client>agent</Client></Dial></Response>');
+  });
+
+  app.post('/api/voice/record/start', requireAuth, requireStaff, requireVoiceEnabled, (req, res) => {
+    const { callSid, consentState } = req.body || {};
+    if (!callSid) return makeError(res, req, 400, 'bad_request', 'callSid is required');
+
+    const record = {
+      callSid,
+      recordingSid: `RE${crypto.randomUUID().replace(/-/g, '').slice(0, 30)}`,
+      status: 'recording',
+      encryptionAtRest: true,
+      retentionPolicyDays: Number(env.RECORDING_RETENTION_DAYS || 30),
+      consentState: consentState || 'unknown',
+      startedAt: new Date().toISOString(),
+      stoppedAt: null,
+      silo: req.headers['x-silo'] || 'bf',
+    };
+
+    recordingsByCallSid.set(callSid, record);
+    logger.info({ event: 'voice_recording_started', callSid, requestId: req.requestId, silo: record.silo });
+
+    return res.status(200).json({ recording: record, requestId: req.requestId });
+  });
+
+  app.post('/api/voice/record/stop', requireAuth, requireStaff, requireVoiceEnabled, (req, res) => {
+    const { callSid } = req.body || {};
+    if (!callSid) return makeError(res, req, 400, 'bad_request', 'callSid is required');
+
+    const existing = recordingsByCallSid.get(callSid);
+    if (!existing) return makeError(res, req, 404, 'not_found', 'Recording not found');
+
+    existing.status = 'stopped';
+    existing.stoppedAt = new Date().toISOString();
+
+    logger.info({ event: 'voice_recording_stopped', callSid, requestId: req.requestId, silo: existing.silo });
+
+    return res.status(200).json({ recording: existing, requestId: req.requestId });
   });
 
   app.use((req, res) => makeError(res, req, 404, 'not_found', 'Route not found'));

@@ -1,5 +1,9 @@
+import AVFoundation
 import SwiftUI
 import UIKit
+#if canImport(Sentry)
+import Sentry
+#endif
 
 @main
 struct BorealDialerApp: App {
@@ -12,6 +16,17 @@ struct BorealDialerApp: App {
         _ = NetworkMonitor.shared
         _ = ReachabilityManager.shared
         _ = PersistenceController.shared
+
+        try? AVAudioSession.sharedInstance().setCategory(.playAndRecord, options: [.allowBluetooth])
+
+        ReconnectionController.shared.start()
+#if canImport(Sentry)
+        SentrySDK.start { options in
+            options.dsn = "<dsn>"
+            options.tracesSampleRate = 1.0
+        }
+#endif
+        Telemetry.event("app_boot")
     }
 
     var body: some Scene {
@@ -37,6 +52,7 @@ struct BorealDialerApp: App {
                     Task {
                         await OfflineQueue.shared.flush()
                     }
+                    Telemetry.event("network_recovered")
                 }
             }
             .onChange(of: scenePhase) { phase in

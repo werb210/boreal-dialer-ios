@@ -36,6 +36,10 @@ final class AuthService: ObservableObject {
 
         await MainActor.run {
             self.isAuthenticated = true
+            WebSocketManager.shared.connect(
+                line: LineManager.shared.activeLine,
+                accessToken: decoded.accessToken
+            )
         }
     }
 
@@ -74,6 +78,7 @@ final class AuthService: ObservableObject {
     }
 
     func logout() {
+        WebSocketManager.shared.disconnect()
         KeychainService.shared.delete("accessToken")
         KeychainService.shared.delete("refreshToken")
         isAuthenticated = false

@@ -87,6 +87,22 @@ final class ConversationsService: NSObject, ObservableObject {
         })
     }
 
+
+    func handleIncoming(_ payload: DataContainer) {
+        guard let number = payload.number,
+              let body = payload.body else { return }
+
+        let message = MessageModel(
+            id: payload.id ?? UUID().uuidString,
+            body: body,
+            author: number,
+            timestamp: payload.timestamp ?? Date()
+        )
+
+        persist(message)
+        messages.append(message)
+    }
+
     func retryQueuedMessages() {
         guard ReachabilityManager.shared.isOnline else { return }
         let pending = queuedMessages
@@ -96,6 +112,19 @@ final class ConversationsService: NSObject, ObservableObject {
         for message in pending {
             sendMessage(message.body)
         }
+    }
+
+
+    private func persist(_ message: MessageModel) {
+        let line = LineManager.shared.activeLine
+        persistMessage(
+            id: message.id,
+            body: message.body,
+            number: message.author,
+            direction: "inbound",
+            timestamp: message.timestamp,
+            lineId: line.id
+        )
     }
 
     private func queueMessage(body: String, number: String, lineId: String) {

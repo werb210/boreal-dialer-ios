@@ -16,6 +16,7 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
     private let callState = CallState()
     private var callStartDate: Date?
     private var currentDirection: CallDirection = .outbound
+    private var pollingTask: Task<Void, Never>?
 
     private var callKitProvider: CXProvider!
     private var callKitController = CXCallController()
@@ -33,9 +34,9 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
 
         callKitProvider = CXProvider(configuration: config)
         callKitProvider.setDelegate(self, queue: nil)
-    }
 
-    // MARK: - Outgoing
+        startActiveCallPolling()
+    }
 
     func startCall(to number: String) {
 
@@ -45,18 +46,22 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
         callState.status = .connecting
         callState.activeNumber = number
 
+        let line = LineManager.shared.activeLine
+        persistCall(
+            CallModel(
+                id: UUID().uuidString,
+                number: number,
+                direction: "outbound",
+                status: "connecting",
+                startedAt: callStartDate ?? Date(),
+                endedAt: nil
+            ),
+            line: line
+        )
+
         Task {
             do {
-                let activeLine = LineManager.shared.activeLine
-
-                guard let line = activeLine else {
-                    callState.status = .failed("No active line")
-                    return
-                }
-
-                let token = try await tokenProvider.fetchAccessToken(
-                    forLine: line.id
-                )
+                let token = try await tokenProvider.fetchAccessToken(forLine: line.id)
 
                 let options = ConnectOptions(accessToken: token) { builder in
                     builder.params = ["To": number]
@@ -70,8 +75,6 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
             }
         }
     }
-
-    // MARK: - Incoming
 
     func handleIncomingCall(_ call: Call) {
         currentDirection = .inbound
@@ -93,6 +96,18 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
                 print("CallKit report error:", error)
             }
         }
+
+        persistCall(
+            CallModel(
+                id: UUID().uuidString,
+                number: call.from ?? "Unknown",
+                direction: "inbound",
+                status: "ringing",
+                startedAt: callStartDate ?? Date(),
+                endedAt: nil
+            ),
+            line: LineManager.shared.activeLine
+        )
     }
 
     func endCall() {
@@ -120,6 +135,51 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
 
     func getCallState() -> CallState {
         callState
+    }
+
+    private func startActiveCallPolling() {
+        pollingTask?.cancel()
+        pollingTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 10_000_000_000)
+                do {
+                    let activeCalls = try await NetworkManager.shared.fetchActiveCalls()
+                    handleRemoteCallUpdates(activeCalls)
+                } catch {
+                    continue
+                }
+            }
+        }
+    }
+
+    private func handleRemoteCallUpdates(_ calls: [RemoteCallStatus]) {
+        let line = LineManager.shared.activeLine
+        for call in calls {
+            persistCall(
+                CallModel(
+                    id: call.id,
+                    number: call.number,
+                    direction: "inbound",
+                    status: call.status,
+                    startedAt: Date(),
+                    endedAt: call.status == "ended" ? Date() : nil
+                ),
+                line: line
+            )
+        }
+    }
+
+    func persistCall(_ call: CallModel, line: Line) {
+        let context = PersistenceController.shared.container.viewContext
+        let entity = CallEntity(context: context)
+        entity.id = call.id
+        entity.number = call.number
+        entity.direction = call.direction
+        entity.status = call.status
+        entity.startedAt = call.startedAt
+        entity.endedAt = call.endedAt
+        entity.lineId = line.id
+        try? context.save()
     }
 }
 
@@ -169,6 +229,17 @@ extension VoiceService: CallDelegate {
         )
 
         CallLogStore.shared.add(log)
+        persistCall(
+            CallModel(
+                id: log.id.uuidString,
+                number: log.phoneNumber,
+                direction: log.direction.rawValue,
+                status: log.result.rawValue,
+                startedAt: log.startedAt,
+                endedAt: log.endedAt
+            ),
+            line: LineManager.shared.activeLine
+        )
 
         durationManager.stop()
         callState.status = .ended
@@ -190,6 +261,17 @@ extension VoiceService: CallDelegate {
         )
 
         CallLogStore.shared.add(log)
+        persistCall(
+            CallModel(
+                id: log.id.uuidString,
+                number: log.phoneNumber,
+                direction: log.direction.rawValue,
+                status: log.result.rawValue,
+                startedAt: log.startedAt,
+                endedAt: log.endedAt
+            ),
+            line: LineManager.shared.activeLine
+        )
 
         durationManager.stop()
         callState.status = .failed(error.localizedDescription)

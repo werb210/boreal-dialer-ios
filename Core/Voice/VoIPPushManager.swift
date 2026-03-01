@@ -1,49 +1,37 @@
 import Foundation
 import PushKit
-import TwilioVoice
+import CallKit
 
-final class VoIPPushManager: NSObject, ObservableObject {
+final class VoIPPushManager: NSObject, PKPushRegistryDelegate {
 
     static let shared = VoIPPushManager()
 
-    private var registry: PKPushRegistry!
+    private var registry: PKPushRegistry?
 
-    override init() {
-        super.init()
-
-        registry = PKPushRegistry(queue: DispatchQueue.main)
-        registry.delegate = self
-        registry.desiredPushTypes = [.voIP]
+    func configure() {
+        registry = PKPushRegistry(queue: .main)
+        registry?.delegate = self
+        registry?.desiredPushTypes = [.voIP]
     }
-}
-
-extension VoIPPushManager: PKPushRegistryDelegate {
 
     func pushRegistry(_ registry: PKPushRegistry,
                       didUpdate pushCredentials: PKPushCredentials,
                       for type: PKPushType) {
+        let token = pushCredentials.token.map { String(format: "%02x", $0) }.joined()
+        print("VoIP Token:", token)
+    }
 
-        TwilioVoiceSDK.register(
-            accessToken: "TEMP_TOKEN",
-            deviceToken: pushCredentials.token
-        ) { error in
-            if let error = error {
-                print("VoIP register error:", error)
-            }
-        }
+    func pushRegistry(_ registry: PKPushRegistry,
+                      didReceiveIncomingPushWith payload: PKPushPayload,
+                      for type: PKPushType) {
+        CallKitManager.shared.reportIncomingCall(from: "Unknown")
     }
 
     func pushRegistry(_ registry: PKPushRegistry,
                       didReceiveIncomingPushWith payload: PKPushPayload,
                       for type: PKPushType,
                       completion: @escaping () -> Void) {
-
-        TwilioVoiceSDK.handleNotification(
-            payload.dictionaryPayload,
-            delegate: VoiceService.shared,
-            delegateQueue: DispatchQueue.main
-        )
-
+        CallKitManager.shared.reportIncomingCall(from: "Unknown")
         completion()
     }
 }

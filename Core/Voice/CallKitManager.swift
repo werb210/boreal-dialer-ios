@@ -9,8 +9,7 @@ final class CallKitManager: NSObject {
     private let callController = CXCallController()
 
     private override init() {
-        let configuration = CXProviderConfiguration(localizedName: "Boreal Financial")
-
+        let configuration = CXProviderConfiguration(localizedName: "Boreal")
         configuration.supportsVideo = false
         configuration.maximumCallsPerCallGroup = 1
         configuration.supportedHandleTypes = [.phoneNumber]
@@ -18,7 +17,6 @@ final class CallKitManager: NSObject {
         provider = CXProvider(configuration: configuration)
 
         super.init()
-
         provider.setDelegate(self, queue: nil)
     }
 
@@ -30,7 +28,7 @@ final class CallKitManager: NSObject {
         let transaction = CXTransaction(action: startCallAction)
 
         callController.request(transaction) { error in
-            if let error = error {
+            if let error {
                 print("CallKit start call error: \(error.localizedDescription)")
             }
         }
@@ -39,12 +37,23 @@ final class CallKitManager: NSObject {
         provider.reportOutgoingCall(with: callUUID, connectedAt: Date())
     }
 
+    func reportIncomingCall(from number: String) {
+        let update = CXCallUpdate()
+        update.remoteHandle = CXHandle(type: .phoneNumber, value: number)
+
+        provider.reportNewIncomingCall(with: UUID(), update: update) { error in
+            if let error {
+                print("Incoming call report failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
     func endCall(uuid: UUID) {
         let endCallAction = CXEndCallAction(call: uuid)
         let transaction = CXTransaction(action: endCallAction)
 
         callController.request(transaction) { error in
-            if let error = error {
+            if let error {
                 print("CallKit end call error: \(error.localizedDescription)")
             }
         }

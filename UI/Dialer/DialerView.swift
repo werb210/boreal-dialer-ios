@@ -5,6 +5,7 @@ struct DialerView: View {
     @State private var number = ""
     @ObservedObject private var callState = VoiceService.shared.getCallState()
     @ObservedObject private var duration = CallDurationManager.shared
+    @ObservedObject private var reachability = ReachabilityManager.shared
 
     var body: some View {
         VStack(spacing: 20) {
@@ -15,6 +16,12 @@ struct DialerView: View {
 
             Button("Call") {
                 VoiceService.shared.startCall(to: number)
+            }
+            .disabled(!reachability.isOnline || number.isEmpty)
+
+            if !reachability.isOnline {
+                Text("Offline: calling disabled")
+                    .foregroundColor(.orange)
             }
 
             callStatusView()

@@ -9,7 +9,13 @@ final class VoiceManager: NSObject, ObservableObject {
     @Published private(set) var activeCall: Call?
 
     private var accessToken: String?
+    private var tokenRefreshTask: Task<Void, Never>?
+    private var inviteUUIDMap: [UUID: CallInvite] = [:]
     private var pendingInvite: CallInvite?
+
+    var currentToken: String {
+        accessToken ?? ""
+    }
 
     private override init() {
         super.init()
@@ -19,8 +25,59 @@ final class VoiceManager: NSObject, ObservableObject {
         guard let token = await fetchToken() else { return }
 
         accessToken = token
+        scheduleTokenRefresh()
         TwilioVoiceSDK.audioDevice = DefaultAudioDevice()
+        PushManager.shared.registerDeviceTokenWithTwilio()
         sendPresence(status: "online")
+    }
+
+    func acceptCallFromCallKit() {
+        guard let invite = pendingInvite else { return }
+        activeCall = invite.accept(with: self)
+        pendingInvite = nil
+        inviteUUIDMap = inviteUUIDMap.filter { $0.value.callSid != invite.callSid }
+        sendPresence(status: "busy")
+    }
+
+    func endActiveCall() {
+        activeCall?.disconnect()
+        activeCall = nil
+        pendingInvite?.reject()
+        pendingInvite = nil
+        inviteUUIDMap.removeAll()
+        sendPresence(status: "online")
+    }
+
+    func acceptCallFromCallKit(uuid: UUID) {
+        guard let invite = inviteUUIDMap[uuid] else { return }
+        pendingInvite = invite
+        acceptCallFromCallKit()
+    }
+
+    func rejectCallFromCallKit(uuid: UUID) {
+        if let invite = inviteUUIDMap[uuid] {
+            invite.reject()
+            inviteUUIDMap.removeValue(forKey: uuid)
+            if pendingInvite?.callSid == invite.callSid {
+                pendingInvite = nil
+            }
+        }
+        endActiveCall()
+    }
+
+    func handleNetworkReconnect() {
+        PushManager.shared.registerDeviceTokenWithTwilio()
+    }
+
+    private func scheduleTokenRefresh() {
+        tokenRefreshTask?.cancel()
+        tokenRefreshTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 50 * 60 * 1_000_000_000)
+                guard !Task.isCancelled else { return }
+                await self?.initialize()
+            }
+        }
     }
 
     private func fetchToken() async -> String? {
@@ -103,6 +160,10 @@ extension VoiceManager: CallDelegate {
         print("Disconnected")
         activeCall = nil
         sendPresence(status: "online")
+        if let uuid = inviteUUIDMap.first(where: { $0.value.callSid == call.sid })?.key {
+            CallKitManager.shared.endCall(uuid: uuid)
+            inviteUUIDMap.removeValue(forKey: uuid)
+        }
         notifyServerStatus(status: "completed")
     }
 
@@ -130,14 +191,21 @@ extension VoiceManager: NotificationDelegate {
 
     func callInviteReceived(_ callInvite: CallInvite) {
         pendingInvite = callInvite
-        DispatchQueue.main.async {
-            IncomingCallController.present(invite: callInvite)
-        }
+        let uuid = UUID()
+        inviteUUIDMap[uuid] = callInvite
+        CallKitManager.shared.reportIncomingCall(
+            uuid: uuid,
+            handle: callInvite.from ?? "Incoming"
+        )
     }
 
     func cancelledCallInviteReceived(_ cancelledCallInvite: CancelledCallInvite, error: (any Error)?) {
         if pendingInvite?.callSid == cancelledCallInvite.callSid {
             pendingInvite = nil
+        }
+        if let uuid = inviteUUIDMap.first(where: { $0.value.callSid == cancelledCallInvite.callSid })?.key {
+            CallKitManager.shared.endCall(uuid: uuid)
+            inviteUUIDMap.removeValue(forKey: uuid)
         }
     }
 }

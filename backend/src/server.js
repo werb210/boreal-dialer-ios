@@ -1,7 +1,8 @@
 const express = require('express');
 const crypto = require('crypto');
-const twilio = require('twilio');
 const http = require('http');
+const createVoiceRouter = require('./modules/voice/voice.routes');
+const { updatePresence } = require('./modules/voice/presence');
 
 const STATUS_MAP = {
   initiated: 'initiated',
@@ -252,6 +253,14 @@ function createApp(env = process.env, deps = {}) {
     return next();
   }
 
+  function requireVoiceTokenRole(req, res, next) {
+    const role = String(req.user.role || '').toLowerCase();
+    if (!['staff', 'admin', 'client'].includes(role)) {
+      return makeError(res, req, 403, 'forbidden', 'forbidden');
+    }
+    return next();
+  }
+
   function requireVoiceEnabled(req, res, next) {
     if (!voiceEnabled) return makeError(res, req, 503, 'voice_unavailable', 'Voice service is disabled');
     return next();
@@ -302,30 +311,30 @@ function createApp(env = process.env, deps = {}) {
     voiceSessionsRepo.save(session);
   }
 
-  app.get('/api/voice/token', requireAuth, requireStaff, requireVoiceEnabled, (req, res) => {
-    const identity = toIdentity('staff', req.user.id);
-    const token = new twilio.jwt.AccessToken(
-      env.TWILIO_ACCOUNT_SID,
-      env.TWILIO_API_KEY,
-      env.TWILIO_API_SECRET,
-      { identity }
-    );
-    token.addGrant(new twilio.jwt.AccessToken.VoiceGrant({ outgoingApplicationSid: env.TWILIO_TWIML_APP_SID }));
+  app.use('/api/voice', createVoiceRouter({
+    env,
+    requireAuth,
+    requireVoiceEnabled,
+    makeError,
+    voiceSessionsRepo,
+    findAssignedStaffId,
+  }));
+
+  app.get('/api/voice/token', requireAuth, requireVoiceTokenRole, requireVoiceEnabled, async (req, res) => {
+    const twilioModule = await import('twilio');
+    const twilio = twilioModule.default || twilioModule;
+    const identity = toIdentity(req.user.role, req.user.id);
+    const token = new twilio.jwt.AccessToken(env.TWILIO_ACCOUNT_SID, env.TWILIO_API_KEY, env.TWILIO_API_SECRET, { identity });
+    token.addGrant(new twilio.jwt.AccessToken.VoiceGrant({ outgoingApplicationSid: env.TWILIO_VOICE_APP_SID || env.TWILIO_TWIML_APP_SID }));
     res.status(200).json({ token: token.toJwt(), identity, requestId: req.requestId });
   });
 
-  app.post('/api/voice/token', requireAuth, requireStaff, requireVoiceEnabled, (req, res) => {
-    const requestedUserId = req.body?.userId || req.user.id;
-    const requestedRole = req.body?.role || req.user.role;
-    const identity = toIdentity(requestedRole, requestedUserId);
-
-    const token = new twilio.jwt.AccessToken(
-      env.TWILIO_ACCOUNT_SID,
-      env.TWILIO_API_KEY,
-      env.TWILIO_API_SECRET,
-      { identity }
-    );
-    token.addGrant(new twilio.jwt.AccessToken.VoiceGrant({ outgoingApplicationSid: env.TWILIO_TWIML_APP_SID }));
+  app.post('/api/voice/token', requireAuth, requireVoiceTokenRole, requireVoiceEnabled, async (req, res) => {
+    const twilioModule = await import('twilio');
+    const twilio = twilioModule.default || twilioModule;
+    const identity = toIdentity(req.user.role, req.user.id);
+    const token = new twilio.jwt.AccessToken(env.TWILIO_ACCOUNT_SID, env.TWILIO_API_KEY, env.TWILIO_API_SECRET, { identity });
+    token.addGrant(new twilio.jwt.AccessToken.VoiceGrant({ outgoingApplicationSid: env.TWILIO_VOICE_APP_SID || env.TWILIO_TWIML_APP_SID }));
     res.status(200).json({ token: token.toJwt(), identity, requestId: req.requestId });
   });
 
@@ -336,7 +345,17 @@ function createApp(env = process.env, deps = {}) {
     if (!['online', 'busy', 'offline'].includes(status)) return makeError(res, req, 400, 'bad_request', 'invalid status');
 
     const record = presenceRepo.upsert({ staffId: req.user.id, source, status });
+    updatePresence({ staffId: req.user.id, source, status, lastSeen: Date.now() });
     return res.status(200).json({ presence: record, requestId: req.requestId });
+  });
+
+  app.post('/api/voice/presence', requireAuth, requireStaff, requireVoiceEnabled, (req, res) => {
+    const source = req.body?.source;
+    const status = req.body?.status;
+    if (!['portal', 'dialer'].includes(source)) return makeError(res, req, 400, 'bad_request', 'invalid source');
+    if (!['online', 'busy'].includes(status)) return makeError(res, req, 400, 'bad_request', 'invalid status');
+    updatePresence({ staffId: req.user.id, source, status, lastSeen: Date.now() });
+    return res.status(204).send();
   });
 
   app.post('/api/voice/call', requireAuth, requireStaff, requireVoiceEnabled, async (req, res) => {
@@ -441,11 +460,13 @@ function createApp(env = process.env, deps = {}) {
     });
   });
 
-  app.post('/api/voice/status', (req, res) => {
+  app.post('/api/voice/status', async (req, res) => {
     const signature = req.headers['x-twilio-signature'];
     if (!signature) return makeError(res, req, 403, 'missing_signature', 'Missing Twilio signature');
 
     const url = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+    const twilioModule = await import('twilio');
+    const twilio = twilioModule.default || twilioModule;
     const valid = twilio.validateRequest(env.TWILIO_AUTH_TOKEN, signature, url, req.body || {});
     if (!valid) return makeError(res, req, 403, 'invalid_signature', 'Invalid Twilio signature');
 

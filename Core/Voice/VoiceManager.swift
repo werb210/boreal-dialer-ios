@@ -47,10 +47,12 @@ final class VoiceManager: NSObject, ObservableObject {
     }
 
     func acceptCallFromCallKit() {
-        guard CallStateManager.shared.current() == .ringing else { return }
+        guard CallStateManager.shared.current() == .connecting else {
+            pendingInvite?.reject()
+            return
+        }
         guard let invite = pendingInvite else { return }
 
-        CallStateManager.shared.transition(to: .connecting)
         configureAudioSessionForCall()
 
         activeCall = invite.accept(with: self)
@@ -126,7 +128,9 @@ final class VoiceManager: NSObject, ObservableObject {
             let response = try JSONDecoder().decode(TokenResponse.self, from: data)
             return response.token
         } catch {
+#if DEBUG
             print("Token fetch failed:", error)
+#endif
             return nil
         }
     }
@@ -177,7 +181,9 @@ final class VoiceManager: NSObject, ObservableObject {
             TwilioVoiceSDK.register(withAccessToken: token, deviceToken: deviceToken) { [weak self] error in
                 guard let self else { return }
                 if let error {
+#if DEBUG
                     print("Twilio push registration failed:", error)
+#endif
                     self.registrationState = .unregistered
                     return
                 }
@@ -205,7 +211,9 @@ final class VoiceManager: NSObject, ObservableObject {
             try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .duckOthers])
             try session.setActive(true)
         } catch {
+#if DEBUG
             print("Audio session config failed:", error)
+#endif
         }
     }
 
@@ -218,7 +226,9 @@ final class VoiceManager: NSObject, ObservableObject {
         do {
             try session.setActive(false, options: [])
         } catch {
+#if DEBUG
             print("Audio session deactivate failed:", error)
+#endif
         }
     }
 
@@ -296,28 +306,40 @@ final class VoiceManager: NSObject, ObservableObject {
 extension VoiceManager: CallDelegate {
 
     func callDidStartRinging(_ call: Call) {
+#if DEBUG
         print("Ringing")
+#endif
     }
 
     func callDidConnect(_ call: Call) {
+#if DEBUG
         print("Connected")
+#endif
         CallStateManager.shared.transition(to: .connected)
         sendPresence(status: "busy")
         notifyServerStatus(status: "connected")
     }
 
     func callDidDisconnect(_ call: Call, error: Error?) {
+#if DEBUG
         print("Disconnected")
+#endif
         if let uuid = inviteUUIDMap.first(where: { $0.value.callSid == call.sid })?.key {
             CallKitManager.shared.endCall(uuid: uuid)
             inviteUUIDMap.removeValue(forKey: uuid)
         }
 
-        CallStateManager.shared.transition(to: .ended)
-        transitionToIdleState()
-        cleanup()
         CallStateManager.shared.reset()
+        cleanup()
+        transitionToIdleState()
         notifyServerStatus(status: "completed")
+    }
+
+    func callDidFailToConnect(_ call: Call, error: Error) {
+        CallStateManager.shared.reset()
+        cleanup()
+        transitionToIdleState()
+        notifyServerStatus(status: "failed")
     }
 
     private func notifyServerStatus(status: String) {
@@ -343,17 +365,22 @@ extension VoiceManager: CallDelegate {
 extension VoiceManager: NotificationDelegate {
 
     func callInviteReceived(_ callInvite: CallInvite) {
-        guard CallStateManager.shared.current() == .idle else {
+        if CallStateManager.shared.current() != .idle {
+            callInvite.reject()
+            return
+        }
+
+        guard CallStateManager.shared.transition(from: .idle, to: .ringing) else {
             callInvite.reject()
             return
         }
 
         if activeCall != nil || pendingInvite != nil {
             callInvite.reject()
+            CallStateManager.shared.reset()
             return
         }
 
-        CallStateManager.shared.transition(to: .ringing)
         pendingInvite = callInvite
         let uuid = callInvite.uuid
         inviteUUIDMap[uuid] = callInvite
@@ -362,7 +389,7 @@ extension VoiceManager: NotificationDelegate {
             guard CallStateManager.shared.current() == .ringing else { return }
             CallKitManager.shared.reportIncomingCall(
                 uuid: uuid,
-                handle: callInvite.from ?? "Incoming"
+                handle: callInvite.from ?? "Unknown"
             )
         }
 

@@ -32,7 +32,9 @@ final class CallKitManager: NSObject, CXProviderDelegate {
 
         callController.request(transaction) { error in
             if let error {
+                #if DEBUG
                 print("CallKit start call error: \(error.localizedDescription)")
+#endif
             }
         }
 
@@ -48,7 +50,9 @@ final class CallKitManager: NSObject, CXProviderDelegate {
 
         provider.reportNewIncomingCall(with: uuid, update: update) { error in
             if let error {
+                #if DEBUG
                 print("Incoming call report failed: \(error.localizedDescription)")
+#endif
                 return
             }
 
@@ -64,7 +68,9 @@ final class CallKitManager: NSObject, CXProviderDelegate {
 
     func providerDidReset(_ provider: CXProvider) {
         reportedIncomingCallUUIDs.removeAll()
+        #if DEBUG
         print("CallKit provider reset")
+#endif
     }
 
     func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
@@ -72,12 +78,23 @@ final class CallKitManager: NSObject, CXProviderDelegate {
     }
 
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
+        guard CallStateManager.shared.current() == .ringing else {
+            action.fail()
+            return
+        }
+
+        guard CallStateManager.shared.transition(from: .ringing, to: .connecting) else {
+            action.fail()
+            return
+        }
+
         VoiceManager.shared.acceptCallFromCallKit(uuid: action.callUUID)
         action.fulfill()
     }
 
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
-        VoiceManager.shared.rejectCallFromCallKit(uuid: action.callUUID)
+        VoiceManager.shared.endActiveCall()
+        CallStateManager.shared.reset()
         action.fulfill()
     }
 }

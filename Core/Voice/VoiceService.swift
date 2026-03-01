@@ -22,7 +22,7 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
 
     private(set) var activeCall: Call?
     private(set) var activeNumber: String?
-    private var pendingCallInvite: CallInvite?
+    private var callInvite: CallInvite?
 
     init(tokenProvider: TokenProvider = BFTokenProvider()) {
         guard IdentityManager.shared.identity != nil else {
@@ -126,9 +126,32 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
     }
 
     func endCall() {
+        activeCall?.disconnect()
+        activeCall = nil
+        callInvite = nil
+
+        try? AVAudioSession.sharedInstance().setActive(false)
         CallManager.shared.endCall()
     }
 
+
+    func acceptCallInvite() {
+        guard CallStateManager.shared.current() == .connecting else {
+            callInvite?.reject()
+            return
+        }
+
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(
+            .playAndRecord,
+            mode: .voiceChat,
+            options: [.allowBluetooth, .duckOthers]
+        )
+        try? session.setActive(true)
+
+        activeCall = callInvite?.accept(with: self)
+        callInvite = nil
+    }
     func endCall(uuid: UUID) {
         guard CallManager.shared.activeCallUUID == uuid else { return }
 
@@ -142,10 +165,10 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
     func acceptCall(uuid: UUID) {
         guard CallManager.shared.activeCallUUID == uuid else { return }
 
-        if let invite = pendingCallInvite {
+        if let invite = callInvite {
             activeCall = invite.accept(with: self)
             activeCall?.delegate = self
-            pendingCallInvite = nil
+            callInvite = nil
             return
         }
 
@@ -155,9 +178,9 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
     func rejectCall(uuid: UUID) {
         guard CallManager.shared.activeCallUUID == uuid else { return }
 
-        if let invite = pendingCallInvite {
+        if let invite = callInvite {
             invite.reject()
-            pendingCallInvite = nil
+            callInvite = nil
             activeNumber = nil
             return
         }
@@ -170,6 +193,15 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
         activeCall = nil
         activeNumber = nil
         CallManager.shared.forceTerminate()
+    }
+
+
+    func cleanup() {
+        activeCall = nil
+        callInvite = nil
+        activeNumber = nil
+
+        try? AVAudioSession.sharedInstance().setActive(false)
     }
 
     private func startActiveCallPolling() {
@@ -246,7 +278,9 @@ extension VoiceService: CXProviderDelegate {
 extension VoiceService: CallDelegate {
 
     func callDidStartRinging(_ call: Call) {
+#if DEBUG
         print("Call ringing")
+#endif
     }
 
     func callDidConnect(_ call: Call) {
@@ -254,6 +288,9 @@ extension VoiceService: CallDelegate {
     }
 
     func callDidDisconnect(_ call: Call, error: Error?) {
+        CallStateManager.shared.reset()
+        cleanup()
+
         if error != nil {
             CallManager.shared.callDidFail()
         } else {
@@ -265,6 +302,8 @@ extension VoiceService: CallDelegate {
     }
 
     func callDidFailToConnect(_ call: Call, error: Error) {
+        CallStateManager.shared.reset()
+        cleanup()
         CallManager.shared.callDidFail()
         activeCall = nil
         activeNumber = nil
@@ -274,7 +313,17 @@ extension VoiceService: CallDelegate {
 extension VoiceService: NotificationDelegate {
 
     func callInviteReceived(_ callInvite: CallInvite) {
-        pendingCallInvite = callInvite
+        if CallStateManager.shared.current() != .idle {
+            callInvite.reject()
+            return
+        }
+
+        guard CallStateManager.shared.transition(from: .idle, to: .ringing) else {
+            callInvite.reject()
+            return
+        }
+
+        self.callInvite = callInvite
 
         let uuid = callInvite.uuid
         let number = callInvite.from ?? "Unknown"

@@ -63,6 +63,10 @@ struct BorealDialerApp: App {
                         try? await API.reconcileActiveCalls()
                     }
                 }
+
+                if phase == .background, CallStateManager.shared.current() == .idle {
+                    VoiceService.shared.cleanup()
+                }
             }
 
             .onReceive(NotificationCenter.default.publisher(

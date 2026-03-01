@@ -1,6 +1,6 @@
 import Foundation
 
-enum CallState {
+enum CallState: Equatable {
     case idle
     case ringing
     case connecting
@@ -19,6 +19,15 @@ final class CallStateManager {
     func transition(to newState: CallState) {
         queue.sync {
             state = newState
+        }
+    }
+
+    @discardableResult
+    func transition(from expectedState: CallState, to newState: CallState) -> Bool {
+        queue.sync {
+            guard state == expectedState else { return false }
+            state = newState
+            return true
         }
     }
 

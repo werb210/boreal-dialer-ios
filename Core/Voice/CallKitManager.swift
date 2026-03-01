@@ -1,7 +1,8 @@
 import Foundation
 import CallKit
+import AVFoundation
 
-final class CallKitManager: NSObject {
+final class CallKitManager: NSObject, CXProviderDelegate {
 
     static let shared = CallKitManager()
 
@@ -9,13 +10,12 @@ final class CallKitManager: NSObject {
     private let callController = CXCallController()
 
     private override init() {
-        let configuration = CXProviderConfiguration(localizedName: "Boreal")
-        configuration.supportsVideo = false
-        configuration.maximumCallsPerCallGroup = 1
-        configuration.supportedHandleTypes = [.phoneNumber]
+        let config = CXProviderConfiguration(localizedName: "Boreal")
+        config.supportsVideo = false
+        config.maximumCallsPerCallGroup = 1
+        config.supportedHandleTypes = [.phoneNumber]
 
-        provider = CXProvider(configuration: configuration)
-
+        provider = CXProvider(configuration: config)
         super.init()
         provider.setDelegate(self, queue: nil)
     }
@@ -37,13 +37,15 @@ final class CallKitManager: NSObject {
         provider.reportOutgoingCall(with: callUUID, connectedAt: Date())
     }
 
-    func reportIncomingCall(from number: String) {
+    func reportIncomingCall(uuid: UUID, number: String) {
         let update = CXCallUpdate()
         update.remoteHandle = CXHandle(type: .phoneNumber, value: number)
+        update.hasVideo = false
 
-        provider.reportNewIncomingCall(with: UUID(), update: update) { error in
+        provider.reportNewIncomingCall(with: uuid, update: update) { error in
             if let error {
                 print("Incoming call report failed: \(error.localizedDescription)")
+                CallManager.shared.endCall(uuid: uuid)
             }
         }
     }
@@ -58,21 +60,22 @@ final class CallKitManager: NSObject {
             }
         }
     }
-}
-
-extension CallKitManager: CXProviderDelegate {
 
     func providerDidReset(_ provider: CXProvider) {
         print("CallKit provider reset")
     }
 
-    func provider(_ provider: CXProvider,
-                  perform action: CXStartCallAction) {
+    func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
         action.fulfill()
     }
 
-    func provider(_ provider: CXProvider,
-                  perform action: CXEndCallAction) {
+    func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
+        CallManager.shared.answerCall(uuid: action.callUUID)
+        action.fulfill()
+    }
+
+    func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
+        CallManager.shared.endCall(uuid: action.callUUID)
         action.fulfill()
     }
 }

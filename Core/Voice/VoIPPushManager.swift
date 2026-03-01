@@ -18,20 +18,39 @@ final class VoIPPushManager: NSObject, PKPushRegistryDelegate {
                       didUpdate pushCredentials: PKPushCredentials,
                       for type: PKPushType) {
         let token = pushCredentials.token.map { String(format: "%02x", $0) }.joined()
-        print("VoIP Token:", token)
+        Task {
+            await API.registerVoIPToken(token)
+        }
     }
 
     func pushRegistry(_ registry: PKPushRegistry,
                       didReceiveIncomingPushWith payload: PKPushPayload,
                       for type: PKPushType) {
-        CallKitManager.shared.reportIncomingCall(from: "Unknown")
+        handleIncomingPush(payload)
     }
 
     func pushRegistry(_ registry: PKPushRegistry,
                       didReceiveIncomingPushWith payload: PKPushPayload,
                       for type: PKPushType,
                       completion: @escaping () -> Void) {
-        CallKitManager.shared.reportIncomingCall(from: "Unknown")
+        handleIncomingPush(payload)
         completion()
+    }
+
+    private func handleIncomingPush(_ payload: PKPushPayload) {
+        let data = payload.dictionaryPayload
+        guard
+            let callId = data["callId"] as? String,
+            let number = data["number"] as? String
+        else {
+            return
+        }
+
+        let uuid = UUID(uuidString: callId) ?? UUID()
+        guard CallManager.shared.startIncomingCall(from: number, uuid: uuid) else {
+            return
+        }
+
+        CallKitManager.shared.reportIncomingCall(uuid: uuid, number: number)
     }
 }

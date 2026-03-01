@@ -12,7 +12,10 @@ final class NetworkManager {
 
     func fetchActiveCalls() async throws -> [RemoteCallStatus] {
         let url = await url(for: "api/voice/calls/active")
-        let (data, _) = try await URLSession.shared.data(from: url)
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+
+        let data = try await AuthService.shared.performAuthorizedRequest(request)
         return try JSONDecoder().decode([RemoteCallStatus].self, from: data)
     }
 }

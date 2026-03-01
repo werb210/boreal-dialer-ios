@@ -6,11 +6,37 @@ final class AuthService: ObservableObject {
     static let shared = AuthService()
 
     @Published var isAuthenticated = false
+    @Published var accessTokenExpiry: Date?
+
+    private var refreshTask: Task<Void, Never>?
 
     private init() {
-        if KeychainService.shared.load("accessToken") != nil {
+        if let accessToken = KeychainService.shared.load("accessToken") {
             isAuthenticated = true
+            accessTokenExpiry = decodeExpiry(from: accessToken)
+            scheduleRefresh()
         }
+    }
+
+    private func decodeExpiry(from token: String) -> Date? {
+        let segments = token.split(separator: ".")
+        guard segments.count > 1 else { return nil }
+
+        var base64 = String(segments[1])
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+
+        while base64.count % 4 != 0 {
+            base64.append("=")
+        }
+
+        guard let data = Data(base64Encoded: base64),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let exp = json["exp"] as? TimeInterval else {
+            return nil
+        }
+
+        return Date(timeIntervalSince1970: exp)
     }
 
     private func baseURL() async -> URL {
@@ -35,7 +61,9 @@ final class AuthService: ObservableObject {
         KeychainService.shared.save(decoded.refreshToken, for: "refreshToken")
 
         await MainActor.run {
+            self.accessTokenExpiry = self.decodeExpiry(from: decoded.accessToken)
             self.isAuthenticated = true
+            self.scheduleRefresh()
             WebSocketManager.shared.connect(
                 line: LineManager.shared.activeLine,
                 accessToken: decoded.accessToken
@@ -49,38 +77,143 @@ final class AuthService: ObservableObject {
             return token
         }
 
-        return try await refresh()
+        return try await refreshToken()
     }
 
-    private func refresh() async throws -> String {
+    func refreshToken() async throws -> String {
 
-        guard let refreshToken = KeychainService.shared.load("refreshToken") else {
-            throw URLError(.userAuthenticationRequired)
+        do {
+            guard let currentRefreshToken = KeychainService.shared.load("refreshToken") else {
+                throw URLError(.userAuthenticationRequired)
+            }
+
+            let url = await baseURL().appendingPathComponent("api/auth/refresh")
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+            request.httpBody = try JSONEncoder().encode([
+                "refreshToken": currentRefreshToken
+            ])
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            if let httpResponse = response as? HTTPURLResponse,
+               !(200...299).contains(httpResponse.statusCode) {
+                throw URLError(.userAuthenticationRequired)
+            }
+
+            let decoded = try JSONDecoder().decode(AuthResponse.self, from: data)
+
+            KeychainService.shared.save(decoded.accessToken, for: "accessToken")
+            KeychainService.shared.save(decoded.refreshToken, for: "refreshToken")
+
+            await MainActor.run {
+                self.accessTokenExpiry = self.decodeExpiry(from: decoded.accessToken)
+                self.scheduleRefresh()
+                WebSocketManager.shared.connect(
+                    line: LineManager.shared.activeLine,
+                    accessToken: decoded.accessToken
+                )
+            }
+
+            return decoded.accessToken
+        } catch {
+            await MainActor.run {
+                self.logout()
+            }
+            throw error
+        }
+    }
+
+    func refreshTokenIfNeededOnResume() async {
+        guard let expiry = await MainActor.run(body: { self.accessTokenExpiry }) else {
+            return
         }
 
-        let url = await baseURL().appendingPathComponent("api/auth/refresh")
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        guard expiry < Date() else { return }
 
-        request.httpBody = try JSONEncoder().encode([
-            "refreshToken": refreshToken
-        ])
+        do {
+            _ = try await refreshToken()
+        } catch {
+            await MainActor.run {
+                self.logout()
+            }
+        }
+    }
 
-        let (data, _) = try await URLSession.shared.data(for: request)
+    @MainActor
+    func scheduleRefresh() {
+        refreshTask?.cancel()
 
-        let decoded = try JSONDecoder().decode(AuthResponse.self, from: data)
+        guard let expiry = accessTokenExpiry else { return }
 
-        KeychainService.shared.save(decoded.accessToken, for: "accessToken")
-        KeychainService.shared.save(decoded.refreshToken, for: "refreshToken")
+        let refreshTime = expiry.addingTimeInterval(-60)
+        let delay = refreshTime.timeIntervalSinceNow
 
-        return decoded.accessToken
+        guard delay > 0 else {
+            refreshTask = Task {
+                do {
+                    _ = try await self.refreshToken()
+                } catch {
+                    await MainActor.run {
+                        self.logout()
+                    }
+                }
+            }
+            return
+        }
+
+        refreshTask = Task {
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+
+            guard !Task.isCancelled else { return }
+
+            do {
+                _ = try await self.refreshToken()
+            } catch {
+                await MainActor.run {
+                    self.logout()
+                }
+            }
+        }
+    }
+
+
+    func performAuthorizedRequest(_ request: URLRequest) async throws -> Data {
+
+        var authorizedRequest = request
+        let accessToken = try await getValidAccessToken()
+        authorizedRequest.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: authorizedRequest)
+
+        if let http = response as? HTTPURLResponse,
+           http.statusCode == 401 {
+
+            let refreshedToken = try await refreshToken()
+
+            authorizedRequest.setValue("Bearer \(refreshedToken)", forHTTPHeaderField: "Authorization")
+
+            let (retryData, retryResponse) = try await URLSession.shared.data(for: authorizedRequest)
+
+            if let retryHTTP = retryResponse as? HTTPURLResponse,
+               retryHTTP.statusCode == 401 {
+                throw URLError(.userAuthenticationRequired)
+            }
+
+            return retryData
+        }
+
+        return data
     }
 
     func logout() {
+        refreshTask?.cancel()
         WebSocketManager.shared.disconnect()
         KeychainService.shared.delete("accessToken")
         KeychainService.shared.delete("refreshToken")
+        accessTokenExpiry = nil
         isAuthenticated = false
     }
 }

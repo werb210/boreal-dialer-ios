@@ -11,7 +11,7 @@ struct BorealDialerApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
-        VoIPPushManager.shared.register()
+        PushManager.shared.register()
         _ = VoiceEngine.shared
         _ = NetworkMonitor.shared
         _ = ReachabilityManager.shared
@@ -52,6 +52,7 @@ struct BorealDialerApp: App {
                     Task {
                         await OfflineQueue.shared.flush()
                     }
+                    VoiceManager.shared.handleNetworkReconnect()
                     Telemetry.event("network_recovered")
                 }
             }

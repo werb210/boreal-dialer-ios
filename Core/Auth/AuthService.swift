@@ -52,8 +52,8 @@ final class AuthService: ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let silo = await MainActor.run { VoiceEngine.shared.silo.rawValue }
-        request.setValue(silo, forHTTPHeaderField: "X-Silo")
+            let silo = await MainActor.run { VoiceEngine.shared.silo.rawValue }
+            request.setValue(silo, forHTTPHeaderField: "X-Silo")
 
         let body = ["phone": phone, "code": otp]
         request.httpBody = try JSONEncoder().encode(body)
@@ -76,7 +76,10 @@ final class AuthService: ObservableObject {
         }
 
         if shouldInitializeVoice(from: decoded.accessToken) {
-            await VoiceManager.shared.initialize()
+            PushManager.shared.register()
+            Task {
+                await VoiceManager.shared.initialize()
+            }
         }
     }
 
@@ -130,8 +133,8 @@ final class AuthService: ObservableObject {
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let silo = await MainActor.run { VoiceEngine.shared.silo.rawValue }
-        request.setValue(silo, forHTTPHeaderField: "X-Silo")
+            let silo = await MainActor.run { VoiceEngine.shared.silo.rawValue }
+            request.setValue(silo, forHTTPHeaderField: "X-Silo")
 
             request.httpBody = try JSONEncoder().encode([
                 "refreshToken": currentRefreshToken
@@ -156,6 +159,10 @@ final class AuthService: ObservableObject {
                     line: LineManager.shared.activeLine,
                     accessToken: decoded.accessToken
                 )
+            }
+
+            await MainActor.run {
+                PushManager.shared.registerDeviceTokenWithTwilio()
             }
 
             return decoded.accessToken

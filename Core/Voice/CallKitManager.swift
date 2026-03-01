@@ -11,10 +11,10 @@ final class CallKitManager: NSObject, CXProviderDelegate {
     private let callController = CXCallController()
 
     private override init() {
-        let config = CXProviderConfiguration(localizedName: "Boreal")
+        let config = CXProviderConfiguration(localizedName: "Boreal Dialer")
         config.supportsVideo = false
         config.maximumCallsPerCallGroup = 1
-        config.supportedHandleTypes = [.phoneNumber]
+        config.supportedHandleTypes = [.generic]
 
         provider = CXProvider(configuration: config)
         super.init()
@@ -22,7 +22,7 @@ final class CallKitManager: NSObject, CXProviderDelegate {
     }
 
     func startCall(uuid: UUID, to number: String) {
-        let handle = CXHandle(type: .phoneNumber, value: number)
+        let handle = CXHandle(type: .generic, value: number)
 
         let startCallAction = CXStartCallAction(call: uuid, handle: handle)
         let transaction = CXTransaction(action: startCallAction)
@@ -38,7 +38,7 @@ final class CallKitManager: NSObject, CXProviderDelegate {
 
     func reportIncomingCall(uuid: UUID, handle: String) {
         let update = CXCallUpdate()
-        update.remoteHandle = CXHandle(type: .phoneNumber, value: handle)
+        update.remoteHandle = CXHandle(type: .generic, value: handle)
         update.hasVideo = false
 
         provider.reportNewIncomingCall(with: uuid, update: update) { error in
@@ -52,14 +52,7 @@ final class CallKitManager: NSObject, CXProviderDelegate {
     }
 
     func endCall(uuid: UUID) {
-        let endCallAction = CXEndCallAction(call: uuid)
-        let transaction = CXTransaction(action: endCallAction)
-
-        callController.request(transaction) { error in
-            if let error {
-                print("CallKit end call error: \(error.localizedDescription)")
-            }
-        }
+        provider.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
     }
 
     func providerDidReset(_ provider: CXProvider) {
@@ -71,14 +64,12 @@ final class CallKitManager: NSObject, CXProviderDelegate {
     }
 
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
-        VoiceService.shared.acceptCall(uuid: action.callUUID)
-        CallManager.shared.callDidConnect()
+        VoiceManager.shared.acceptCallFromCallKit(uuid: action.callUUID)
         action.fulfill()
     }
 
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
-        VoiceService.shared.rejectCall(uuid: action.callUUID)
-        CallManager.shared.callDidFail()
+        VoiceManager.shared.rejectCallFromCallKit(uuid: action.callUUID)
         action.fulfill()
     }
 }

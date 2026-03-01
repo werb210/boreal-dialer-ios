@@ -84,11 +84,15 @@ final class VoiceManager: NSObject, ObservableObject {
 
     func updateAccessToken(_ token: String) {
         latestToken = token
+        if registeredToken != token {
+            registrationState = .unregistered
+        }
         attemptRegistrationIfPossible()
     }
 
     func updateDeviceToken(_ token: Data) {
         deviceToken = token
+        registrationState = .unregistered
         attemptRegistrationIfPossible()
     }
 
@@ -150,10 +154,7 @@ final class VoiceManager: NSObject, ObservableObject {
 
     private func attemptRegistrationIfPossible() {
         guard let token = latestToken, let deviceToken else { return }
-        guard registrationState != .registering else { return }
-        if registrationState == .registered, registeredToken == token {
-            return
-        }
+        guard registrationState == .unregistered else { return }
 
         registrationState = .registering
 

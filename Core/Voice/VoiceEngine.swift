@@ -60,6 +60,8 @@ final class VoiceEngine: NSObject, ObservableObject {
         let config = CXProviderConfiguration(localizedName: "Boreal")
         config.supportsVideo = false
         config.maximumCallsPerCallGroup = 1
+        config.maximumCallGroups = 1
+        config.includesCallsInRecents = true
         config.supportedHandleTypes = [.phoneNumber]
 
         provider = CXProvider(configuration: config)

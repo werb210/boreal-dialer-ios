@@ -7,6 +7,17 @@ final class IdentityManager {
     private(set) var identity: String?
 
     func configure(identity: String) {
+        guard !identity.isEmpty else {
+            fatalError("Dialer identity cannot be empty")
+        }
+
+        if let existing = self.identity {
+            guard existing == identity else {
+                fatalError("Dialer identity cannot change at runtime")
+            }
+            return
+        }
+
         self.identity = identity
     }
 

@@ -11,9 +11,11 @@ final class CallKitManager: NSObject, CXProviderDelegate {
     private let callController = CXCallController()
 
     private override init() {
-        let config = CXProviderConfiguration(localizedName: "Boreal Dialer")
+        let config = CXProviderConfiguration(localizedName: "Boreal")
         config.supportsVideo = false
         config.maximumCallsPerCallGroup = 1
+        config.maximumCallGroups = 1
+        config.includesCallsInRecents = true
         config.supportedHandleTypes = [.generic]
 
         provider = CXProvider(configuration: config)

@@ -1,5 +1,12 @@
 import Foundation
 import TwilioVoice
+import AVFoundation
+
+enum RegistrationState {
+    case unregistered
+    case registering
+    case registered
+}
 
 @MainActor
 final class VoiceManager: NSObject, ObservableObject {
@@ -7,14 +14,19 @@ final class VoiceManager: NSObject, ObservableObject {
     static let shared = VoiceManager()
 
     @Published private(set) var activeCall: Call?
+    @Published private(set) var registrationState: RegistrationState = .unregistered
 
     private var accessToken: String?
     private var tokenRefreshTask: Task<Void, Never>?
     private var inviteUUIDMap: [UUID: CallInvite] = [:]
     private var pendingInvite: CallInvite?
+    private var latestToken: String?
+    private var registeredToken: String?
+    private var deviceToken: Data?
+    private var hasRequestedMicrophonePermission = false
 
     var currentToken: String {
-        accessToken ?? ""
+        latestToken ?? ""
     }
 
     private override init() {
@@ -25,8 +37,11 @@ final class VoiceManager: NSObject, ObservableObject {
         guard let token = await fetchToken() else { return }
 
         accessToken = token
+        updateAccessToken(token)
         scheduleTokenRefresh()
         TwilioVoiceSDK.audioDevice = DefaultAudioDevice()
+        requestMicrophonePermissionIfNeeded()
+        configureIdentityIfNeeded(from: token)
         PushManager.shared.registerDeviceTokenWithTwilio()
         sendPresence(status: "online")
     }
@@ -41,11 +56,8 @@ final class VoiceManager: NSObject, ObservableObject {
 
     func endActiveCall() {
         activeCall?.disconnect()
-        activeCall = nil
         pendingInvite?.reject()
-        pendingInvite = nil
-        inviteUUIDMap.removeAll()
-        sendPresence(status: "online")
+        transitionToIdleState()
     }
 
     func acceptCallFromCallKit(uuid: UUID) {
@@ -66,7 +78,18 @@ final class VoiceManager: NSObject, ObservableObject {
     }
 
     func handleNetworkReconnect() {
+        registrationState = .unregistered
         PushManager.shared.registerDeviceTokenWithTwilio()
+    }
+
+    func updateAccessToken(_ token: String) {
+        latestToken = token
+        attemptRegistrationIfPossible()
+    }
+
+    func updateDeviceToken(_ token: Data) {
+        deviceToken = token
+        attemptRegistrationIfPossible()
     }
 
     private func scheduleTokenRefresh() {
@@ -100,6 +123,8 @@ final class VoiceManager: NSObject, ObservableObject {
     }
 
     func startCall(clientId: String) async {
+        guard activeCall == nil else { return }
+        guard clientId == IdentityManager.shared.requireIdentity() else { return }
         guard let token = accessToken else { return }
 
         let options = ConnectOptions(accessToken: token) { builder in
@@ -121,6 +146,90 @@ final class VoiceManager: NSObject, ObservableObject {
         if pendingInvite?.uuid == invite.uuid {
             pendingInvite = nil
         }
+    }
+
+    private func attemptRegistrationIfPossible() {
+        guard let token = latestToken, let deviceToken else { return }
+        guard registrationState != .registering else { return }
+        if registrationState == .registered, registeredToken == token {
+            return
+        }
+
+        registrationState = .registering
+
+        let registerWithToken = {
+            TwilioVoiceSDK.register(withAccessToken: token, deviceToken: deviceToken) { [weak self] error in
+                guard let self else { return }
+                if let error {
+                    print("Twilio push registration failed:", error)
+                    self.registrationState = .unregistered
+                    return
+                }
+
+                self.registeredToken = token
+                self.registrationState = .registered
+            }
+        }
+
+        let tokenToUnregister = registeredToken ?? latestToken ?? ""
+        if tokenToUnregister.isEmpty {
+            registerWithToken()
+            return
+        }
+
+        TwilioVoiceSDK.unregister(withAccessToken: tokenToUnregister, deviceToken: deviceToken) { _ in
+            registerWithToken()
+        }
+    }
+
+    private func transitionToIdleState() {
+        activeCall = nil
+        pendingInvite = nil
+        inviteUUIDMap.removeAll()
+        sendPresence(status: "online")
+    }
+
+    private func requestMicrophonePermissionIfNeeded() {
+        guard !hasRequestedMicrophonePermission else { return }
+        hasRequestedMicrophonePermission = true
+        AVAudioSession.sharedInstance().requestRecordPermission { _ in }
+    }
+
+    private func configureIdentityIfNeeded(from token: String) {
+        guard let identity = decodeIdentity(from: token), !identity.isEmpty else { return }
+
+        if let existing = IdentityManager.shared.identity {
+            guard existing == identity else {
+                fatalError("Dialer identity mismatch: \(existing) != \(identity)")
+            }
+            return
+        }
+
+        IdentityManager.shared.configure(identity: identity)
+    }
+
+    private func decodeIdentity(from token: String) -> String? {
+        let segments = token.split(separator: ".")
+        guard segments.count > 1 else { return nil }
+
+        var base64 = String(segments[1])
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+
+        while base64.count % 4 != 0 {
+            base64.append("=")
+        }
+
+        guard
+            let data = Data(base64Encoded: base64),
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let grants = json["grants"] as? [String: Any],
+            let identity = grants["identity"] as? String
+        else {
+            return nil
+        }
+
+        return identity
     }
 
     func sendPresence(status: String) {
@@ -158,12 +267,11 @@ extension VoiceManager: CallDelegate {
 
     func callDidDisconnect(_ call: Call, error: Error?) {
         print("Disconnected")
-        activeCall = nil
-        sendPresence(status: "online")
         if let uuid = inviteUUIDMap.first(where: { $0.value.callSid == call.sid })?.key {
             CallKitManager.shared.endCall(uuid: uuid)
             inviteUUIDMap.removeValue(forKey: uuid)
         }
+        transitionToIdleState()
         notifyServerStatus(status: "completed")
     }
 
@@ -190,6 +298,11 @@ extension VoiceManager: CallDelegate {
 extension VoiceManager: NotificationDelegate {
 
     func callInviteReceived(_ callInvite: CallInvite) {
+        if activeCall != nil || pendingInvite != nil {
+            callInvite.reject()
+            return
+        }
+
         pendingInvite = callInvite
         let uuid = UUID()
         inviteUUIDMap[uuid] = callInvite
@@ -197,6 +310,14 @@ extension VoiceManager: NotificationDelegate {
             uuid: uuid,
             handle: callInvite.from ?? "Incoming"
         )
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in
+            guard let self else { return }
+            guard self.activeCall == nil else { return }
+            guard self.pendingInvite?.callSid == callInvite.callSid else { return }
+            self.pendingInvite?.reject()
+            self.pendingInvite = nil
+        }
     }
 
     func cancelledCallInviteReceived(_ cancelledCallInvite: CancelledCallInvite, error: (any Error)?) {

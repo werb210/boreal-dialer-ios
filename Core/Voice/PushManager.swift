@@ -22,16 +22,7 @@ final class PushManager: NSObject, PKPushRegistryDelegate {
 
     func registerDeviceTokenWithTwilio() {
         guard let deviceToken else { return }
-        let token = VoiceManager.shared.currentToken
-        guard !token.isEmpty else { return }
-
-        TwilioVoiceSDK.register(withAccessToken: token, deviceToken: deviceToken) { error in
-            if let error {
-                print("Twilio push registration failed:", error)
-            } else {
-                print("Push registration successful")
-            }
-        }
+        VoiceManager.shared.updateDeviceToken(deviceToken)
     }
 
     func pushRegistry(_ registry: PKPushRegistry,

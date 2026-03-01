@@ -2,6 +2,26 @@ import Foundation
 
 enum API {
 
+    static func getTwilioToken(line: VoiceEngine.Line) async throws -> String {
+        let baseURL = await MainActor.run { LineManager.shared.activeLine.baseURL }
+        let url = baseURL.appendingPathComponent("api/voice/token")
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body = ["lineId": line.backendLineId]
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let data = try await AuthService.shared.performAuthorizedRequest(request)
+
+        struct Response: Decodable {
+            let token: String
+        }
+
+        return try JSONDecoder().decode(Response.self, from: data).token
+    }
+
     static func registerVoIPToken(_ token: String) async {
         let baseURL = await MainActor.run { LineManager.shared.activeLine.baseURL }
         let url = baseURL.appendingPathComponent("api/voice/device-token")
@@ -66,7 +86,7 @@ enum API {
     static func reconcileActiveCalls() async throws {
         let serverCalls = try await getActiveCalls()
         await MainActor.run {
-            CallManager.shared.syncWithServer(serverCalls)
+            VoiceEngine.shared.syncWithServer(serverCalls)
         }
     }
 

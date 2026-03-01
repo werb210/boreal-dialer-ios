@@ -24,7 +24,8 @@ final class LineManager: ObservableObject {
     func switchLine(to line: Line) {
         activeLine = line
         CallManager.shared.setActiveLine(line)
-        VoiceService.shared.reset()
+        TwilioVoiceManager.shared.disconnect()
+        VoiceEngine.shared.forceTerminate()
         ConversationsService.shared.reset()
 
         WebSocketManager.shared.disconnect()

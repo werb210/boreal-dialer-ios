@@ -8,6 +8,7 @@ struct BorealDialerApp: App {
 
     init() {
         VoIPPushManager.shared.register()
+        _ = VoiceEngine.shared
         _ = NetworkMonitor.shared
         _ = ReachabilityManager.shared
         _ = PersistenceController.shared

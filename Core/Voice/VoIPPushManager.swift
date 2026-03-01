@@ -53,6 +53,6 @@ final class VoIPPushManager: NSObject, PKPushRegistryDelegate {
             return
         }
 
-        CallKitManager.shared.reportIncomingCall(uuid: uuid, handle: handle)
+        VoiceEngine.shared.reportIncoming(uuid: uuid, handle: handle)
     }
 }

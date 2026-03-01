@@ -8,7 +8,11 @@ final class VoIPPushManager: NSObject, PKPushRegistryDelegate {
 
     private var registry: PKPushRegistry?
 
-    func configure() {
+    private override init() {
+        super.init()
+    }
+
+    func register() {
         registry = PKPushRegistry(queue: .main)
         registry?.delegate = self
         registry?.desiredPushTypes = [.voIP]
@@ -18,6 +22,7 @@ final class VoIPPushManager: NSObject, PKPushRegistryDelegate {
                       didUpdate pushCredentials: PKPushCredentials,
                       for type: PKPushType) {
         let token = pushCredentials.token.map { String(format: "%02x", $0) }.joined()
+
         Task {
             await API.registerVoIPToken(token)
         }
@@ -26,31 +31,28 @@ final class VoIPPushManager: NSObject, PKPushRegistryDelegate {
     func pushRegistry(_ registry: PKPushRegistry,
                       didReceiveIncomingPushWith payload: PKPushPayload,
                       for type: PKPushType) {
-        handleIncomingPush(payload)
+        handleIncomingPush(payload, type: type)
     }
 
     func pushRegistry(_ registry: PKPushRegistry,
                       didReceiveIncomingPushWith payload: PKPushPayload,
                       for type: PKPushType,
                       completion: @escaping () -> Void) {
-        handleIncomingPush(payload)
+        handleIncomingPush(payload, type: type)
         completion()
     }
 
-    private func handleIncomingPush(_ payload: PKPushPayload) {
-        let data = payload.dictionaryPayload
+    private func handleIncomingPush(_ payload: PKPushPayload, type: PKPushType) {
+        guard type == .voIP else { return }
+
         guard
-            let callId = data["callId"] as? String,
-            let number = data["number"] as? String
+            let uuidString = payload.dictionaryPayload["uuid"] as? String,
+            let handle = payload.dictionaryPayload["handle"] as? String,
+            let uuid = UUID(uuidString: uuidString)
         else {
             return
         }
 
-        let uuid = UUID(uuidString: callId) ?? UUID()
-        guard CallManager.shared.startIncomingCall(from: number, uuid: uuid) else {
-            return
-        }
-
-        CallKitManager.shared.reportIncomingCall(uuid: uuid, number: number)
+        CallKitManager.shared.reportIncomingCall(uuid: uuid, handle: handle)
     }
 }

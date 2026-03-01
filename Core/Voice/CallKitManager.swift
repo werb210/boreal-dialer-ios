@@ -2,6 +2,7 @@ import Foundation
 import CallKit
 import AVFoundation
 
+@MainActor
 final class CallKitManager: NSObject, CXProviderDelegate {
 
     static let shared = CallKitManager()
@@ -20,11 +21,10 @@ final class CallKitManager: NSObject, CXProviderDelegate {
         provider.setDelegate(self, queue: nil)
     }
 
-    func startCall(to number: String) {
+    func startCall(uuid: UUID, to number: String) {
         let handle = CXHandle(type: .phoneNumber, value: number)
-        let callUUID = UUID()
 
-        let startCallAction = CXStartCallAction(call: callUUID, handle: handle)
+        let startCallAction = CXStartCallAction(call: uuid, handle: handle)
         let transaction = CXTransaction(action: startCallAction)
 
         callController.request(transaction) { error in
@@ -33,8 +33,7 @@ final class CallKitManager: NSObject, CXProviderDelegate {
             }
         }
 
-        provider.reportOutgoingCall(with: callUUID, startedConnectingAt: nil)
-        provider.reportOutgoingCall(with: callUUID, connectedAt: Date())
+        provider.reportOutgoingCall(with: uuid, startedConnectingAt: nil)
     }
 
     func reportIncomingCall(uuid: UUID, number: String) {
@@ -75,7 +74,8 @@ final class CallKitManager: NSObject, CXProviderDelegate {
     }
 
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
-        CallManager.shared.endCall(uuid: action.callUUID)
+        VoiceService.shared.activeCall?.disconnect()
         action.fulfill()
+        CallManager.shared.callDidFail()
     }
 }

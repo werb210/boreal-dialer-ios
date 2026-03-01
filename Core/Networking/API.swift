@@ -49,9 +49,25 @@ enum API {
         try await NetworkManager.shared.fetchActiveCalls()
     }
 
+    static func logCall(duration: Int, status: String) async throws {
+        let baseURL = await MainActor.run { LineManager.shared.activeLine.baseURL }
+        let url = baseURL.appendingPathComponent("api/voice/calls/log")
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let payload = CallLogPayload(duration: duration, status: status)
+        request.httpBody = try JSONEncoder().encode(payload)
+
+        _ = try await AuthService.shared.performAuthorizedRequest(request)
+    }
+
     static func reconcileActiveCalls() async throws {
         let serverCalls = try await getActiveCalls()
-        CallManager.shared.syncWithServer(serverCalls)
+        await MainActor.run {
+            CallManager.shared.syncWithServer(serverCalls)
+        }
     }
 
     static func executeQueuedAction(_ action: QueuedAction) async throws {
@@ -82,4 +98,9 @@ enum API {
 
         _ = try await AuthService.shared.performAuthorizedRequest(request)
     }
+}
+
+private struct CallLogPayload: Codable {
+    let duration: Int
+    let status: String
 }

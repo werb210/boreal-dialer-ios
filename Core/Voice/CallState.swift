@@ -1,16 +1,10 @@
 import Foundation
-import Combine
 
-enum CallStatus {
+enum CallState: String {
     case idle
-    case connecting
+    case dialing
     case ringing
     case active
     case ended
-    case failed(String)
-}
-
-final class CallState: ObservableObject {
-    @Published var status: CallStatus = .idle
-    @Published var activeNumber: String?
+    case failed
 }

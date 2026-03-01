@@ -3,8 +3,7 @@ import SwiftUI
 struct DialerView: View {
 
     @State private var number = ""
-    @ObservedObject private var callState = VoiceService.shared.getCallState()
-    @ObservedObject private var duration = CallDurationManager.shared
+    @ObservedObject private var callManager = CallManager.shared
     @ObservedObject private var reachability = ReachabilityManager.shared
 
     var body: some View {
@@ -15,9 +14,9 @@ struct DialerView: View {
                 .textFieldStyle(.roundedBorder)
 
             Button("Call") {
-                VoiceService.shared.startCall(to: number)
+                CallManager.shared.startCall(to: number)
             }
-            .disabled(!reachability.isOnline || number.isEmpty)
+            .disabled(!reachability.isOnline || number.isEmpty || callManager.state != .idle)
 
             if !reachability.isOnline {
                 Text("Offline: calling disabled")
@@ -32,29 +31,35 @@ struct DialerView: View {
 
     @ViewBuilder
     private func callStatusView() -> some View {
-        switch callState.status {
+        switch callManager.state {
         case .idle:
             EmptyView()
-        case .connecting:
-            Text("Connecting...")
+        case .dialing:
+            Text("Dialing...")
+        case .ringing:
+            Text("Ringing...")
         case .active:
             VStack {
-                Text("On call with \(callState.activeNumber ?? "")")
-                Text(duration.formattedDuration)
+                Text("On call with \(VoiceService.shared.activeNumber ?? "")")
+                Text(formatDuration(callManager.callDuration))
                     .font(.system(size: 28, weight: .medium, design: .monospaced))
                     .foregroundColor(.white)
                 Button("End Call") {
-                    VoiceService.shared.endCall()
+                    CallManager.shared.endCall()
                 }
                 .foregroundColor(.red)
             }
         case .ended:
             Text("Call Ended")
-        case .failed(let error):
-            Text("Error: \(error)")
+        case .failed:
+            Text("Call Failed")
                 .foregroundColor(.red)
-        case .ringing:
-            Text("Ringing...")
         }
+    }
+
+    private func formatDuration(_ seconds: Int) -> String {
+        let minutes = seconds / 60
+        let remainder = seconds % 60
+        return String(format: "%02d:%02d", minutes, remainder)
     }
 }

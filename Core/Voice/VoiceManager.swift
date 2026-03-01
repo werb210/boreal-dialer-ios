@@ -47,7 +47,12 @@ final class VoiceManager: NSObject, ObservableObject {
     }
 
     func acceptCallFromCallKit() {
+        guard CallStateManager.shared.current() == .ringing else { return }
         guard let invite = pendingInvite else { return }
+
+        CallStateManager.shared.transition(to: .connecting)
+        configureAudioSessionForCall()
+
         activeCall = invite.accept(with: self)
         pendingInvite = nil
         inviteUUIDMap = inviteUUIDMap.filter { $0.value.callSid != invite.callSid }
@@ -127,9 +132,13 @@ final class VoiceManager: NSObject, ObservableObject {
     }
 
     func startCall(clientId: String) async {
+        guard CallStateManager.shared.current() == .idle else { return }
         guard activeCall == nil else { return }
         guard clientId == IdentityManager.shared.requireIdentity() else { return }
         guard let token = accessToken else { return }
+
+        CallStateManager.shared.transition(to: .connecting)
+        configureAudioSessionForCall()
 
         let options = ConnectOptions(accessToken: token) { builder in
             builder.params = ["clientId": clientId]
@@ -140,6 +149,11 @@ final class VoiceManager: NSObject, ObservableObject {
     }
 
     func acceptCall(invite: CallInvite) {
+        guard CallStateManager.shared.current() == .ringing else { return }
+
+        CallStateManager.shared.transition(to: .connecting)
+        configureAudioSessionForCall()
+
         activeCall = invite.accept(with: self)
         pendingInvite = nil
         sendPresence(status: "busy")
@@ -155,6 +169,7 @@ final class VoiceManager: NSObject, ObservableObject {
     private func attemptRegistrationIfPossible() {
         guard let token = latestToken, let deviceToken else { return }
         guard registrationState == .unregistered else { return }
+        guard CallStateManager.shared.current() == .idle else { return }
 
         registrationState = .registering
 
@@ -180,6 +195,30 @@ final class VoiceManager: NSObject, ObservableObject {
 
         TwilioVoiceSDK.unregister(withAccessToken: tokenToUnregister, deviceToken: deviceToken) { _ in
             registerWithToken()
+        }
+    }
+
+
+    private func configureAudioSessionForCall() {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .duckOthers])
+            try session.setActive(true)
+        } catch {
+            print("Audio session config failed:", error)
+        }
+    }
+
+    func cleanup() {
+        activeCall = nil
+        pendingInvite = nil
+        inviteUUIDMap.removeAll()
+
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setActive(false, options: [])
+        } catch {
+            print("Audio session deactivate failed:", error)
         }
     }
 
@@ -262,6 +301,7 @@ extension VoiceManager: CallDelegate {
 
     func callDidConnect(_ call: Call) {
         print("Connected")
+        CallStateManager.shared.transition(to: .connected)
         sendPresence(status: "busy")
         notifyServerStatus(status: "connected")
     }
@@ -272,7 +312,11 @@ extension VoiceManager: CallDelegate {
             CallKitManager.shared.endCall(uuid: uuid)
             inviteUUIDMap.removeValue(forKey: uuid)
         }
+
+        CallStateManager.shared.transition(to: .ended)
         transitionToIdleState()
+        cleanup()
+        CallStateManager.shared.reset()
         notifyServerStatus(status: "completed")
     }
 
@@ -299,18 +343,28 @@ extension VoiceManager: CallDelegate {
 extension VoiceManager: NotificationDelegate {
 
     func callInviteReceived(_ callInvite: CallInvite) {
+        guard CallStateManager.shared.current() == .idle else {
+            callInvite.reject()
+            return
+        }
+
         if activeCall != nil || pendingInvite != nil {
             callInvite.reject()
             return
         }
 
+        CallStateManager.shared.transition(to: .ringing)
         pendingInvite = callInvite
-        let uuid = UUID()
+        let uuid = callInvite.uuid
         inviteUUIDMap[uuid] = callInvite
-        CallKitManager.shared.reportIncomingCall(
-            uuid: uuid,
-            handle: callInvite.from ?? "Incoming"
-        )
+
+        DispatchQueue.main.async {
+            guard CallStateManager.shared.current() == .ringing else { return }
+            CallKitManager.shared.reportIncomingCall(
+                uuid: uuid,
+                handle: callInvite.from ?? "Incoming"
+            )
+        }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in
             guard let self else { return }
@@ -318,12 +372,18 @@ extension VoiceManager: NotificationDelegate {
             guard self.pendingInvite?.callSid == callInvite.callSid else { return }
             self.pendingInvite?.reject()
             self.pendingInvite = nil
+            CallStateManager.shared.transition(to: .ended)
+            CallStateManager.shared.reset()
+            self.cleanup()
         }
     }
 
     func cancelledCallInviteReceived(_ cancelledCallInvite: CancelledCallInvite, error: (any Error)?) {
         if pendingInvite?.callSid == cancelledCallInvite.callSid {
             pendingInvite = nil
+            cleanup()
+            CallStateManager.shared.transition(to: .ended)
+            CallStateManager.shared.reset()
         }
         if let uuid = inviteUUIDMap.first(where: { $0.value.callSid == cancelledCallInvite.callSid })?.key {
             CallKitManager.shared.endCall(uuid: uuid)

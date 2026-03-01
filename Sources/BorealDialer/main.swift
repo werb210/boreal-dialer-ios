@@ -68,8 +68,10 @@ struct BorealDialerApp: App {
             .onReceive(NotificationCenter.default.publisher(
                 for: UIScene.didDisconnectNotification
             )) { _ in
-                TwilioVoiceManager.shared.disconnect()
+                TwilioVoiceManager.shared.cleanup()
+                VoiceManager.shared.cleanup()
                 VoiceEngine.shared.forceTerminate()
+                CallStateManager.shared.reset()
             }
         }
     }

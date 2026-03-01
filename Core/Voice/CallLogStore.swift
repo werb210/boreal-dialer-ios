@@ -6,7 +6,7 @@ final class CallLogStore: ObservableObject {
 
     @Published private(set) var logs: [CallLog] = []
 
-    private let storageKey = "boreal.call.logs"
+    private let storageKey = "call_logs"
 
     private init() {
         load()
@@ -18,8 +18,8 @@ final class CallLogStore: ObservableObject {
     }
 
     private func save() {
-        if let data = try? JSONEncoder().encode(logs) {
-            UserDefaults.standard.set(data, forKey: storageKey)
+        if let encodedLogs = try? JSONEncoder().encode(logs) {
+            UserDefaults.standard.set(encodedLogs, forKey: storageKey)
         }
     }
 

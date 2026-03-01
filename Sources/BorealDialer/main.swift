@@ -17,7 +17,7 @@ struct BorealDialerApp: App {
         _ = ReachabilityManager.shared
         _ = PersistenceController.shared
 
-        try? AVAudioSession.sharedInstance().setCategory(.playAndRecord, options: [.allowBluetooth])
+        try? AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth])
 
         ReconnectionController.shared.start()
 #if canImport(Sentry)
@@ -63,6 +63,13 @@ struct BorealDialerApp: App {
                         try? await API.reconcileActiveCalls()
                     }
                 }
+            }
+
+            .onReceive(NotificationCenter.default.publisher(
+                for: UIScene.didDisconnectNotification
+            )) { _ in
+                TwilioVoiceManager.shared.disconnect()
+                VoiceEngine.shared.forceTerminate()
             }
         }
     }

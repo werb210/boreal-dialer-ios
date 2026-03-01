@@ -8,14 +8,14 @@ struct CallHistoryView: View {
         List(store.logs) { log in
             VStack(alignment: .leading, spacing: 4) {
 
-                Text(log.phoneNumber)
+                Text(log.direction.capitalized)
                     .font(.headline)
 
-                Text("\(log.direction.rawValue.capitalized) • \(log.result.rawValue.capitalized)")
+                Text(log.timestamp.formatted(date: .abbreviated, time: .shortened))
                     .font(.subheadline)
                     .foregroundColor(.gray)
 
-                Text("\(log.durationSeconds)s")
+                Text("\(Int(log.duration))s")
                     .font(.caption)
                     .foregroundColor(.gray)
             }

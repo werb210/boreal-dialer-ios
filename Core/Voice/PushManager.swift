@@ -33,6 +33,12 @@ final class PushManager: NSObject, PKPushRegistryDelegate {
         registerDeviceTokenWithTwilio()
     }
 
+    func pushRegistry(_ registry: PKPushRegistry, didInvalidatePushTokenFor type: PKPushType) {
+        guard type == .voIP else { return }
+        deviceToken = nil
+        VoiceManager.shared.handleNetworkReconnect()
+    }
+
     func pushRegistry(_ registry: PKPushRegistry,
                       didReceiveIncomingPushWith payload: PKPushPayload,
                       for type: PKPushType,

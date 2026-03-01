@@ -25,12 +25,18 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
     private var pendingCallInvite: CallInvite?
 
     init(tokenProvider: TokenProvider = BFTokenProvider()) {
+        guard IdentityManager.shared.identity != nil else {
+            fatalError("Identity not configured before Voice init")
+        }
+
         self.tokenProvider = tokenProvider
         super.init()
 
         let config = CXProviderConfiguration(localizedName: "Boreal")
         config.supportsVideo = false
         config.maximumCallsPerCallGroup = 1
+        config.maximumCallGroups = 1
+        config.includesCallsInRecents = true
         config.supportedHandleTypes = [.phoneNumber]
 
         callKitProvider = CXProvider(configuration: config)

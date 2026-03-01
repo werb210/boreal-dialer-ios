@@ -26,14 +26,19 @@ final class CallManager: ObservableObject {
         VoiceService.shared.startCall(uuid: uuid, to: number)
     }
 
+    func incomingCall(uuid: UUID) {
+        guard state == .idle else { return }
+        activeCallUUID = uuid
+        state = .ringing
+    }
+
     @discardableResult
     func startIncomingCall(from number: String, uuid: UUID) -> Bool {
         _ = number
-        guard state == .idle else { return false }
         guard activeLine == LineManager.shared.activeLine else { return false }
+        guard state == .idle else { return false }
 
-        activeCallUUID = uuid
-        state = .ringing
+        incomingCall(uuid: uuid)
         return true
     }
 
@@ -82,7 +87,7 @@ final class CallManager: ObservableObject {
             if let ringingCall = serverCalls.first(where: { $0.status == "ringing" }),
                let ringingUUID = UUID(uuidString: ringingCall.id),
                startIncomingCall(from: ringingCall.number, uuid: ringingUUID) {
-                CallKitManager.shared.reportIncomingCall(uuid: ringingUUID, number: ringingCall.number)
+                CallKitManager.shared.reportIncomingCall(uuid: ringingUUID, handle: ringingCall.number)
             }
             return
         }

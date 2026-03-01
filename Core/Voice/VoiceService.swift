@@ -22,6 +22,7 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
 
     private(set) var activeCall: Call?
     private(set) var activeNumber: String?
+    private var pendingCallInvite: CallInvite?
 
     init(tokenProvider: TokenProvider = BFTokenProvider()) {
         self.tokenProvider = tokenProvider
@@ -100,24 +101,15 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
         }
     }
 
-    func handleIncomingCall(_ call: Call) {
+    func handleIncomingCall(uuid: UUID, number: String) {
         currentDirection = .inbound
         callStartDate = Date()
-
-        activeCall = call
-        activeCall?.delegate = self
-        activeNumber = call.from ?? "Unknown"
-
-        let uuid = UUID()
-        guard CallManager.shared.startIncomingCall(from: activeNumber ?? "Unknown", uuid: uuid) else {
-            return
-        }
-        CallKitManager.shared.reportIncomingCall(uuid: uuid, number: activeNumber ?? "Unknown")
+        activeNumber = number
 
         persistCall(
             CallModel(
                 id: uuid.uuidString,
-                number: activeNumber ?? "Unknown",
+                number: number,
                 direction: "inbound",
                 status: "ringing",
                 startedAt: callStartDate ?? Date(),
@@ -141,13 +133,30 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
         activeNumber = nil
     }
 
-    func answerIncomingCall() {
+    func acceptCall(uuid: UUID) {
+        guard CallManager.shared.activeCallUUID == uuid else { return }
+
+        if let invite = pendingCallInvite {
+            activeCall = invite.accept(with: self)
+            activeCall?.delegate = self
+            pendingCallInvite = nil
+            return
+        }
+
         activeCall?.accept()
     }
 
-    func rejectIncomingCall() {
+    func rejectCall(uuid: UUID) {
+        guard CallManager.shared.activeCallUUID == uuid else { return }
+
+        if let invite = pendingCallInvite {
+            invite.reject()
+            pendingCallInvite = nil
+            activeNumber = nil
+            return
+        }
+
         activeCall?.reject()
-        CallManager.shared.callDidFail()
     }
 
     func reset() {
@@ -259,7 +268,12 @@ extension VoiceService: CallDelegate {
 extension VoiceService: NotificationDelegate {
 
     func callInviteReceived(_ callInvite: CallInvite) {
-        let call = callInvite.accept(with: self)
-        handleIncomingCall(call)
+        pendingCallInvite = callInvite
+
+        let uuid = callInvite.uuid
+        let number = callInvite.from ?? "Unknown"
+
+        handleIncomingCall(uuid: uuid, number: number)
+        CallKitManager.shared.reportIncomingCall(uuid: uuid, handle: number)
     }
 }

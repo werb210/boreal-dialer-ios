@@ -7,7 +7,7 @@ struct BorealDialerApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
-        VoIPPushManager.shared.configure()
+        VoIPPushManager.shared.register()
         _ = NetworkMonitor.shared
         _ = ReachabilityManager.shared
         _ = PersistenceController.shared

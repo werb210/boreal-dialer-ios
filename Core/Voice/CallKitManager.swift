@@ -36,16 +36,18 @@ final class CallKitManager: NSObject, CXProviderDelegate {
         provider.reportOutgoingCall(with: uuid, startedConnectingAt: nil)
     }
 
-    func reportIncomingCall(uuid: UUID, number: String) {
+    func reportIncomingCall(uuid: UUID, handle: String) {
         let update = CXCallUpdate()
-        update.remoteHandle = CXHandle(type: .phoneNumber, value: number)
+        update.remoteHandle = CXHandle(type: .phoneNumber, value: handle)
         update.hasVideo = false
 
         provider.reportNewIncomingCall(with: uuid, update: update) { error in
             if let error {
                 print("Incoming call report failed: \(error.localizedDescription)")
-                CallManager.shared.endCall(uuid: uuid)
+                return
             }
+
+            CallManager.shared.incomingCall(uuid: uuid)
         }
     }
 
@@ -69,13 +71,14 @@ final class CallKitManager: NSObject, CXProviderDelegate {
     }
 
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
-        CallManager.shared.answerCall(uuid: action.callUUID)
+        VoiceService.shared.acceptCall(uuid: action.callUUID)
+        CallManager.shared.callDidConnect()
         action.fulfill()
     }
 
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
-        VoiceService.shared.activeCall?.disconnect()
-        action.fulfill()
+        VoiceService.shared.rejectCall(uuid: action.callUUID)
         CallManager.shared.callDidFail()
+        action.fulfill()
     }
 }

@@ -4,21 +4,19 @@ const twilio = require('twilio');
 const http = require('http');
 
 const STATUS_MAP = {
-  queued: 'ringing',
-  ringing: 'ringing',
-  'in-progress': 'active',
   completed: 'completed',
+  'in-progress': 'active',
+  failed: 'failed',
   busy: 'failed',
   'no-answer': 'failed',
-  failed: 'failed',
   canceled: 'failed',
 };
 
 const TERMINAL_STATUSES = new Set(['completed', 'failed']);
 
-function normalizeStatus(rawStatus, fallback = 'initiated') {
-  if (!rawStatus) return fallback;
-  return STATUS_MAP[String(rawStatus).toLowerCase()] || fallback;
+function normalizeStatus(rawStatus) {
+  if (!rawStatus) return 'unknown';
+  return STATUS_MAP[String(rawStatus).toLowerCase()] || 'unknown';
 }
 
 function isTerminal(status) {
@@ -38,10 +36,11 @@ function timeout(ms) {
 function createInMemoryCallsRepo() {
   const callsById = new Map();
   const callsByClientKey = new Map();
+  const callsByApplicationKey = new Map();
 
   return {
     // Mirrors an atomic DB upsert by unique(user_id, client_call_id).
-    upsertCallAtomic({ userId, clientCallId, to }) {
+    upsertCallAtomic({ userId, clientCallId, to, applicationId }) {
       const dedupeKey = `${userId}:${clientCallId}`;
       const existingId = callsByClientKey.get(dedupeKey);
       if (existingId) {
@@ -55,6 +54,7 @@ function createInMemoryCallsRepo() {
         id,
         user_id: userId,
         clientCallId,
+        applicationId,
         to,
         status: 'initiated',
         twilioStatus: null,
@@ -65,7 +65,16 @@ function createInMemoryCallsRepo() {
         updated_at: new Date().toISOString(),
       };
       callsById.set(id, call);
-      callsByClientKey.set(dedupeKey, id);
+      if (clientCallId) callsByClientKey.set(dedupeKey, id);
+      if (applicationId) callsByApplicationKey.set(`${userId}:${applicationId}`, id);
+      return call;
+    },
+    findActiveCall(userId, applicationId) {
+      const id = callsByApplicationKey.get(`${userId}:${applicationId}`);
+      if (!id) return null;
+      const call = callsById.get(id);
+      if (!call) return null;
+      if (isTerminal(call.status)) return null;
       return call;
     },
     getById(id) {
@@ -98,13 +107,7 @@ function createApp(env = process.env, deps = {}) {
   const startTwilioCall = deps.startTwilioCall || defaultTwilioStartCall;
   const logger = deps.logger || console;
 
-  const voiceEnabled = String(env.VOICE_ENABLED || '').toLowerCase() !== 'false' && Boolean(
-    env.TWILIO_ACCOUNT_SID &&
-    env.TWILIO_AUTH_TOKEN &&
-    env.TWILIO_API_KEY &&
-    env.TWILIO_API_SECRET &&
-    env.TWILIO_TWIML_APP_SID
-  );
+  const voiceEnabled = env.VOICE_ENABLED !== 'false';
 
   app.use((req, res, next) => {
     req.requestId = req.headers['x-request-id'] || crypto.randomUUID();
@@ -132,9 +135,10 @@ function createApp(env = process.env, deps = {}) {
     return next();
   }
 
-  function requireRole(req, res, next) {
-    if (!['staff', 'admin'].includes((req.user.role || '').toLowerCase())) {
-      return makeError(res, req, 403, 'forbidden', 'Insufficient role');
+  function requireStaff(req, res, next) {
+    const role = String(req.user.role || '');
+    if (!['Staff', 'staff', 'admin', 'Admin'].includes(role)) {
+      return makeError(res, req, 403, 'forbidden', 'forbidden');
     }
     return next();
   }
@@ -144,7 +148,7 @@ function createApp(env = process.env, deps = {}) {
     return next();
   }
 
-  app.post('/api/voice/token', requireAuth, requireRole, requireVoiceEnabled, (req, res) => {
+  app.get('/api/voice/token', requireAuth, requireStaff, requireVoiceEnabled, (req, res) => {
     const token = new twilio.jwt.AccessToken(
       env.TWILIO_ACCOUNT_SID,
       env.TWILIO_API_KEY,
@@ -152,15 +156,28 @@ function createApp(env = process.env, deps = {}) {
       { identity: req.user.id }
     );
     token.addGrant(new twilio.jwt.AccessToken.VoiceGrant({ outgoingApplicationSid: env.TWILIO_TWIML_APP_SID }));
-
     res.status(200).json({ token: token.toJwt(), identity: req.user.id, requestId: req.requestId });
   });
 
-  app.post('/api/voice/calls/start', requireAuth, requireRole, requireVoiceEnabled, async (req, res) => {
-    const { clientCallId, to } = req.body || {};
-    if (!clientCallId || !to) return makeError(res, req, 400, 'bad_request', 'clientCallId and to are required');
+  app.post('/api/voice/token', requireAuth, requireStaff, requireVoiceEnabled, (req, res) => {
+    const token = new twilio.jwt.AccessToken(
+      env.TWILIO_ACCOUNT_SID,
+      env.TWILIO_API_KEY,
+      env.TWILIO_API_SECRET,
+      { identity: req.user.id }
+    );
+    token.addGrant(new twilio.jwt.AccessToken.VoiceGrant({ outgoingApplicationSid: env.TWILIO_TWIML_APP_SID }));
+    res.status(200).json({ token: token.toJwt(), identity: req.user.id, requestId: req.requestId });
+  });
 
-    const call = callsRepo.upsertCallAtomic({ userId: req.user.id, clientCallId, to });
+  app.post('/api/voice/calls/start', requireAuth, requireStaff, requireVoiceEnabled, async (req, res) => {
+    const { clientCallId, to, applicationId } = req.body || {};
+    if (!to || (!clientCallId && !applicationId)) return makeError(res, req, 400, 'bad_request', 'missing call identifiers');
+
+    let call = applicationId ? callsRepo.findActiveCall(req.user.id, applicationId) : null;
+    if (!call) {
+      call = callsRepo.upsertCallAtomic({ userId: req.user.id, clientCallId, to, applicationId });
+    }
 
     try {
       const twilioResult = await Promise.race([
@@ -170,10 +187,11 @@ function createApp(env = process.env, deps = {}) {
 
       if (twilioResult?.sid) call.sid = twilioResult.sid;
       call.updated_at = new Date().toISOString();
-      call.status = normalizeStatus(call.twilioStatus, call.status);
+      const normalized = normalizeStatus(call.twilioStatus);
+      if (normalized !== 'unknown') call.status = normalized;
 
       logger.info({ event: 'voice_call_started', requestId: req.requestId, callId: call.id, status: call.status });
-      return res.status(200).json({ call: { ...call, status: normalizeStatus(call.twilioStatus, call.status) }, requestId: req.requestId });
+      return res.status(200).json({ call: { ...call, status: call.status }, requestId: req.requestId });
     } catch {
       call.status = 'failed';
       call.ended_at = call.ended_at || new Date().toISOString();
@@ -182,7 +200,7 @@ function createApp(env = process.env, deps = {}) {
     }
   });
 
-  app.post('/api/voice/calls/end', requireAuth, requireRole, requireVoiceEnabled, (req, res) => {
+  app.post('/api/voice/calls/end', requireAuth, requireStaff, requireVoiceEnabled, (req, res) => {
     const { id } = req.body || {};
     const call = callsRepo.getById(id);
     if (!call) return makeError(res, req, 404, 'not_found', 'Call not found');
@@ -194,10 +212,10 @@ function createApp(env = process.env, deps = {}) {
       call.updated_at = new Date().toISOString();
       logger.info({ event: 'voice_call_completed', requestId: req.requestId, callId: call.id, status: call.status });
     }
-    return res.status(200).json({ call: { ...call, status: normalizeStatus(call.twilioStatus, call.status) }, requestId: req.requestId });
+    return res.status(200).json({ call: { ...call, status: call.status }, requestId: req.requestId });
   });
 
-  app.get('/api/voice/calls/:id', requireAuth, requireRole, requireVoiceEnabled, (req, res) => {
+  app.get('/api/voice/calls/:id', requireAuth, requireStaff, requireVoiceEnabled, (req, res) => {
     const call = callsRepo.getById(req.params.id);
     if (!call) return makeError(res, req, 404, 'not_found', 'Call not found');
     if (call.user_id !== req.user.id) return makeError(res, req, 403, 'forbidden', 'Call ownership violation');
@@ -206,7 +224,7 @@ function createApp(env = process.env, deps = {}) {
       call: {
         id: call.id,
         clientCallId: call.clientCallId,
-        status: normalizeStatus(call.twilioStatus, call.status),
+        status: call.status,
         started_at: call.started_at,
         ended_at: call.ended_at,
       },
@@ -224,25 +242,41 @@ function createApp(env = process.env, deps = {}) {
 
     const sid = req.body.CallSid;
     const twilioStatus = req.body.CallStatus;
-    const incomingStatus = normalizeStatus(twilioStatus, 'initiated');
+    const incomingStatus = normalizeStatus(twilioStatus);
 
     const call = callsRepo.findBySidOrClientCallId(sid, req.body.clientCallId);
     if (!call) return res.status(200).json({ ok: true, requestId: req.requestId });
 
     if (isTerminal(call.status)) return res.status(200).json({ ok: true, requestId: req.requestId });
 
-    const currentNormalized = normalizeStatus(call.twilioStatus, call.status);
+    const currentNormalized = normalizeStatus(call.twilioStatus);
     if (currentNormalized === incomingStatus) return res.status(200).json({ ok: true, requestId: req.requestId });
 
     call.sid = sid || call.sid;
     call.twilioStatus = twilioStatus || call.twilioStatus;
-    call.status = normalizeStatus(call.twilioStatus, call.status);
+    call.status = normalizeStatus(call.twilioStatus);
     call.updated_at = new Date().toISOString();
     if (isTerminal(call.status)) call.ended_at = call.ended_at || new Date().toISOString();
 
     logger.info({ event: 'voice_call_status_update', requestId: req.requestId, callId: call.id, status: call.status });
 
     return res.status(200).json({ ok: true, requestId: req.requestId });
+  });
+
+  app.post('/api/twilio/status', (req, res) => {
+    const sid = req.body?.CallSid;
+    const call = callsRepo.findBySidOrClientCallId(sid, req.body?.clientCallId);
+
+    if (call) {
+      const mapped = normalizeStatus(req.body?.CallStatus);
+      call.sid = sid || call.sid;
+      call.twilioStatus = req.body?.CallStatus || call.twilioStatus;
+      call.status = mapped;
+      call.updated_at = new Date().toISOString();
+      if (isTerminal(call.status)) call.ended_at = call.ended_at || new Date().toISOString();
+    }
+
+    return res.sendStatus(200);
   });
 
   app.all('/api/twilio/voice', (_req, res) => {

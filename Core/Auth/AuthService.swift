@@ -7,17 +7,19 @@ final class AuthService: ObservableObject {
 
     @Published var isAuthenticated = false
 
-    private let baseURL = "https://YOUR-BF-SERVER"
-
     private init() {
         if KeychainService.shared.load("accessToken") != nil {
             isAuthenticated = true
         }
     }
 
+    private func baseURL() async -> URL {
+        await MainActor.run { LineManager.shared.activeLine.baseURL }
+    }
+
     func login(phone: String, otp: String) async throws {
 
-        let url = URL(string: "\(baseURL)/api/auth/otp/verify")!
+        let url = await baseURL().appendingPathComponent("api/auth/otp/verify")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -52,7 +54,7 @@ final class AuthService: ObservableObject {
             throw URLError(.userAuthenticationRequired)
         }
 
-        let url = URL(string: "\(baseURL)/api/auth/refresh")!
+        let url = await baseURL().appendingPathComponent("api/auth/refresh")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

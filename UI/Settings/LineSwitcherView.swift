@@ -11,7 +11,7 @@ struct LineSwitcherView: View {
                     manager.switchLine(to: line)
                 } label: {
                     HStack {
-                        Text(line.displayName)
+                        Text(line.name)
                         if manager.activeLine == line {
                             Spacer()
                             Image(systemName: "checkmark")

@@ -1,6 +1,14 @@
 import Foundation
-import SwiftData
 import TwilioConversationsClient
+
+struct QueuedMessage: Codable {
+    let id: String
+    let body: String
+    let number: String
+    let direction: String
+    let timestamp: Date
+    let lineId: String
+}
 
 final class ConversationsService: NSObject, ObservableObject {
 
@@ -8,21 +16,19 @@ final class ConversationsService: NSObject, ObservableObject {
 
     @Published var messages: [MessageModel] = []
 
-    var modelContext: ModelContext?
-
     private var client: TwilioConversationsClient?
     private var conversation: TCHConversation?
+    private let queueStorageKey = "boreal.sms.queue"
+    private var queuedMessages: [QueuedMessage] = []
 
-    func configureContext(_ context: ModelContext) {
-        self.modelContext = context
+    override init() {
+        super.init()
+        loadQueue()
     }
 
     func initialize(for lineId: String, with token: String) {
-        // token is already line-specific
-        TwilioConversationsClient.conversationsClient(
-            withToken: token
-        ) { result, client in
-            if let client = client {
+        TwilioConversationsClient.conversationsClient(withToken: token) { _, client in
+            if let client {
                 self.client = client
                 client.delegate = self
             }
@@ -37,9 +43,9 @@ final class ConversationsService: NSObject, ObservableObject {
 
     func joinConversation(named name: String) {
 
-        client?.conversation(withSidOrUniqueName: name) { result, conversation in
+        client?.conversation(withSidOrUniqueName: name) { _, conversation in
 
-            if let conversation = conversation {
+            if let conversation {
                 self.conversation = conversation
                 conversation.delegate = self
                 conversation.join(completion: { _ in })
@@ -48,20 +54,99 @@ final class ConversationsService: NSObject, ObservableObject {
     }
 
     func sendMessage(_ text: String) {
+        guard !text.isEmpty else { return }
 
-        conversation?.sendMessage(text, completion: { result, message in
-            if let message = message {
+        let line = LineManager.shared.activeLine
+        let number = "unknown"
+
+        if !ReachabilityManager.shared.isOnline {
+            queueMessage(body: text, number: number, lineId: line.id)
+            return
+        }
+
+        conversation?.sendMessage(text, completion: { _, message in
+            if let message {
                 let model = MessageModel(
                     id: message.sid ?? UUID().uuidString,
                     body: text,
                     author: "me",
                     timestamp: Date()
                 )
+                self.persistMessage(
+                    id: model.id,
+                    body: text,
+                    number: number,
+                    direction: "outbound",
+                    timestamp: model.timestamp,
+                    lineId: line.id
+                )
                 DispatchQueue.main.async {
                     self.messages.append(model)
                 }
             }
         })
+    }
+
+    func retryQueuedMessages() {
+        guard ReachabilityManager.shared.isOnline else { return }
+        let pending = queuedMessages
+        queuedMessages.removeAll()
+        saveQueue()
+
+        for message in pending {
+            sendMessage(message.body)
+        }
+    }
+
+    private func queueMessage(body: String, number: String, lineId: String) {
+        let queued = QueuedMessage(
+            id: UUID().uuidString,
+            body: body,
+            number: number,
+            direction: "outbound",
+            timestamp: Date(),
+            lineId: lineId
+        )
+        queuedMessages.append(queued)
+        saveQueue()
+        persistMessage(
+            id: queued.id,
+            body: queued.body,
+            number: queued.number,
+            direction: queued.direction,
+            timestamp: queued.timestamp,
+            lineId: queued.lineId
+        )
+    }
+
+    private func persistMessage(id: String,
+                                body: String,
+                                number: String,
+                                direction: String,
+                                timestamp: Date,
+                                lineId: String) {
+        let context = PersistenceController.shared.container.viewContext
+        let entity = MessageEntity(context: context)
+        entity.id = id
+        entity.body = body
+        entity.number = number
+        entity.direction = direction
+        entity.timestamp = timestamp
+        entity.lineId = lineId
+        try? context.save()
+    }
+
+    private func saveQueue() {
+        if let data = try? JSONEncoder().encode(queuedMessages) {
+            UserDefaults.standard.set(data, forKey: queueStorageKey)
+        }
+    }
+
+    private func loadQueue() {
+        guard let data = UserDefaults.standard.data(forKey: queueStorageKey),
+              let decoded = try? JSONDecoder().decode([QueuedMessage].self, from: data)
+        else { return }
+        queuedMessages = decoded
     }
 }
 
@@ -79,20 +164,15 @@ extension ConversationsService: TCHConversationDelegate {
             timestamp: message.dateCreated ?? Date()
         )
 
-        if let line = LineManager.shared.activeLine,
-           let context = modelContext {
-
-            let stored = StoredMessage(
-                id: message.sid ?? UUID().uuidString,
-                lineId: line.id,
-                conversationId: conversation.sid ?? "unknown",
-                body: message.body ?? "",
-                author: message.author ?? "",
-                timestamp: message.dateCreated ?? Date()
-            )
-
-            context.insert(stored)
-        }
+        let line = LineManager.shared.activeLine
+        persistMessage(
+            id: model.id,
+            body: model.body,
+            number: message.author ?? "unknown",
+            direction: "inbound",
+            timestamp: model.timestamp,
+            lineId: line.id
+        )
 
         DispatchQueue.main.async {
             self.messages.append(model)

@@ -1,19 +1,22 @@
 import SwiftUI
-import SwiftData
+import CoreData
 
-struct LegacyCallHistoryView: View {
+struct CallHistoryView: View {
 
-    @Query(sort: \PersistedCallLog.timestamp, order: .reverse)
-    var calls: [PersistedCallLog]
+    @FetchRequest(
+        sortDescriptors: [NSSortDescriptor(keyPath: \CallEntity.startedAt, ascending: false)],
+        animation: .default
+    )
+    private var calls: FetchedResults<CallEntity>
 
     var body: some View {
-        List(calls) { call in
+        List(calls, id: \.id) { call in
             VStack(alignment: .leading) {
-                Text(call.phoneNumber)
+                Text(call.number)
                     .font(.headline)
                 Text(call.status)
                     .font(.subheadline)
-                Text(call.timestamp.formatted())
+                Text(call.startedAt.formatted())
                     .font(.caption)
             }
         }

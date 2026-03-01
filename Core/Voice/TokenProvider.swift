@@ -8,7 +8,8 @@ final class BFTokenProvider: TokenProvider {
 
     func fetchAccessToken(forLine lineId: String) async throws -> String {
 
-        let url = URL(string: "https://YOUR-BF-SERVER/api/voice/token")!
+        let baseURL = await MainActor.run { LineManager.shared.activeLine.baseURL }
+        let url = baseURL.appendingPathComponent("api/voice/token")
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"

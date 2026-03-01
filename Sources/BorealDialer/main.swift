@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 import UIKit
 
 @main
@@ -7,7 +6,9 @@ struct BorealDialerApp: App {
     @StateObject var auth = AuthService.shared
 
     init() {
-        _ = VoIPPushManager.shared
+        VoIPPushManager.shared.configure()
+        _ = ReachabilityManager.shared
+        _ = PersistenceController.shared
     }
 
     var body: some Scene {
@@ -19,14 +20,12 @@ struct BorealDialerApp: App {
                     LoginView()
                 }
             }
+            .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
             .onReceive(NotificationCenter.default.publisher(
                 for: UIApplication.willEnterForegroundNotification
             )) { _ in
                 CallDurationManager.shared.resumeIfNeeded()
             }
         }
-        .modelContainer(for: [
-            StoredMessage.self
-        ])
     }
 }

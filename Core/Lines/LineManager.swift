@@ -1,34 +1,27 @@
 import Foundation
-import Combine
 
+@MainActor
 final class LineManager: ObservableObject {
 
     static let shared = LineManager()
 
-    @Published var activeLine: Line?
+    @Published var activeLine: Line
 
-    private(set) var availableLines: [Line] = []
+    let availableLines: [Line] = [
+        Line(
+            id: "BF",
+            name: "Boreal Financial",
+            baseURL: URL(string: "https://bf-server.com")!,
+            wsURL: nil
+        )
+    ]
 
     private init() {
-        loadDefaultLines()
-        activeLine = availableLines.first
-    }
-
-    private func loadDefaultLines() {
-        availableLines = [
-            Line(
-                id: "bf",
-                displayName: "Boreal Financial",
-                twilioVoiceAppSid: "BF_VOICE_APP_SID",
-                twilioConversationServiceSid: "BF_CONVERSATION_SID"
-            )
-        ]
+        self.activeLine = availableLines[0]
     }
 
     func switchLine(to line: Line) {
         activeLine = line
-
-        // Reset services for clean isolation
         VoiceService.shared.reset()
         ConversationsService.shared.reset()
     }

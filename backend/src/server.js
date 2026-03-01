@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const http = require('http');
 const createVoiceRouter = require('./modules/voice/voice.routes');
 const { updatePresence } = require('./modules/voice/presence');
+const { validateTwilioSignature } = require('./modules/voice/twilioWebhookGuard');
 
 const STATUS_MAP = {
   initiated: 'initiated',
@@ -12,11 +13,11 @@ const STATUS_MAP = {
   'in-progress': 'active',
   failed: 'failed',
   busy: 'failed',
-  'no-answer': 'failed',
+  'no-answer': 'missed',
   canceled: 'failed',
 };
 
-const TERMINAL_STATUSES = new Set(['completed', 'failed', 'voicemail']);
+const TERMINAL_STATUSES = new Set(['completed', 'failed', 'missed', 'voicemail']);
 
 function normalizeStatus(rawStatus) {
   if (!rawStatus) return 'unknown';
@@ -68,6 +69,9 @@ function createInMemoryCallsRepo() {
         status: 'initiated',
         twilioStatus: null,
         sid: null,
+        recording_sid: null,
+        recording_url: null,
+        recording_duration: null,
         started_at: new Date().toISOString(),
         ended_at: null,
         created_at: new Date().toISOString(),
@@ -202,6 +206,7 @@ function createApp(env = process.env, deps = {}) {
   const app = express();
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
+  app.locals.env = env;
 
   const callsRepo = deps.callsRepo || createInMemoryCallsRepo();
   const voiceSessionsRepo = deps.voiceSessionsRepo || createInMemoryVoiceSessionRepo();
@@ -460,16 +465,7 @@ function createApp(env = process.env, deps = {}) {
     });
   });
 
-  app.post('/api/voice/status', async (req, res) => {
-    const signature = req.headers['x-twilio-signature'];
-    if (!signature) return makeError(res, req, 403, 'missing_signature', 'Missing Twilio signature');
-
-    const url = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
-    const twilioModule = await import('twilio');
-    const twilio = twilioModule.default || twilioModule;
-    const valid = twilio.validateRequest(env.TWILIO_AUTH_TOKEN, signature, url, req.body || {});
-    if (!valid) return makeError(res, req, 403, 'invalid_signature', 'Invalid Twilio signature');
-
+  app.post('/api/voice/status', validateTwilioSignature, async (req, res) => {
     const sid = req.body.CallSid;
     const twilioStatus = req.body.CallStatus;
 
@@ -527,6 +523,24 @@ function createApp(env = process.env, deps = {}) {
     logger.info({ event: 'voice_call_status_update', requestId: req.requestId, callId: call.id, status: call.status });
 
     return res.status(200).json({ ok: true, requestId: req.requestId });
+  });
+
+
+  app.post('/api/voice/recording', validateTwilioSignature, async (req, res) => {
+    const { RecordingSid, RecordingUrl, RecordingDuration, CallSid } = req.body || {};
+
+    try {
+      const call = callsRepo.findBySidOrClientCallId(CallSid, null);
+      if (call) {
+        call.recording_sid = RecordingSid || call.recording_sid;
+        call.recording_url = RecordingUrl || call.recording_url;
+        call.recording_duration = Number(RecordingDuration);
+        call.updated_at = new Date().toISOString();
+      }
+      return res.sendStatus(200);
+    } catch {
+      return res.sendStatus(500);
+    }
   });
 
   app.post('/api/twilio/status', (req, res) => {

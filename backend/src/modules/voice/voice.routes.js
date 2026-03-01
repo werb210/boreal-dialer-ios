@@ -1,6 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const { updatePresence, getOnlineStaff, markBusy, markAvailable } = require('./presence');
+const { validateTwilioSignature } = require('./twilioWebhookGuard');
 
 const ROLE_TOKEN_ALLOWED = new Set(['admin', 'staff', 'client']);
 const ROLE_STAFF_ALLOWED = new Set(['admin', 'staff']);
@@ -120,6 +121,24 @@ function createVoiceRouter(opts) {
 
     voiceSessionsRepo.save(session);
     return res.status(200).json({ ok: true, requestId: req.requestId });
+  });
+
+
+  router.post('/recording', validateTwilioSignature, async (req, res) => {
+    const { RecordingSid, RecordingUrl, RecordingDuration, CallSid } = req.body || {};
+
+    try {
+      const session = voiceSessionsRepo.getById(CallSid);
+      if (session) {
+        session.recordingSid = RecordingSid || session.recordingSid;
+        session.voicemailUrl = RecordingUrl || session.voicemailUrl;
+        session.recordingDuration = Number(RecordingDuration);
+        voiceSessionsRepo.save(session);
+      }
+      return res.sendStatus(200);
+    } catch {
+      return res.sendStatus(500);
+    }
   });
 
   return router;

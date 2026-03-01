@@ -9,6 +9,7 @@ final class WebSocketManager: ObservableObject {
     private var session: URLSession
     private var activeLine: Line?
     private var activeAccessToken: String?
+    private var reconnectAttempts = 0
 
     @Published var isConnected = false
 
@@ -31,7 +32,12 @@ final class WebSocketManager: ObservableObject {
         task?.resume()
 
         isConnected = true
+        reconnectAttempts = 0
         listen()
+
+        Task {
+            try? await API.reconcileActiveCalls()
+        }
     }
 
     func disconnect() {
@@ -48,7 +54,7 @@ final class WebSocketManager: ObservableObject {
                 switch result {
                 case .failure:
                     self.isConnected = false
-                    self.reconnectWithBackoff()
+                    self.handleDisconnect()
                 case .success(let message):
                     switch message {
                     case .string(let text):
@@ -66,14 +72,15 @@ final class WebSocketManager: ObservableObject {
         }
     }
 
-    private func reconnectWithBackoff() {
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
+    private func handleDisconnect() {
+        guard reconnectAttempts < 5 else { return }
 
-            guard !isConnected,
-                  let line = activeLine,
-                  let accessToken = activeAccessToken else { return }
-            connect(line: line, accessToken: accessToken)
+        reconnectAttempts += 1
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + Double(reconnectAttempts * 2)) {
+            guard let line = self.activeLine,
+                  let accessToken = self.activeAccessToken else { return }
+            self.connect(line: line, accessToken: accessToken)
         }
     }
 

@@ -59,8 +59,11 @@ final class ConversationsService: NSObject, ObservableObject {
         let line = LineManager.shared.activeLine
         let number = "unknown"
 
-        if !ReachabilityManager.shared.isOnline {
+        if !NetworkMonitor.shared.isConnected {
             queueMessage(body: text, number: number, lineId: line.id)
+            if let encoded = try? JSONEncoder().encode(SendSMSPayload(body: text, number: number, lineId: line.id)) {
+                OfflineQueue.shared.enqueue(type: "send_sms", payload: encoded)
+            }
             return
         }
 
@@ -83,6 +86,8 @@ final class ConversationsService: NSObject, ObservableObject {
                 DispatchQueue.main.async {
                     self.messages.append(model)
                 }
+            } else if let encoded = try? JSONEncoder().encode(SendSMSPayload(body: text, number: number, lineId: line.id)) {
+                OfflineQueue.shared.enqueue(type: "send_sms", payload: encoded)
             }
         })
     }
@@ -104,7 +109,7 @@ final class ConversationsService: NSObject, ObservableObject {
     }
 
     func retryQueuedMessages() {
-        guard ReachabilityManager.shared.isOnline else { return }
+        guard NetworkMonitor.shared.isConnected else { return }
         let pending = queuedMessages
         queuedMessages.removeAll()
         saveQueue()

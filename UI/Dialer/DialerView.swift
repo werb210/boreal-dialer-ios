@@ -3,7 +3,7 @@ import SwiftUI
 struct DialerView: View {
 
     @State private var number = ""
-    @ObservedObject private var callManager = CallManager.shared
+    @ObservedObject private var voiceEngine = VoiceEngine.shared
     @ObservedObject private var reachability = ReachabilityManager.shared
 
     var body: some View {
@@ -14,9 +14,9 @@ struct DialerView: View {
                 .textFieldStyle(.roundedBorder)
 
             Button("Call") {
-                CallManager.shared.startCall(to: number)
+                VoiceEngine.shared.startCall(to: number)
             }
-            .disabled(!reachability.isOnline || number.isEmpty || callManager.state != .idle)
+            .disabled(!reachability.isOnline || number.isEmpty || !isIdle)
 
             if !reachability.isOnline {
                 Text("Offline: calling disabled")
@@ -31,7 +31,7 @@ struct DialerView: View {
 
     @ViewBuilder
     private func callStatusView() -> some View {
-        switch callManager.state {
+        switch voiceEngine.state {
         case .idle:
             EmptyView()
         case .dialing:
@@ -40,12 +40,13 @@ struct DialerView: View {
             Text("Ringing...")
         case .active:
             VStack {
-                Text("On call with \(VoiceService.shared.activeNumber ?? "")")
-                Text(formatDuration(callManager.callDuration))
+                Text("On call with \(TwilioVoiceManager.shared.activeNumber ?? "")")
+                Text(formatDuration(voiceEngine.callDuration))
                     .font(.system(size: 28, weight: .medium, design: .monospaced))
                     .foregroundColor(.white)
                 Button("End Call") {
-                    CallManager.shared.endCall()
+                    TwilioVoiceManager.shared.disconnect()
+                    VoiceEngine.shared.handleDisconnect()
                 }
                 .foregroundColor(.red)
             }
@@ -55,6 +56,13 @@ struct DialerView: View {
             Text("Call Failed")
                 .foregroundColor(.red)
         }
+    }
+
+    private var isIdle: Bool {
+        if case .idle = voiceEngine.state {
+            return true
+        }
+        return false
     }
 
     private func formatDuration(_ seconds: Int) -> String {

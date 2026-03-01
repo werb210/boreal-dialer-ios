@@ -6,12 +6,14 @@ final class KeychainService {
     static let shared = KeychainService()
 
     func save(_ value: String, for key: String) {
-        let data = value.data(using: .utf8)!
+        saveData(Data(value.utf8), for: key)
+    }
 
+    func saveData(_ value: Data, for key: String) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
-            kSecValueData as String: data
+            kSecValueData as String: value
         ]
 
         SecItemDelete(query as CFDictionary)
@@ -19,7 +21,11 @@ final class KeychainService {
     }
 
     func load(_ key: String) -> String? {
+        guard let data = loadData(key) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
 
+    func loadData(_ key: String) -> Data? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
@@ -30,11 +36,7 @@ final class KeychainService {
         var result: AnyObject?
         SecItemCopyMatching(query as CFDictionary, &result)
 
-        if let data = result as? Data {
-            return String(data: data, encoding: .utf8)
-        }
-
-        return nil
+        return result as? Data
     }
 
     func delete(_ key: String) {

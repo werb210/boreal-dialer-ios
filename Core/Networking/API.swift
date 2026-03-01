@@ -9,6 +9,7 @@ enum API {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(await currentSiloHeader(), forHTTPHeaderField: "X-Silo")
 
         let body = ["lineId": line.backendLineId]
         request.httpBody = try JSONEncoder().encode(body)
@@ -29,6 +30,7 @@ enum API {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(await currentSiloHeader(), forHTTPHeaderField: "X-Silo")
 
         guard let accessToken = try? await AuthService.shared.getValidAccessToken() else {
             return
@@ -60,9 +62,19 @@ enum API {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(await currentSiloHeader(), forHTTPHeaderField: "X-Silo")
 
         request.httpBody = try JSONEncoder().encode(payload)
         _ = try await AuthService.shared.performAuthorizedRequest(request)
+    }
+
+
+    static func startRecording(callSid: String) async throws {
+        try await recordingAction(path: "api/voice/record/start", callSid: callSid)
+    }
+
+    static func stopRecording(callSid: String) async throws {
+        try await recordingAction(path: "api/voice/record/stop", callSid: callSid)
     }
 
     static func getActiveCalls() async throws -> [RemoteCallStatus] {
@@ -76,6 +88,7 @@ enum API {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(await currentSiloHeader(), forHTTPHeaderField: "X-Silo")
 
         let payload = CallLogPayload(duration: duration, status: status)
         request.httpBody = try JSONEncoder().encode(payload)
@@ -106,6 +119,24 @@ enum API {
         }
     }
 
+
+    private static func recordingAction(path: String, callSid: String) async throws {
+        let baseURL = await MainActor.run { LineManager.shared.activeLine.baseURL }
+        let url = baseURL.appendingPathComponent(path)
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(await currentSiloHeader(), forHTTPHeaderField: "X-Silo")
+
+        request.httpBody = try JSONEncoder().encode(["callSid": callSid])
+        _ = try await AuthService.shared.performAuthorizedRequest(request)
+    }
+
+    private static func currentSiloHeader() async -> String {
+        await MainActor.run { VoiceEngine.shared.silo.rawValue }
+    }
+
     private static func updateCallState(path: String, id: String) async throws {
         let baseURL = await MainActor.run { LineManager.shared.activeLine.baseURL }
         let url = baseURL.appendingPathComponent(path)
@@ -113,6 +144,7 @@ enum API {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(await currentSiloHeader(), forHTTPHeaderField: "X-Silo")
 
         request.httpBody = try JSONEncoder().encode(["id": id])
 

@@ -46,6 +46,7 @@ final class VoiceEngine: NSObject, ObservableObject {
     @Published private(set) var state: State = .idle
     @Published private(set) var callDuration: Int = 0
     @Published var activeLine: Line = .bf
+    @Published var silo: Silo = .bf
 
     private var provider: CXProvider!
     private var timer: Timer?
@@ -82,6 +83,7 @@ final class VoiceEngine: NSObject, ObservableObject {
             }
         }
 
+        Telemetry.event("call_start", metadata: ["number": number, "silo": silo.rawValue])
         TwilioVoiceManager.shared.startCall(uuid: uuid, to: number)
     }
 
@@ -101,6 +103,7 @@ final class VoiceEngine: NSObject, ObservableObject {
 
     func setActiveLine(_ line: Line) {
         activeLine = line
+        silo = Silo(rawValue: line.rawValue) ?? .bf
     }
 
     func forceTerminate() {
@@ -119,6 +122,14 @@ final class VoiceEngine: NSObject, ObservableObject {
         if let ringing = serverCalls.first(where: { $0.status == "ringing" }),
            let uuid = UUID(uuidString: ringing.id) {
             reportIncoming(uuid: uuid, handle: ringing.number)
+        }
+    }
+
+    func reconcile() async {
+        let serverCalls = try? await API.getActiveCalls()
+
+        if serverCalls?.isEmpty == true {
+            state = .idle
         }
     }
 
@@ -145,6 +156,7 @@ final class VoiceEngine: NSObject, ObservableObject {
     }
 
     func handleDisconnect() {
+        Telemetry.event("call_end", metadata: ["duration": "\(callDuration)"])
         finishCall(status: .ended)
     }
 

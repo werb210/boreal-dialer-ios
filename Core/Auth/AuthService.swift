@@ -9,6 +9,9 @@ final class AuthService: ObservableObject {
     @Published var accessTokenExpiry: Date?
 
     private var refreshTask: Task<Void, Never>?
+    private lazy var secureSession: URLSession = {
+        URLSession(configuration: .default, delegate: PinnedSessionDelegate(), delegateQueue: nil)
+    }()
 
     private init() {
         if let accessToken = KeychainService.shared.load("accessToken") {
@@ -49,11 +52,13 @@ final class AuthService: ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let silo = await MainActor.run { VoiceEngine.shared.silo.rawValue }
+        request.setValue(silo, forHTTPHeaderField: "X-Silo")
 
         let body = ["phone": phone, "code": otp]
         request.httpBody = try JSONEncoder().encode(body)
 
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await secureSession.data(for: request)
 
         let decoded = try JSONDecoder().decode(AuthResponse.self, from: data)
 
@@ -91,12 +96,14 @@ final class AuthService: ObservableObject {
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let silo = await MainActor.run { VoiceEngine.shared.silo.rawValue }
+        request.setValue(silo, forHTTPHeaderField: "X-Silo")
 
             request.httpBody = try JSONEncoder().encode([
                 "refreshToken": currentRefreshToken
             ])
 
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await secureSession.data(for: request)
 
             if let httpResponse = response as? HTTPURLResponse,
                !(200...299).contains(httpResponse.statusCode) {
@@ -186,7 +193,7 @@ final class AuthService: ObservableObject {
         let accessToken = try await getValidAccessToken()
         authorizedRequest.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
 
-        let (data, response) = try await URLSession.shared.data(for: authorizedRequest)
+        let (data, response) = try await secureSession.data(for: authorizedRequest)
 
         if let http = response as? HTTPURLResponse,
            http.statusCode == 401 {
@@ -195,7 +202,7 @@ final class AuthService: ObservableObject {
 
             authorizedRequest.setValue("Bearer \(refreshedToken)", forHTTPHeaderField: "Authorization")
 
-            let (retryData, retryResponse) = try await URLSession.shared.data(for: authorizedRequest)
+            let (retryData, retryResponse) = try await secureSession.data(for: authorizedRequest)
 
             if let retryHTTP = retryResponse as? HTTPURLResponse,
                retryHTTP.statusCode == 401 {

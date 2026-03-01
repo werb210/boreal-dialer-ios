@@ -1,5 +1,8 @@
 import Foundation
 import TwilioVoice
+#if canImport(Sentry)
+import Sentry
+#endif
 
 @MainActor
 final class TwilioVoiceManager: NSObject, ObservableObject {
@@ -29,6 +32,10 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
                 activeCall = TwilioVoiceSDK.connect(options: options, delegate: self)
             } catch {
                 await MainActor.run {
+                    Telemetry.event("call_failed", metadata: ["error": error.localizedDescription])
+#if canImport(Sentry)
+                    SentrySDK.capture(error: error)
+#endif
                     VoiceEngine.shared.handleFailure()
                 }
             }
@@ -80,6 +87,10 @@ extension TwilioVoiceManager: CallDelegate {
 
     func callDidConnect(_ call: Call) {
         activeUUID = call.uuid
+        Telemetry.event("call_connected")
+#if canImport(Sentry)
+        SentrySDK.capture(message: "Call started")
+#endif
         VoiceEngine.shared.handleCallConnected(uuid: call.uuid)
     }
 
@@ -87,6 +98,12 @@ extension TwilioVoiceManager: CallDelegate {
         if error == nil {
             VoiceEngine.shared.handleDisconnect()
         } else {
+            Telemetry.event("call_error", metadata: ["message": error?.localizedDescription ?? "unknown"])
+#if canImport(Sentry)
+            if let error {
+                SentrySDK.capture(error: error)
+            }
+#endif
             VoiceEngine.shared.handleFailure()
         }
 
@@ -96,6 +113,10 @@ extension TwilioVoiceManager: CallDelegate {
     }
 
     func callDidFailToConnect(_ call: Call, error: Error) {
+        Telemetry.event("call_failed", metadata: ["error": error.localizedDescription])
+#if canImport(Sentry)
+        SentrySDK.capture(error: error)
+#endif
         VoiceEngine.shared.handleFailure()
         activeCall = nil
         activeUUID = nil

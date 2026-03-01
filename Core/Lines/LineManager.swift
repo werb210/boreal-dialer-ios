@@ -13,6 +13,18 @@ final class LineManager: ObservableObject {
             name: "Boreal Financial",
             baseURL: URL(string: "https://bf-server.com")!,
             wsURL: nil
+        ),
+        Line(
+            id: "BI",
+            name: "Boreal Insurance",
+            baseURL: URL(string: "https://bi-server.com")!,
+            wsURL: nil
+        ),
+        Line(
+            id: "SLF",
+            name: "SLF",
+            baseURL: URL(string: "https://slf-server.com")!,
+            wsURL: nil
         )
     ]
 
@@ -30,8 +42,14 @@ final class LineManager: ObservableObject {
 
         WebSocketManager.shared.disconnect()
 
-        if let accessToken = KeychainService.shared.load("accessToken") {
-            WebSocketManager.shared.connect(line: line, accessToken: accessToken)
+        Task {
+            let refreshed = try? await AuthService.shared.refreshToken()
+            let accessToken = refreshed ?? KeychainService.shared.load("accessToken")
+            if let accessToken {
+                await MainActor.run {
+                    WebSocketManager.shared.connect(line: line, accessToken: accessToken)
+                }
+            }
         }
     }
 }

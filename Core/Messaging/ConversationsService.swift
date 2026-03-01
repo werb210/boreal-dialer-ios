@@ -3,7 +3,7 @@ import TwilioConversationsClient
 
 struct QueuedMessage: Codable {
     let id: String
-    let body: String
+    let encryptedBody: Data
     let number: String
     let direction: String
     let timestamp: Date
@@ -61,6 +61,7 @@ final class ConversationsService: NSObject, ObservableObject {
 
         if !NetworkMonitor.shared.isConnected {
             queueMessage(body: text, number: number, lineId: line.id)
+            Telemetry.event("sms_queued", metadata: ["lineId": line.id])
             if let encoded = try? JSONEncoder().encode(SendSMSPayload(body: text, number: number, lineId: line.id)) {
                 OfflineQueue.shared.enqueue(type: "send_sms", payload: encoded)
             }
@@ -83,6 +84,7 @@ final class ConversationsService: NSObject, ObservableObject {
                     timestamp: model.timestamp,
                     lineId: line.id
                 )
+                Telemetry.event("sms_send", metadata: ["lineId": line.id])
                 DispatchQueue.main.async {
                     self.messages.append(model)
                 }
@@ -115,7 +117,8 @@ final class ConversationsService: NSObject, ObservableObject {
         saveQueue()
 
         for message in pending {
-            sendMessage(message.body)
+            guard let text = try? SecureMessageStore.shared.decrypt(message.encryptedBody) else { continue }
+            sendMessage(text)
         }
     }
 
@@ -133,9 +136,10 @@ final class ConversationsService: NSObject, ObservableObject {
     }
 
     private func queueMessage(body: String, number: String, lineId: String) {
+        guard let encrypted = try? SecureMessageStore.shared.encrypt(body) else { return }
         let queued = QueuedMessage(
             id: UUID().uuidString,
-            body: body,
+            encryptedBody: encrypted,
             number: number,
             direction: "outbound",
             timestamp: Date(),
@@ -145,7 +149,7 @@ final class ConversationsService: NSObject, ObservableObject {
         saveQueue()
         persistMessage(
             id: queued.id,
-            body: queued.body,
+            body: body,
             number: queued.number,
             direction: queued.direction,
             timestamp: queued.timestamp,
@@ -159,10 +163,11 @@ final class ConversationsService: NSObject, ObservableObject {
                                 direction: String,
                                 timestamp: Date,
                                 lineId: String) {
+        guard let encrypted = try? SecureMessageStore.shared.encrypt(body) else { return }
         let context = PersistenceController.shared.container.viewContext
         let entity = MessageEntity(context: context)
         entity.id = id
-        entity.body = body
+        entity.body = encrypted.base64EncodedString()
         entity.number = number
         entity.direction = direction
         entity.timestamp = timestamp

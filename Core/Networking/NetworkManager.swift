@@ -14,6 +14,8 @@ final class NetworkManager {
         let url = await url(for: "api/voice/calls/active")
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        let silo = await MainActor.run { VoiceEngine.shared.silo.rawValue }
+        request.setValue(silo, forHTTPHeaderField: "X-Silo")
 
         let data = try await AuthService.shared.performAuthorizedRequest(request)
         return try JSONDecoder().decode([RemoteCallStatus].self, from: data)

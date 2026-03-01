@@ -5,9 +5,18 @@ struct DialerView: View {
     @State private var number = ""
     @ObservedObject private var voiceEngine = VoiceEngine.shared
     @ObservedObject private var reachability = ReachabilityManager.shared
+    @ObservedObject private var recordingManager = RecordingManager.shared
 
     var body: some View {
         VStack(spacing: 20) {
+
+            if recordingManager.isRecording {
+                Text("Call is being recorded")
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.red)
+            }
 
             TextField("Enter phone number", text: $number)
                 .keyboardType(.phonePad)
@@ -49,6 +58,25 @@ struct DialerView: View {
                     VoiceEngine.shared.handleDisconnect()
                 }
                 .foregroundColor(.red)
+
+                if recordingManager.isRecording {
+                    Button("Stop Recording") {
+                        Task {
+                            if case .active(let uuid) = voiceEngine.state {
+                                try? await recordingManager.stopRecording(callSid: uuid.uuidString)
+                            }
+                        }
+                    }
+                } else {
+                    Button("Start Recording") {
+                        Task {
+                            if case .active(let uuid) = voiceEngine.state {
+                                recordingManager.setConsentState("announced")
+                                try? await recordingManager.startRecording(callSid: uuid.uuidString)
+                            }
+                        }
+                    }
+                }
             }
         case .ended:
             Text("Call Ended")

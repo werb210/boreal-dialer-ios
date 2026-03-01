@@ -26,6 +26,7 @@ final class VoIPPushManager: NSObject, PKPushRegistryDelegate {
         Task {
             await API.registerVoIPToken(token)
         }
+        Telemetry.event("token_refresh")
     }
 
     func pushRegistry(_ registry: PKPushRegistry,
@@ -53,6 +54,7 @@ final class VoIPPushManager: NSObject, PKPushRegistryDelegate {
             return
         }
 
+        Telemetry.event("push_received", metadata: ["uuid": uuid.uuidString])
         VoiceEngine.shared.reportIncoming(uuid: uuid, handle: handle)
     }
 }

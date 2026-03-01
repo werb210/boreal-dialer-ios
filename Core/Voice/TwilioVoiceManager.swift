@@ -26,17 +26,15 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
     }
 
     func startCall(uuid: UUID, to number: String) {
+        guard CallStateManager.shared.current() == .idle else { return }
+
+        CallStateManager.shared.transition(to: .connecting)
         activeUUID = uuid
         activeNumber = number
         callStartDate = Date()
         callDirection = "outbound"
 
-        do {
-            try AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth])
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {
-            Telemetry.event("audio_session_config_failed", metadata: ["error": error.localizedDescription])
-        }
+        configureAudioSessionForCall()
 
         Task {
             do {
@@ -48,6 +46,8 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
                 activeCall = TwilioVoiceSDK.connect(options: options, delegate: self)
             } catch {
                 await MainActor.run {
+                    CallStateManager.shared.transition(to: .ended)
+                    CallStateManager.shared.reset()
                     Telemetry.event("call_failed", metadata: ["error": error.localizedDescription])
 #if canImport(Sentry)
                     SentrySDK.capture(error: error)
@@ -59,18 +59,17 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
     }
 
     func accept() {
+        guard CallStateManager.shared.current() == .ringing else { return }
+
+        CallStateManager.shared.transition(to: .connecting)
+
         if let invite = pendingCallInvite {
             activeUUID = invite.uuid
             activeNumber = invite.from
             callStartDate = Date()
             callDirection = "inbound"
 
-            do {
-                try AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth])
-                try AVAudioSession.sharedInstance().setActive(true)
-            } catch {
-                Telemetry.event("audio_session_config_failed", metadata: ["error": error.localizedDescription])
-            }
+            configureAudioSessionForCall()
 
             activeCall = invite.accept(with: self)
             pendingCallInvite = nil
@@ -93,19 +92,10 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
     func disconnect() {
         if let invite = pendingCallInvite {
             invite.reject()
-            pendingCallInvite = nil
         }
 
         activeCall?.disconnect()
-        activeCall = nil
-        activeUUID = nil
-        activeNumber = nil
-
-        do {
-            try AVAudioSession.sharedInstance().setActive(false)
-        } catch {
-            Telemetry.event("audio_session_deactivate_failed", metadata: ["error": error.localizedDescription])
-        }
+        cleanup()
     }
 
     private func appendCallLog() {
@@ -124,6 +114,7 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
 
     private func resetCallTracking() {
         activeCall = nil
+        pendingCallInvite = nil
         activeUUID = nil
         activeNumber = nil
         callStartDate = nil
@@ -134,6 +125,42 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
         } catch {
             Telemetry.event("audio_session_deactivate_failed", metadata: ["error": error.localizedDescription])
         }
+
+        CallStateManager.shared.transition(to: .ended)
+        CallStateManager.shared.reset()
+    }
+
+    private func configureAudioSessionForCall() {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(
+                .playAndRecord,
+                mode: .voiceChat,
+                options: [.allowBluetooth, .duckOthers]
+            )
+            try session.setActive(true)
+        } catch {
+            Telemetry.event("audio_session_config_failed", metadata: ["error": error.localizedDescription])
+        }
+    }
+
+    func cleanup() {
+        activeCall = nil
+        pendingCallInvite = nil
+        activeUUID = nil
+        activeNumber = nil
+        callStartDate = nil
+        callDirection = "outbound"
+
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setActive(false, options: [])
+        } catch {
+            Telemetry.event("audio_session_deactivate_failed", metadata: ["error": error.localizedDescription])
+        }
+
+        CallStateManager.shared.transition(to: .ended)
+        CallStateManager.shared.reset()
     }
 }
 
@@ -147,6 +174,7 @@ extension TwilioVoiceManager: CallDelegate {
 
     func callDidConnect(_ call: Call) {
         activeUUID = call.uuid
+        CallStateManager.shared.transition(to: .connected)
         Telemetry.event("call_connected")
 #if canImport(Sentry)
         SentrySDK.capture(message: "Call started")
@@ -185,11 +213,20 @@ extension TwilioVoiceManager: CallDelegate {
 extension TwilioVoiceManager: NotificationDelegate {
 
     func callInviteReceived(_ callInvite: CallInvite) {
+        guard CallStateManager.shared.current() == .idle else {
+            callInvite.reject()
+            return
+        }
+
+        CallStateManager.shared.transition(to: .ringing)
         pendingCallInvite = callInvite
 
         let uuid = callInvite.uuid
         let handle = callInvite.from ?? "Unknown"
 
-        VoiceEngine.shared.reportIncoming(uuid: uuid, handle: handle)
+        DispatchQueue.main.async {
+            guard CallStateManager.shared.current() == .ringing else { return }
+            VoiceEngine.shared.reportIncoming(uuid: uuid, handle: handle)
+        }
     }
 }

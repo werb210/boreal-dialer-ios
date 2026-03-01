@@ -9,6 +9,7 @@ final class CallKitManager: NSObject, CXProviderDelegate {
 
     private let provider: CXProvider
     private let callController = CXCallController()
+    private var reportedIncomingCallUUIDs: Set<UUID> = []
 
     private override init() {
         let config = CXProviderConfiguration(localizedName: "Boreal")
@@ -39,6 +40,8 @@ final class CallKitManager: NSObject, CXProviderDelegate {
     }
 
     func reportIncomingCall(uuid: UUID, handle: String) {
+        guard !reportedIncomingCallUUIDs.contains(uuid) else { return }
+
         let update = CXCallUpdate()
         update.remoteHandle = CXHandle(type: .generic, value: handle)
         update.hasVideo = false
@@ -49,15 +52,18 @@ final class CallKitManager: NSObject, CXProviderDelegate {
                 return
             }
 
+            self.reportedIncomingCallUUIDs.insert(uuid)
             CallManager.shared.incomingCall(uuid: uuid)
         }
     }
 
     func endCall(uuid: UUID) {
         provider.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
+        reportedIncomingCallUUIDs.remove(uuid)
     }
 
     func providerDidReset(_ provider: CXProvider) {
+        reportedIncomingCallUUIDs.removeAll()
         print("CallKit provider reset")
     }
 

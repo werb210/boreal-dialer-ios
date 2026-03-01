@@ -24,5 +24,11 @@ final class LineManager: ObservableObject {
         activeLine = line
         VoiceService.shared.reset()
         ConversationsService.shared.reset()
+
+        WebSocketManager.shared.disconnect()
+
+        if let accessToken = KeychainService.shared.load("accessToken") {
+            WebSocketManager.shared.connect(line: line, accessToken: accessToken)
+        }
     }
 }

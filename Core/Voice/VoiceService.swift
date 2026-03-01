@@ -34,8 +34,30 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
 
         callKitProvider = CXProvider(configuration: config)
         callKitProvider.setDelegate(self, queue: nil)
+    }
 
-        startActiveCallPolling()
+    func handleIncoming(_ payload: DataContainer) {
+        guard let number = payload.number else { return }
+
+        callState.status = .ringing
+        callState.activeNumber = number
+
+        persistCall(
+            CallModel(
+                id: payload.id ?? UUID().uuidString,
+                number: number,
+                direction: payload.direction ?? "inbound",
+                status: "ringing",
+                startedAt: payload.timestamp ?? Date(),
+                endedAt: nil
+            ),
+            line: LineManager.shared.activeLine
+        )
+    }
+
+    func handleUpdate(_ payload: DataContainer) {
+        guard let id = payload.id else { return }
+        updateCallStatus(id: id, status: payload.status ?? "")
     }
 
     func startCall(to number: String) {
@@ -166,6 +188,21 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
                 ),
                 line: line
             )
+        }
+    }
+
+    private func updateCallStatus(id: String, status: String) {
+        let context = PersistenceController.shared.container.viewContext
+        let request = CallEntity.fetchRequest()
+        request.fetchLimit = 1
+        request.predicate = NSPredicate(format: "id == %@", id)
+
+        if let call = try? context.fetch(request).first {
+            call.status = status
+            if status == "completed" || status == "ended" {
+                call.endedAt = Date()
+            }
+            try? context.save()
         }
     }
 

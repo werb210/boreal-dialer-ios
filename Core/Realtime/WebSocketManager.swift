@@ -36,7 +36,16 @@ final class WebSocketManager: ObservableObject {
         listen()
 
         Task {
-            try? await API.reconcileActiveCalls()
+            do {
+                let serverState = try await API.getActiveCalls()
+                if serverState.isEmpty {
+                    CallManager.shared.forceTerminate()
+                } else {
+                    CallManager.shared.syncWithServer(serverState)
+                }
+            } catch {
+                try? await API.reconcileActiveCalls()
+            }
         }
     }
 

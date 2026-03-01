@@ -18,10 +18,12 @@ final class LineManager: ObservableObject {
 
     private init() {
         self.activeLine = availableLines[0]
+        CallManager.shared.setActiveLine(activeLine)
     }
 
     func switchLine(to line: Line) {
         activeLine = line
+        CallManager.shared.setActiveLine(line)
         VoiceService.shared.reset()
         ConversationsService.shared.reset()
 

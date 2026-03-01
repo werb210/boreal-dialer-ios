@@ -25,6 +25,9 @@ struct BorealDialerApp: App {
                 for: UIApplication.willEnterForegroundNotification
             )) { _ in
                 CallDurationManager.shared.resumeIfNeeded()
+                Task {
+                    await AuthService.shared.refreshTokenIfNeededOnResume()
+                }
             }
         }
     }

@@ -105,19 +105,11 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
         activeCall = call
         activeCall?.delegate = self
 
-        let update = CXCallUpdate()
-        update.remoteHandle = CXHandle(type: .phoneNumber,
-                                       value: call.from ?? "Unknown")
-        update.hasVideo = false
-
-        callKitProvider.reportNewIncomingCall(
-            with: UUID(),
-            update: update
-        ) { error in
-            if let error = error {
-                print("CallKit report error:", error)
-            }
+        let uuid = UUID()
+        guard CallManager.shared.startIncomingCall(from: call.from ?? "Unknown", uuid: uuid) else {
+            return
         }
+        CallKitManager.shared.reportIncomingCall(uuid: uuid, number: call.from ?? "Unknown")
 
         persistCall(
             CallModel(

@@ -4,6 +4,9 @@ const twilio = require('twilio');
 const http = require('http');
 
 const STATUS_MAP = {
+  initiated: 'initiated',
+  ringing: 'ringing',
+  answered: 'answered',
   completed: 'completed',
   'in-progress': 'active',
   failed: 'failed',
@@ -12,7 +15,7 @@ const STATUS_MAP = {
   canceled: 'failed',
 };
 
-const TERMINAL_STATUSES = new Set(['completed', 'failed']);
+const TERMINAL_STATUSES = new Set(['completed', 'failed', 'voicemail']);
 
 function normalizeStatus(rawStatus) {
   if (!rawStatus) return 'unknown';
@@ -33,13 +36,18 @@ function timeout(ms) {
   });
 }
 
+function toIdentity(role, userId) {
+  const normalizedRole = String(role || '').toLowerCase();
+  if (normalizedRole === 'client') return `client:${userId}`;
+  return `staff:${userId}`;
+}
+
 function createInMemoryCallsRepo() {
   const callsById = new Map();
   const callsByClientKey = new Map();
   const callsByApplicationKey = new Map();
 
   return {
-    // Mirrors an atomic DB upsert by unique(user_id, client_call_id).
     upsertCallAtomic({ userId, clientCallId, to, applicationId }) {
       const dedupeKey = `${userId}:${clientCallId}`;
       const existingId = callsByClientKey.get(dedupeKey);
@@ -73,8 +81,7 @@ function createInMemoryCallsRepo() {
       const id = callsByApplicationKey.get(`${userId}:${applicationId}`);
       if (!id) return null;
       const call = callsById.get(id);
-      if (!call) return null;
-      if (isTerminal(call.status)) return null;
+      if (!call || isTerminal(call.status)) return null;
       return call;
     },
     getById(id) {
@@ -91,11 +98,103 @@ function createInMemoryCallsRepo() {
   };
 }
 
+function createInMemoryVoiceSessionRepo() {
+  const sessions = new Map();
+  const ringSidToSession = new Map();
+
+  return {
+    create({ clientId, assignedStaffId, fromIdentity }) {
+      const now = new Date().toISOString();
+      const id = crypto.randomUUID();
+      const session = {
+        id,
+        clientId,
+        assignedStaffId,
+        answeredByStaffId: null,
+        status: 'initiated',
+        fromIdentity,
+        startedAt: now,
+        answeredAt: null,
+        endedAt: null,
+        voicemailUrl: null,
+        ringLegs: [],
+      };
+      sessions.set(id, session);
+      return session;
+    },
+    getById(id) {
+      return sessions.get(id) || null;
+    },
+    save(session) {
+      sessions.set(session.id, session);
+      return session;
+    },
+    bindRingSid(sessionId, sid, staffId) {
+      ringSidToSession.set(sid, { sessionId, staffId });
+    },
+    lookupByRingSid(sid) {
+      return ringSidToSession.get(sid) || null;
+    },
+  };
+}
+
+function createInMemoryPresenceRepo() {
+  const entries = new Map();
+
+  const isStale = (record) => Date.now() - new Date(record.lastSeen).getTime() > 30000;
+
+  return {
+    upsert({ staffId, source, status }) {
+      const key = `${staffId}:${source}`;
+      const record = {
+        staffId,
+        source,
+        status,
+        lastSeen: new Date().toISOString(),
+      };
+      entries.set(key, record);
+      return record;
+    },
+    listEligibleStaff() {
+      const byStaff = new Map();
+      for (const record of entries.values()) {
+        if (isStale(record)) continue;
+        if (!byStaff.has(record.staffId)) {
+          byStaff.set(record.staffId, []);
+        }
+        byStaff.get(record.staffId).push(record);
+      }
+
+      const eligible = [];
+      for (const [staffId, sources] of byStaff.entries()) {
+        const hasOnline = sources.some((sourceRecord) => sourceRecord.status === 'online');
+        const hasBusy = sources.some((sourceRecord) => sourceRecord.status === 'busy');
+        if (hasOnline && !hasBusy) eligible.push(staffId);
+      }
+      return eligible;
+    },
+  };
+}
+
 async function defaultTwilioStartCall(call, env) {
   if (env.MOCK_TWILIO_DELAY_MS) {
     await new Promise((resolve) => setTimeout(resolve, Number(env.MOCK_TWILIO_DELAY_MS)));
   }
   return { sid: `CA${call.id.replace(/-/g, '').slice(0, 30)}` };
+}
+
+async function defaultRingStaffLeg({ sessionId, staffId }) {
+  return { sid: `CA${sessionId.replace(/-/g, '').slice(0, 20)}${staffId}`.slice(0, 34) };
+}
+
+async function defaultCancelRing() {
+  return true;
+}
+
+async function defaultRouteVoicemail({ sessionId }) {
+  return {
+    voicemailUrl: `https://recordings.example.com/${sessionId}.mp3`,
+  };
 }
 
 function createApp(env = process.env, deps = {}) {
@@ -104,9 +203,18 @@ function createApp(env = process.env, deps = {}) {
   app.use(express.urlencoded({ extended: false }));
 
   const callsRepo = deps.callsRepo || createInMemoryCallsRepo();
+  const voiceSessionsRepo = deps.voiceSessionsRepo || createInMemoryVoiceSessionRepo();
+  const presenceRepo = deps.presenceRepo || createInMemoryPresenceRepo();
+  const findAssignedStaffId = deps.findAssignedStaffId || (async () => null);
+
   const startTwilioCall = deps.startTwilioCall || defaultTwilioStartCall;
+  const ringStaffLeg = deps.ringStaffLeg || defaultRingStaffLeg;
+  const cancelRingLeg = deps.cancelRingLeg || defaultCancelRing;
+  const routeToVoicemail = deps.routeToVoicemail || defaultRouteVoicemail;
+
   const logger = deps.logger || console;
   const recordingsByCallSid = new Map();
+  const sessionTimers = new Map();
 
   const voiceEnabled = env.VOICE_ENABLED !== 'false';
 
@@ -149,26 +257,126 @@ function createApp(env = process.env, deps = {}) {
     return next();
   }
 
+  function clearSessionTimers(sessionId) {
+    const timers = sessionTimers.get(sessionId);
+    if (!timers) return;
+    if (timers.assignedOnlyTimeout) clearTimeout(timers.assignedOnlyTimeout);
+    if (timers.voicemailTimeout) clearTimeout(timers.voicemailTimeout);
+    sessionTimers.delete(sessionId);
+  }
+
+  async function ringStaffList(session, staffIds) {
+    for (const staffId of staffIds) {
+      const exists = session.ringLegs.some((leg) => leg.staffId === staffId && !leg.terminal);
+      if (exists) continue;
+      const result = await ringStaffLeg({
+        sessionId: session.id,
+        staffId,
+        clientId: session.clientId,
+        fromIdentity: session.fromIdentity,
+        toIdentity: `staff:${staffId}`,
+      });
+      if (!result?.sid) continue;
+      const leg = { sid: result.sid, staffId, status: 'ringing', terminal: false };
+      session.ringLegs.push(leg);
+      voiceSessionsRepo.bindRingSid(session.id, result.sid, staffId);
+    }
+    session.status = 'ringing';
+    voiceSessionsRepo.save(session);
+  }
+
+  async function completeSessionWithVoicemail(session) {
+    if (isTerminal(session.status) || session.status === 'answered') return;
+    const voicemail = await routeToVoicemail({ sessionId: session.id, clientId: session.clientId, assignedStaffId: session.assignedStaffId });
+    session.status = 'voicemail';
+    session.voicemailUrl = voicemail?.voicemailUrl || null;
+    session.endedAt = new Date().toISOString();
+    for (const leg of session.ringLegs) {
+      if (!leg.terminal) {
+        await cancelRingLeg({ sid: leg.sid });
+        leg.terminal = true;
+        leg.status = 'canceled';
+      }
+    }
+    clearSessionTimers(session.id);
+    voiceSessionsRepo.save(session);
+  }
+
   app.get('/api/voice/token', requireAuth, requireStaff, requireVoiceEnabled, (req, res) => {
+    const identity = toIdentity('staff', req.user.id);
     const token = new twilio.jwt.AccessToken(
       env.TWILIO_ACCOUNT_SID,
       env.TWILIO_API_KEY,
       env.TWILIO_API_SECRET,
-      { identity: req.user.id }
+      { identity }
     );
     token.addGrant(new twilio.jwt.AccessToken.VoiceGrant({ outgoingApplicationSid: env.TWILIO_TWIML_APP_SID }));
-    res.status(200).json({ token: token.toJwt(), identity: req.user.id, requestId: req.requestId });
+    res.status(200).json({ token: token.toJwt(), identity, requestId: req.requestId });
   });
 
   app.post('/api/voice/token', requireAuth, requireStaff, requireVoiceEnabled, (req, res) => {
+    const requestedUserId = req.body?.userId || req.user.id;
+    const requestedRole = req.body?.role || req.user.role;
+    const identity = toIdentity(requestedRole, requestedUserId);
+
     const token = new twilio.jwt.AccessToken(
       env.TWILIO_ACCOUNT_SID,
       env.TWILIO_API_KEY,
       env.TWILIO_API_SECRET,
-      { identity: req.user.id }
+      { identity }
     );
     token.addGrant(new twilio.jwt.AccessToken.VoiceGrant({ outgoingApplicationSid: env.TWILIO_TWIML_APP_SID }));
-    res.status(200).json({ token: token.toJwt(), identity: req.user.id, requestId: req.requestId });
+    res.status(200).json({ token: token.toJwt(), identity, requestId: req.requestId });
+  });
+
+  app.post('/api/voice/presence/heartbeat', requireAuth, requireStaff, requireVoiceEnabled, (req, res) => {
+    const source = req.body?.source;
+    const status = req.body?.status;
+    if (!['portal', 'dialer'].includes(source)) return makeError(res, req, 400, 'bad_request', 'invalid source');
+    if (!['online', 'busy', 'offline'].includes(status)) return makeError(res, req, 400, 'bad_request', 'invalid status');
+
+    const record = presenceRepo.upsert({ staffId: req.user.id, source, status });
+    return res.status(200).json({ presence: record, requestId: req.requestId });
+  });
+
+  app.post('/api/voice/call', requireAuth, requireStaff, requireVoiceEnabled, async (req, res) => {
+    const { fromIdentity, toClientId } = req.body || {};
+    if (!fromIdentity || !toClientId) return makeError(res, req, 400, 'bad_request', 'fromIdentity and toClientId are required');
+
+    const assignedStaffId = await findAssignedStaffId(toClientId);
+    const session = voiceSessionsRepo.create({
+      clientId: toClientId,
+      assignedStaffId,
+      fromIdentity,
+    });
+
+    const onlineStaff = presenceRepo.listEligibleStaff();
+
+    if (assignedStaffId && onlineStaff.includes(assignedStaffId)) {
+      await ringStaffList(session, [assignedStaffId]);
+      const assignedOnlyTimeout = setTimeout(async () => {
+        const fresh = voiceSessionsRepo.getById(session.id);
+        if (!fresh || fresh.status === 'answered' || isTerminal(fresh.status)) return;
+        const fallbackStaff = presenceRepo.listEligibleStaff();
+        await ringStaffList(fresh, fallbackStaff);
+      }, 10000);
+      const voicemailTimeout = setTimeout(async () => {
+        const fresh = voiceSessionsRepo.getById(session.id);
+        if (!fresh) return;
+        await completeSessionWithVoicemail(fresh);
+      }, 25000);
+      sessionTimers.set(session.id, { assignedOnlyTimeout, voicemailTimeout });
+    } else {
+      await ringStaffList(session, onlineStaff);
+      const voicemailTimeout = setTimeout(async () => {
+        const fresh = voiceSessionsRepo.getById(session.id);
+        if (!fresh) return;
+        await completeSessionWithVoicemail(fresh);
+      }, 25000);
+      sessionTimers.set(session.id, { voicemailTimeout });
+    }
+
+    return res.status(200).json({ callSession: session, requestId: req.requestId });
   });
 
   app.post('/api/voice/calls/start', requireAuth, requireStaff, requireVoiceEnabled, async (req, res) => {
@@ -243,8 +451,44 @@ function createApp(env = process.env, deps = {}) {
 
     const sid = req.body.CallSid;
     const twilioStatus = req.body.CallStatus;
-    const incomingStatus = normalizeStatus(twilioStatus);
 
+    const ringLookup = sid ? voiceSessionsRepo.lookupByRingSid(sid) : null;
+    if (ringLookup) {
+      const session = voiceSessionsRepo.getById(ringLookup.sessionId);
+      if (!session) return res.status(200).json({ ok: true, requestId: req.requestId });
+
+      const leg = session.ringLegs.find((ringLeg) => ringLeg.sid === sid);
+      if (leg) {
+        leg.status = String(twilioStatus || leg.status).toLowerCase();
+        if (['completed', 'busy', 'failed', 'no-answer', 'canceled'].includes(leg.status)) {
+          leg.terminal = true;
+        }
+      }
+
+      if (String(twilioStatus).toLowerCase() === 'answered' && session.status !== 'answered') {
+        session.status = 'answered';
+        session.answeredByStaffId = ringLookup.staffId;
+        session.answeredAt = new Date().toISOString();
+        clearSessionTimers(session.id);
+
+        for (const other of session.ringLegs) {
+          if (other.sid !== sid && !other.terminal) {
+            cancelRingLeg({ sid: other.sid });
+            other.terminal = true;
+            other.status = 'canceled';
+          }
+        }
+      }
+
+      if (['completed', 'failed', 'busy', 'no-answer'].includes(String(twilioStatus).toLowerCase()) && session.status === 'answered') {
+        session.status = 'completed';
+        session.endedAt = session.endedAt || new Date().toISOString();
+      }
+
+      voiceSessionsRepo.save(session);
+    }
+
+    const incomingStatus = normalizeStatus(twilioStatus);
     const call = callsRepo.findBySidOrClientCallId(sid, req.body.clientCallId);
     if (!call) return res.status(200).json({ ok: true, requestId: req.requestId });
 
@@ -352,4 +596,4 @@ function createServer(env = process.env, deps = {}) {
   return { app, server, shutdown };
 }
 
-module.exports = { createApp, createServer, STATUS_MAP, normalizeStatus, isTerminal };
+module.exports = { createApp, createServer, STATUS_MAP, normalizeStatus, isTerminal, toIdentity };

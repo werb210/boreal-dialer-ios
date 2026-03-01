@@ -74,6 +74,40 @@ final class AuthService: ObservableObject {
                 accessToken: decoded.accessToken
             )
         }
+
+        if shouldInitializeVoice(from: decoded.accessToken) {
+            await VoiceManager.shared.initialize()
+        }
+    }
+
+    private func shouldInitializeVoice(from token: String) -> Bool {
+        guard let role = decodeClaim("role", from: token) else {
+            return false
+        }
+
+        let normalized = role.lowercased()
+        return normalized == "admin" || normalized == "staff"
+    }
+
+    private func decodeClaim(_ key: String, from token: String) -> String? {
+        let segments = token.split(separator: ".")
+        guard segments.count > 1 else { return nil }
+
+        var base64 = String(segments[1])
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+
+        while base64.count % 4 != 0 {
+            base64.append("=")
+        }
+
+        guard let data = Data(base64Encoded: base64),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let value = json[key] as? String else {
+            return nil
+        }
+
+        return value
     }
 
     func getValidAccessToken() async throws -> String {

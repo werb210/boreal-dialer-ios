@@ -1,53 +1,78 @@
-import { Device } from "@twilio/voice-sdk";
+import { Device, type Call } from "@twilio/voice-sdk";
+import { getDevice, setDevice, clearDevice } from "./deviceSingleton";
 import { setCallStatus } from "../state/callState";
+import { twilioEnv } from "../config/env";
 
-let device: Device | null = null;
+void twilioEnv;
+
 let tokenExpiryTimeout: ReturnType<typeof setTimeout> | null = null;
 let tokenRefreshPromise: Promise<void> | null = null;
 
+async function logDialerConnect(call: Call): Promise<void> {
+  const to = String(call.parameters?.To ?? "");
+  const from = String(call.parameters?.From ?? "");
+  const callSid = String(call.parameters?.CallSid ?? "");
+
+  await fetch("/api/dialer/log", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    credentials: "include",
+    body: JSON.stringify({
+      direction: "outbound",
+      to,
+      from,
+      callSid
+    })
+  });
+}
+
 export async function initDevice(token: string): Promise<Device> {
-  if (device) {
-    device.destroy();
-    device = null;
+  const existingDevice = getDevice();
+  if (existingDevice) {
+    return existingDevice;
   }
 
-  device = new Device(token, {
+  const nextDevice = new Device(token, {
     closeProtection: true
   });
+  setDevice(nextDevice);
 
-  device.on("tokenWillExpire", async () => {
+  nextDevice.on("tokenWillExpire", async () => {
     await refreshToken();
   });
 
-  device.on("error", () => {
-    // silent fail — no console
-  });
-
-  device.on("offline", async () => {
-    await refreshToken();
-  });
-
-  device.on("incoming", () => {
-    setCallStatus("incoming");
-  });
-
-  device.on("connect", () => {
-    setCallStatus("connected");
-  });
-
-  device.on("disconnect", () => {
+  nextDevice.on("error", () => {
     setCallStatus("ended");
   });
 
-  await device.register();
+  nextDevice.on("offline", async () => {
+    await refreshToken();
+  });
+
+  nextDevice.on("incoming", () => {
+    setCallStatus("incoming");
+  });
+
+  nextDevice.on("connect", (call: Call) => {
+    setCallStatus("connected");
+    void logDialerConnect(call);
+  });
+
+  nextDevice.on("disconnect", () => {
+    setCallStatus("ended");
+  });
+
+  await nextDevice.register();
 
   scheduleExpiryRefresh();
 
-  return device;
+  return nextDevice;
 }
 
 function scheduleExpiryRefresh() {
-  if (!device) return;
+  if (!getDevice()) return;
 
   if (tokenExpiryTimeout) clearTimeout(tokenExpiryTimeout);
 
@@ -57,22 +82,24 @@ function scheduleExpiryRefresh() {
 }
 
 export async function refreshToken(): Promise<void> {
-  if (!device) return;
+  const currentDevice = getDevice();
+  if (!currentDevice) return;
   if (tokenRefreshPromise) {
     await tokenRefreshPromise;
     return;
   }
 
   tokenRefreshPromise = (async () => {
-    const res = await fetch("/api/dialer/token", {
+    const res = await fetch("/api/voice/token", {
       credentials: "include"
     });
 
-    const data = await res.json();
+    const data: { token: string } = await res.json();
 
-    if (!device) return;
+    const deviceToRefresh = getDevice();
+    if (!deviceToRefresh) return;
 
-    await device.updateToken(data.token);
+    await deviceToRefresh.updateToken(data.token);
     scheduleExpiryRefresh();
   })();
 
@@ -83,8 +110,8 @@ export async function refreshToken(): Promise<void> {
   }
 }
 
-export function getDevice(): Device | null {
-  return device;
+export function getManagedDevice(): Device | null {
+  return getDevice();
 }
 
 export function destroyDevice(): void {
@@ -93,9 +120,10 @@ export function destroyDevice(): void {
     tokenExpiryTimeout = null;
   }
 
-  if (device) {
-    device.destroy();
-    device = null;
+  const currentDevice = getDevice();
+  if (currentDevice) {
+    currentDevice.destroy();
+    clearDevice();
   }
 
   tokenRefreshPromise = null;

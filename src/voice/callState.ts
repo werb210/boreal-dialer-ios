@@ -1,6 +1,10 @@
-let activeCall: any = null;
+export type VoiceCall = {
+  disconnect: () => void;
+};
 
-export function setActiveCall(call: any) {
+let activeCall: VoiceCall | null = null;
+
+export function setActiveCall(call: VoiceCall) {
   if (activeCall && activeCall !== call) {
     activeCall.disconnect();
   }

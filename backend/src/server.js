@@ -103,6 +103,26 @@ function createInMemoryCallsRepo() {
   };
 }
 
+
+function createInMemoryDialerLogRepo() {
+  const entries = [];
+
+  return {
+    create(entry) {
+      const record = {
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+        ...entry,
+      };
+      entries.push(record);
+      return record;
+    },
+    list() {
+      return [...entries];
+    },
+  };
+}
+
 function createInMemoryVoiceSessionRepo() {
   const sessions = new Map();
   const ringSidToSession = new Map();
@@ -211,6 +231,7 @@ function createApp(env = process.env, deps = {}) {
   const callsRepo = deps.callsRepo || createInMemoryCallsRepo();
   const voiceSessionsRepo = deps.voiceSessionsRepo || createInMemoryVoiceSessionRepo();
   const presenceRepo = deps.presenceRepo || createInMemoryPresenceRepo();
+  const dialerLogRepo = deps.dialerLogRepo || createInMemoryDialerLogRepo();
   const findAssignedStaffId = deps.findAssignedStaffId || (async () => null);
 
   const startTwilioCall = deps.startTwilioCall || defaultTwilioStartCall;
@@ -341,6 +362,24 @@ function createApp(env = process.env, deps = {}) {
     const token = new twilio.jwt.AccessToken(env.TWILIO_ACCOUNT_SID, env.TWILIO_API_KEY, env.TWILIO_API_SECRET, { identity });
     token.addGrant(new twilio.jwt.AccessToken.VoiceGrant({ outgoingApplicationSid: env.TWILIO_VOICE_APP_SID || env.TWILIO_TWIML_APP_SID }));
     res.status(200).json({ token: token.toJwt(), identity, requestId: req.requestId });
+  });
+
+
+  app.post('/api/dialer/log', requireAuth, requireVoiceEnabled, (req, res) => {
+    const { direction, to, from, callSid } = req.body || {};
+    if (!direction || !to || !from || !callSid) {
+      return makeError(res, req, 400, 'bad_request', 'direction, to, from, and callSid are required');
+    }
+
+    const record = dialerLogRepo.create({
+      userId: req.user.id,
+      direction,
+      to,
+      from,
+      callSid,
+    });
+
+    return res.status(201).json({ log: record, requestId: req.requestId });
   });
 
   app.post('/api/voice/presence/heartbeat', requireAuth, requireStaff, requireVoiceEnabled, (req, res) => {

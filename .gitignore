@@ -15,3 +15,7 @@ xcuserdata/
 *.p8
 *.pem
 .env
+
+# Node / frontend
+node_modules/
+dist/

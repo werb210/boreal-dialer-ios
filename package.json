@@ -6,7 +6,8 @@
     "test": "node --test backend/tests/*.test.js",
     "lint": "node -e 'process.exit(0)'",
     "check": "npm test",
-    "build": "node -e 'process.exit(0)'"
+    "build": "node -e 'process.exit(0)'",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "express": "^4.21.2",
@@ -16,5 +17,8 @@
   "devDependencies": {
     "supertest": "^7.1.0",
     "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=22 <23"
   }
 }

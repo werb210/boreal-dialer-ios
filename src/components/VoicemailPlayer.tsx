@@ -14,7 +14,6 @@ export function VoicemailPlayer({ voicemailUrl, authToken }: VoicemailPlayerProp
     <audio
       controls
       preload="none"
-      onError={() => console.error("Voicemail load failed")}
     >
       <source src={sourceUrl} type="audio/mpeg" />
     </audio>

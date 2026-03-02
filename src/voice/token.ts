@@ -1,6 +1,5 @@
-import { destroyDevice, getDevice } from "./device";
+import { initDevice } from "./device";
 
 export async function refreshVoice(token: string) {
-  destroyDevice();
-  return getDevice(token);
+  return initDevice(token);
 }

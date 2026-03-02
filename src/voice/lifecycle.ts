@@ -1,4 +1,4 @@
-import type { Device } from "@twilio/voice-sdk";
+import type { Call, Device } from "@twilio/voice-sdk";
 import { clearActiveCall, getActiveCall, setActiveCall } from "./callState";
 import { startHeartbeat, stopHeartbeat } from "./heartbeat";
 
@@ -11,7 +11,7 @@ export async function syncVoiceState(status: "connected" | "ended") {
 }
 
 export function attachCallLifecycleHandlers(device: Device) {
-  device.on("incoming", (call: any) => {
+  device.on("incoming", (call: Call) => {
     if (getActiveCall()) {
       call.reject();
       return;

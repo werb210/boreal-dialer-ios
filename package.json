@@ -4,10 +4,12 @@
   "type": "commonjs",
   "scripts": {
     "test": "node --test backend/tests/*.test.js",
-    "lint": "node -e 'process.exit(0)'",
+    "lint": "eslint .",
     "check": "npm test",
-    "build": "node -e 'process.exit(0)'",
-    "typecheck": "tsc --noEmit"
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "dev": "vite",
+    "preview": "vite preview"
   },
   "dependencies": {
     "express": "^4.21.2",
@@ -15,7 +17,17 @@
     "twilio": "^5.4.0"
   },
   "devDependencies": {
+    "@twilio/voice-sdk": "^2.18.0",
+    "@types/node": "^25.3.3",
+    "@types/react": "^19.2.14",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
+    "eslint": "^8.57.1",
+    "prettier": "^3.8.1",
+    "react": "^19.2.4",
     "supertest": "^7.1.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
     "vitest": "^4.0.18"
   },
   "engines": {

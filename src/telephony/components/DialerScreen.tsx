@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 import DialPad from "./DialPad";
 import CallControls from "./CallControls";
 import { initializeVoice } from "../services/voiceDevice";

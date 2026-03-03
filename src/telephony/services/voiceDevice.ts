@@ -15,7 +15,7 @@ export async function initializeVoice(identity: string) {
   const { token } = await res.json();
 
   device = new Device(token, {
-    codecPreferences: ["opus", "pcmu"],
+    codecPreferences: [Call.Codec.Opus, Call.Codec.PCMU],
     closeProtection: true
   });
 

@@ -13,8 +13,10 @@
   },
   "dependencies": {
     "@twilio/conversations": "^2.7.0",
+    "@types/react-dom": "^19.2.3",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
+    "react-dom": "^19.2.4",
     "twilio": "^5.4.0",
     "uuid": "^13.0.0"
   },

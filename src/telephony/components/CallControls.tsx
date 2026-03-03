@@ -1,4 +1,3 @@
-import React from "react";
 import { hangupCall, muteCall, unmuteCall } from "../services/voiceDevice";
 
 export default function CallControls() {

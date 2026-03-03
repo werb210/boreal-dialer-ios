@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { startCall } from "../services/voiceDevice";
 
 export default function DialPad() {

@@ -12,9 +12,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@twilio/conversations": "^2.7.0",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
-    "twilio": "^5.4.0"
+    "twilio": "^5.4.0",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@twilio/voice-sdk": "^2.18.0",

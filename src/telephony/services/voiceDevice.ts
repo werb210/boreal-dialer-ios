@@ -3,27 +3,25 @@ import { Device, Call } from "@twilio/voice-sdk";
 let device: Device | null = null;
 let activeCall: Call | null = null;
 
-export async function initializeVoice(identity: string) {
-  const res = await fetch("/telephony/token", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ identity })
-  });
-
-  const { token } = await res.json();
-
+export async function initializeVoice(token: string) {
   device = new Device(token, {
     codecPreferences: [Call.Codec.Opus, Call.Codec.PCMU],
-    closeProtection: true
+    logLevel: 1
+  });
+
+  device.on("registered", () => {
+    console.log("Twilio device registered");
   });
 
   device.on("incoming", (call: Call) => {
     activeCall = call;
+
+    call.on("disconnect", () => {
+      activeCall = null;
+    });
   });
 
-  device.register();
+  await device.register();
 }
 
 export function getDevice() {
@@ -40,7 +38,13 @@ export async function startCall(destination: string) {
   }
 
   activeCall = await device.connect({
-    params: { to: destination }
+    params: {
+      To: destination
+    }
+  });
+
+  activeCall.on("disconnect", () => {
+    activeCall = null;
   });
 
   return activeCall;

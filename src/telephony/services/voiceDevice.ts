@@ -1,13 +1,24 @@
-import { Device, Call } from "@twilio/voice-sdk";
+import { Call, Device } from "@twilio/voice-sdk";
+import { getVoiceToken } from "../api/getVoiceToken";
 import {
-  clearAll,
+  clearAllCalls,
   clearIncomingCall,
   getCallStoreState,
   setActiveCall,
-  setIncomingCall
+  setDevice,
+  setIncomingCall,
+  useCallStore
 } from "../state/callStore";
 
-let device: Device | null = null;
+let initializePromise: Promise<void> | null = null;
+
+function clearCallReferences(call: Call) {
+  const { activeCall, incomingCall } = getCallStoreState();
+
+  if (activeCall === call || incomingCall === call) {
+    clearAllCalls();
+  }
+}
 
 function bindCallLifecycle(call: Call) {
   call.on("accept", () => {
@@ -16,66 +27,78 @@ function bindCallLifecycle(call: Call) {
   });
 
   call.on("disconnect", () => {
-    clearAll();
+    clearCallReferences(call);
   });
 
   call.on("cancel", () => {
-    if (getCallStoreState().incomingCall === call) {
-      clearIncomingCall();
-    }
+    clearCallReferences(call);
   });
 
   call.on("reject", () => {
-    if (getCallStoreState().incomingCall === call) {
-      clearIncomingCall();
-    }
+    clearCallReferences(call);
   });
 }
 
-export function registerVoiceDevice(token: string) {
-  if (device) {
-    device.destroy();
-  }
-
-  clearAll();
-  device = new Device(token);
-
+function bindDeviceLifecycle(device: Device) {
   device.on("incoming", (call: Call) => {
     setIncomingCall(call);
     bindCallLifecycle(call);
   });
 
   device.on("disconnect", () => {
-    clearAll();
-  });
-
-  device.on("error", (error: Error) => {
-    throw new Error(`Twilio device error: ${error.message}`);
+    clearAllCalls();
   });
 }
 
-export async function initializeVoice(token: string) {
-  registerVoiceDevice(token);
+async function createAndRegisterDevice(): Promise<void> {
+  const { token } = await getVoiceToken();
+  const device = new Device(token);
+
+  bindDeviceLifecycle(device);
+  await device.register();
+  setDevice(device);
 }
 
-export async function startCall(to: string) {
+export async function initializeVoice(): Promise<void> {
+  if (getCallStoreState().device) {
+    return;
+  }
+
+  if (!initializePromise) {
+    initializePromise = createAndRegisterDevice().finally(() => {
+      initializePromise = null;
+    });
+  }
+
+  await initializePromise;
+}
+
+export async function startCall(to: string): Promise<Call> {
+  const { device } = getCallStoreState();
+
   if (!device) {
     throw new Error("Device not initialized");
   }
 
   const call = await device.connect({ params: { To: to } });
+
   bindCallLifecycle(call);
   setActiveCall(call);
+
+  return call;
 }
 
 export function hangupCall() {
-  const { activeCall } = getCallStoreState();
+  getCallStoreState().activeCall?.disconnect();
+  clearAllCalls();
+}
 
-  if (activeCall) {
-    activeCall.disconnect();
-  }
+export function muteCall() {
+  getCallStoreState().activeCall?.mute(true);
+}
 
-  clearAll();
+export function unmuteCall() {
+  getCallStoreState().activeCall?.mute(false);
 }
 
 export function answerIncomingCall() {
@@ -101,10 +124,8 @@ export function rejectIncomingCall() {
   clearIncomingCall();
 }
 
-export function muteCall() {
-  getCallStoreState().activeCall?.mute(true);
+export function getCallState() {
+  return getCallStoreState();
 }
 
-export function unmuteCall() {
-  getCallStoreState().activeCall?.mute(false);
-}
+export { useCallStore };

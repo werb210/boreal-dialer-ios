@@ -1,37 +1,52 @@
 import { Device, Call } from "@twilio/voice-sdk";
+import {
+  clearAll,
+  clearIncomingCall,
+  getCallStoreState,
+  setActiveCall,
+  setIncomingCall
+} from "../state/callStore";
 
 let device: Device | null = null;
-let activeCall: Call | null = null;
-let incomingCall: Call | null = null;
+
+function bindCallLifecycle(call: Call) {
+  call.on("accept", () => {
+    setActiveCall(call);
+    clearIncomingCall();
+  });
+
+  call.on("disconnect", () => {
+    clearAll();
+  });
+
+  call.on("cancel", () => {
+    if (getCallStoreState().incomingCall === call) {
+      clearIncomingCall();
+    }
+  });
+
+  call.on("reject", () => {
+    if (getCallStoreState().incomingCall === call) {
+      clearIncomingCall();
+    }
+  });
+}
 
 export function registerVoiceDevice(token: string) {
   if (device) {
     device.destroy();
   }
 
+  clearAll();
   device = new Device(token);
 
   device.on("incoming", (call: Call) => {
-    incomingCall = call;
-
-    call.on("accept", () => {
-      activeCall = call;
-      incomingCall = null;
-    });
-
-    call.on("disconnect", () => {
-      activeCall = null;
-      incomingCall = null;
-    });
-
-    call.on("reject", () => {
-      incomingCall = null;
-    });
+    setIncomingCall(call);
+    bindCallLifecycle(call);
   });
 
   device.on("disconnect", () => {
-    activeCall = null;
-    incomingCall = null;
+    clearAll();
   });
 
   device.on("error", (error: Error) => {
@@ -48,35 +63,48 @@ export async function startCall(to: string) {
     throw new Error("Device not initialized");
   }
 
-  activeCall = await device.connect({ params: { To: to } });
+  const call = await device.connect({ params: { To: to } });
+  bindCallLifecycle(call);
+  setActiveCall(call);
 }
 
 export function hangupCall() {
+  const { activeCall } = getCallStoreState();
+
   if (activeCall) {
     activeCall.disconnect();
-    activeCall = null;
   }
+
+  clearAll();
 }
 
 export function answerIncomingCall() {
-  if (!incomingCall) return;
+  const { incomingCall } = getCallStoreState();
+
+  if (!incomingCall) {
+    return;
+  }
 
   incomingCall.accept();
-  activeCall = incomingCall;
-  incomingCall = null;
+  setActiveCall(incomingCall);
+  clearIncomingCall();
 }
 
 export function rejectIncomingCall() {
-  if (!incomingCall) return;
+  const { incomingCall } = getCallStoreState();
+
+  if (!incomingCall) {
+    return;
+  }
 
   incomingCall.reject();
-  incomingCall = null;
+  clearIncomingCall();
 }
 
 export function muteCall() {
-  activeCall?.mute(true);
+  getCallStoreState().activeCall?.mute(true);
 }
 
 export function unmuteCall() {
-  activeCall?.mute(false);
+  getCallStoreState().activeCall?.mute(false);
 }

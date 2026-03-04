@@ -9,10 +9,6 @@ export async function initializeVoice(token: string) {
     logLevel: 1
   });
 
-  device.on("registered", () => {
-    console.log("Twilio device registered");
-  });
-
   device.on("incoming", (call: Call) => {
     activeCall = call;
 

@@ -1,34 +1,40 @@
-import { Device } from "@twilio/voice-sdk";
+import { Device, Call } from "@twilio/voice-sdk";
 
 let device: Device | null = null;
-let activeCall: any = null;
+let activeCall: Call | null = null;
 
-export async function initializeVoice(token: string) {
-  device = new Device(token, {
-    enableRingingState: true
-  });
+export function registerVoiceDevice(token: string) {
+  if (device) {
+    device.destroy();
+  }
 
-  device.on("registered", () => {});
+  device = new Device(token);
 
-  device.on("incoming", call => {
+  device.on("incoming", (call: Call) => {
     activeCall = call;
+
+    call.on("disconnect", () => {
+      activeCall = null;
+    });
 
     call.accept();
   });
 
-  device.on("disconnect", () => {
-    activeCall = null;
+  device.on("error", (error: Error) => {
+    throw new Error(`Twilio device error: ${error.message}`);
   });
-
-  await device.register();
 }
 
-export function startCall(number: string) {
-  if (!device) return;
+export async function initializeVoice(token: string) {
+  registerVoiceDevice(token);
+}
 
-  activeCall = device.connect({
-    params: { To: number }
-  });
+export function startCall(to: string) {
+  if (!device) {
+    throw new Error("Device not initialized");
+  }
+
+  activeCall = device.connect({ params: { To: to } });
 }
 
 export function hangupCall() {
@@ -39,13 +45,9 @@ export function hangupCall() {
 }
 
 export function muteCall() {
-  if (activeCall) {
-    activeCall.mute(true);
-  }
+  activeCall?.mute(true);
 }
 
 export function unmuteCall() {
-  if (activeCall) {
-    activeCall.mute(false);
-  }
+  activeCall?.mute(false);
 }

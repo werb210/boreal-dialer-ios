@@ -9,8 +9,8 @@ export default function DialPad() {
 
     try {
       await startCall(number);
-    } catch (err) {
-      console.error("Dial failed", err);
+    } catch {
+      // call failed silently
     }
   };
 

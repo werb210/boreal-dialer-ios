@@ -2,6 +2,7 @@ import { Device, Call } from "@twilio/voice-sdk";
 
 let device: Device | null = null;
 let activeCall: Call | null = null;
+let incomingCall: Call | null = null;
 
 export function registerVoiceDevice(token: string) {
   if (device) {
@@ -11,13 +12,26 @@ export function registerVoiceDevice(token: string) {
   device = new Device(token);
 
   device.on("incoming", (call: Call) => {
-    activeCall = call;
+    incomingCall = call;
+
+    call.on("accept", () => {
+      activeCall = call;
+      incomingCall = null;
+    });
 
     call.on("disconnect", () => {
       activeCall = null;
+      incomingCall = null;
     });
 
-    call.accept();
+    call.on("reject", () => {
+      incomingCall = null;
+    });
+  });
+
+  device.on("disconnect", () => {
+    activeCall = null;
+    incomingCall = null;
   });
 
   device.on("error", (error: Error) => {
@@ -42,6 +56,21 @@ export function hangupCall() {
     activeCall.disconnect();
     activeCall = null;
   }
+}
+
+export function answerIncomingCall() {
+  if (!incomingCall) return;
+
+  incomingCall.accept();
+  activeCall = incomingCall;
+  incomingCall = null;
+}
+
+export function rejectIncomingCall() {
+  if (!incomingCall) return;
+
+  incomingCall.reject();
+  incomingCall = null;
 }
 
 export function muteCall() {

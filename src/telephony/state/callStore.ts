@@ -1,7 +1,8 @@
 import { useSyncExternalStore } from "react";
-import type { Call } from "@twilio/voice-sdk";
+import type { Call, Device } from "@twilio/voice-sdk";
 
-type CallStoreState = {
+export type CallStoreState = {
+  device: Device | null;
   incomingCall: Call | null;
   activeCall: Call | null;
 };
@@ -9,6 +10,7 @@ type CallStoreState = {
 type Listener = () => void;
 
 const state: CallStoreState = {
+  device: null,
   incomingCall: null,
   activeCall: null
 };
@@ -19,6 +21,11 @@ function emitChange() {
   listeners.forEach((listener) => {
     listener();
   });
+}
+
+export function setDevice(device: Device | null) {
+  state.device = device;
+  emitChange();
 }
 
 export function setIncomingCall(incomingCall: Call | null) {
@@ -36,7 +43,14 @@ export function clearIncomingCall() {
   emitChange();
 }
 
-export function clearAll() {
+export function clearAllCalls() {
+  state.incomingCall = null;
+  state.activeCall = null;
+  emitChange();
+}
+
+export function clearStore() {
+  state.device = null;
   state.incomingCall = null;
   state.activeCall = null;
   emitChange();

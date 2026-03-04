@@ -29,12 +29,12 @@ export async function initializeVoice(token: string) {
   registerVoiceDevice(token);
 }
 
-export function startCall(to: string) {
+export async function startCall(to: string) {
   if (!device) {
     throw new Error("Device not initialized");
   }
 
-  activeCall = device.connect({ params: { To: to } });
+  activeCall = await device.connect({ params: { To: to } });
 }
 
 export function hangupCall() {

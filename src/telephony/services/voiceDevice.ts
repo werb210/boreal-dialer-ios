@@ -73,6 +73,10 @@ function bindDeviceLifecycle(device: Device) {
   device.on("ready", () => {
     setNetworkBanner(null);
   });
+
+  device.on("error", () => {
+    setNetworkBanner("Connection lost. Attempting reconnect.");
+  });
 }
 
 export async function getVoiceDevice(): Promise<Device> {

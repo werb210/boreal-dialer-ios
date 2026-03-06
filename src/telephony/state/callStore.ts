@@ -5,8 +5,9 @@ export type CallStoreState = {
   device: Device | null;
   incomingCall: Call | null;
   activeCall: Call | null;
-  callStatus: "idle" | "incoming" | "connecting" | "connected" | "ended" | "error";
+  callStatus: "idle" | "ringing" | "connecting" | "connected" | "ended" | "error";
   callDuration: number;
+  networkStatus: "online" | "offline";
   networkBanner: string | null;
 };
 
@@ -18,6 +19,7 @@ const state: CallStoreState = {
   activeCall: null,
   callStatus: "idle",
   callDuration: 0,
+  networkStatus: "online",
   networkBanner: null
 };
 
@@ -71,6 +73,7 @@ export function setCallDuration(callDuration: number) {
 
 export function setNetworkBanner(networkBanner: string | null) {
   state.networkBanner = networkBanner;
+  state.networkStatus = networkBanner ? "offline" : "online";
   emitChange();
 }
 
@@ -80,6 +83,7 @@ export function clearStore() {
   state.activeCall = null;
   state.callStatus = "idle";
   state.callDuration = 0;
+  state.networkStatus = "online";
   state.networkBanner = null;
   emitChange();
 }

@@ -5,7 +5,6 @@ import { logCall } from "../../services/callLogger";
 import { emitPortalCallEvent } from "../../services/portalEvents";
 import { registerIncomingCallHandler } from "../../services/incomingCallHandler";
 import {
-  clearAllCalls,
   clearIncomingCall,
   getCallStoreState,
   setActiveCall,
@@ -15,6 +14,7 @@ import {
   useCallStore
 } from "../state/callStore";
 
+let device: Device | null = null;
 let initializePromise: Promise<Device> | null = null;
 
 async function retryConnect(device: Device, attempt = 0): Promise<void> {
@@ -95,20 +95,34 @@ async function createAndRegisterDevice(): Promise<Device> {
 
   const { token } = await getTwilioToken();
 
-  const device = new Device(token, {
-    logLevel: 1
-  });
+  const voiceDeviceOptions = {
+    codecPreferences: [Call.Codec.Opus, Call.Codec.PCMU],
+    fakeLocalDTMF: true,
+    enableRingingState: true
+  } as unknown as ConstructorParameters<typeof Device>[1];
 
-  bindDeviceLifecycle(device);
-  await retryConnect(device);
-  setDevice(device);
+  const nextDevice = new Device(token, voiceDeviceOptions);
 
-  return device;
+  bindDeviceLifecycle(nextDevice);
+  await retryConnect(nextDevice);
+  setDevice(nextDevice);
+  device = nextDevice;
+
+  return nextDevice;
 }
 
-export async function initializeVoice(): Promise<void> {
-  if (getCallStoreState().device) {
-    return;
+export async function getVoiceDevice(): Promise<Device> {
+  if (device) {
+    if (!getCallStoreState().device) {
+      setDevice(device);
+    }
+    return device;
+  }
+
+  const storeDevice = getCallStoreState().device;
+  if (storeDevice) {
+    device = storeDevice;
+    return storeDevice;
   }
 
   if (!initializePromise) {
@@ -117,7 +131,11 @@ export async function initializeVoice(): Promise<void> {
     });
   }
 
-  await initializePromise;
+  return initializePromise;
+}
+
+export async function initializeVoice(): Promise<void> {
+  await getVoiceDevice();
 }
 
 export async function startCall(to: string): Promise<Call> {
@@ -183,6 +201,7 @@ export function answerIncomingCall() {
   incomingCall.accept();
   setActiveCall(incomingCall);
   clearIncomingCall();
+  setCallStatus("connected");
 
   emitPortalCallEvent("call_answered", {
     phoneNumber: String(incomingCall.parameters.From ?? "unknown")
@@ -202,6 +221,7 @@ export function rejectIncomingCall() {
 
   incomingCall.reject();
   cleanupCall(incomingCall);
+  setCallStatus("ended");
 }
 
 export function getCallState() {
@@ -209,3 +229,8 @@ export function getCallState() {
 }
 
 export { useCallStore };
+
+export function __resetVoiceDeviceForTests() {
+  device = null;
+  initializePromise = null;
+}

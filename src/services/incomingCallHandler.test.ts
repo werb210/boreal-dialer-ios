@@ -12,6 +12,6 @@ describe("incomingCallHandler", () => {
     handleIncomingCall(call);
 
     expect(getCallStoreState().incomingCall).toBe(call);
-    expect(getCallStoreState().callStatus).toBe("incoming");
+    expect(getCallStoreState().callStatus).toBe("ringing");
   });
 });

@@ -1,39 +1,28 @@
-import { useEffect, useState } from "react";
-
-export type CallState =
-  | "idle"
-  | "ringing"
-  | "connecting"
-  | "in-call"
-  | "ended";
+import { useEffect, useState } from "react"
 
 export function useCallState() {
-  const [state, setState] = useState<CallState>("idle");
+
+  const [online, setOnline] = useState(navigator.onLine)
 
   useEffect(() => {
-    const handleOffline = () => {
-      if (!navigator.onLine) {
-        setState((previous) => (previous === "in-call" ? "connecting" : previous));
-      }
-    };
 
-    const handleOnline = () => {
-      if (navigator.onLine) {
-        setState((previous) => (previous === "connecting" ? "idle" : previous));
-      }
-    };
+    function handleOnline() {
+      setOnline(true)
+    }
 
-    window.addEventListener("offline", handleOffline);
-    window.addEventListener("online", handleOnline);
+    function handleOffline() {
+      setOnline(false)
+    }
+
+    window.addEventListener("online", handleOnline)
+    window.addEventListener("offline", handleOffline)
 
     return () => {
-      window.removeEventListener("offline", handleOffline);
-      window.removeEventListener("online", handleOnline);
-    };
-  }, []);
+      window.removeEventListener("online", handleOnline)
+      window.removeEventListener("offline", handleOffline)
+    }
 
-  return {
-    state,
-    setState
-  };
+  }, [])
+
+  return { online }
 }

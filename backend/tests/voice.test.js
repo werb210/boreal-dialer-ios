@@ -10,6 +10,9 @@ const env = {
   TWILIO_API_KEY: 'SK123',
   TWILIO_API_SECRET: 'secret',
   TWILIO_TWIML_APP_SID: 'AP123',
+  OPENAI_API_KEY: 'test-openai',
+  BF_SERVER_API: 'http://api.example.test',
+  MAYA_SECRET: 'maya-test-secret',
 };
 
 const auth = (id, role) => `Bearer ${Buffer.from(JSON.stringify({ id, role })).toString('base64')}`;

@@ -4,6 +4,8 @@ const http = require('http');
 const createVoiceRouter = require('./modules/voice/voice.routes');
 const { updatePresence } = require('./modules/voice/presence');
 const { validateTwilioSignature } = require('./modules/voice/twilioWebhookGuard');
+const { getQueueHealth } = require('./queue/jobQueue');
+const { validateEnv } = require('./config/validateEnv');
 
 const STATUS_MAP = {
   initiated: 'initiated',
@@ -228,6 +230,10 @@ function createApp(env = process.env, deps = {}) {
   app.use(express.urlencoded({ extended: false }));
   app.locals.env = env;
 
+  if (env.MAYA_VALIDATE_ENV !== 'false') {
+    validateEnv(env);
+  }
+
   const callsRepo = deps.callsRepo || createInMemoryCallsRepo();
   const voiceSessionsRepo = deps.voiceSessionsRepo || createInMemoryVoiceSessionRepo();
   const presenceRepo = deps.presenceRepo || createInMemoryPresenceRepo();
@@ -336,6 +342,11 @@ function createApp(env = process.env, deps = {}) {
     clearSessionTimers(session.id);
     voiceSessionsRepo.save(session);
   }
+
+
+  app.get('/maya/health', (_req, res) => {
+    return res.status(200).json(getQueueHealth());
+  });
 
   app.use('/api/voice', createVoiceRouter({
     env,

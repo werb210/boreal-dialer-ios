@@ -39,9 +39,8 @@ function timeout(ms) {
 }
 
 function toIdentity(role, userId) {
-  const normalizedRole = String(role || '').toLowerCase();
-  if (normalizedRole === 'client') return `client:${userId}`;
-  return `staff:${userId}`;
+  void role;
+  return String(userId);
 }
 
 function createInMemoryCallsRepo() {
@@ -377,6 +376,39 @@ function createApp(env = process.env, deps = {}) {
       to,
       from,
       callSid,
+    });
+
+    return res.status(201).json({ log: record, requestId: req.requestId });
+  });
+
+  app.post('/api/calls/log', requireAuth, requireVoiceEnabled, (req, res) => {
+    const {
+      staff_id,
+      client_id,
+      phone_number,
+      call_duration,
+      call_direction,
+      timestamp,
+    } = req.body || {};
+
+    if (!staff_id || !phone_number || typeof call_duration !== 'number' || !call_direction || !timestamp) {
+      return makeError(
+        res,
+        req,
+        400,
+        'bad_request',
+        'staff_id, phone_number, call_duration, call_direction, and timestamp are required'
+      );
+    }
+
+    const record = dialerLogRepo.create({
+      userId: req.user.id,
+      staff_id,
+      client_id: client_id || null,
+      phone_number,
+      call_duration,
+      call_direction,
+      timestamp,
     });
 
     return res.status(201).json({ log: record, requestId: req.requestId });

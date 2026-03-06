@@ -25,12 +25,16 @@ type MockDevice = {
 };
 
 const hoisted = vi.hoisted(() => ({
-  getVoiceToken: vi.fn(async () => ({ token: "token-123" })),
+  getTwilioToken: vi.fn(async () => ({ token: "token-123", identity: "staff-1" })),
   createCall: null as ((from?: string) => MockCall) | null
 }));
 
-vi.mock("../api/getVoiceToken", () => ({
-  getVoiceToken: hoisted.getVoiceToken
+vi.mock("../../services/twilioTokenService", () => ({
+  getTwilioToken: hoisted.getTwilioToken
+}));
+
+vi.mock("../../services/callLogger", () => ({
+  logCall: vi.fn(async () => undefined)
 }));
 
 vi.mock("@twilio/voice-sdk", () => {
@@ -38,7 +42,7 @@ vi.mock("@twilio/voice-sdk", () => {
     const handlers: Record<string, Array<() => void>> = {};
 
     const call: MockCall = {
-      parameters: { From: from },
+      parameters: { From: from, To: "+15551234567" },
       on(event, handler) {
         handlers[event] ??= [];
         handlers[event].push(handler);
@@ -119,6 +123,34 @@ describe("voiceDevice", () => {
 
     expect(incomingCall.accept).toHaveBeenCalledTimes(1);
     expect(getCallState().activeCall).toBe(incomingCall);
+    expect(getCallState().incomingCall).toBeNull();
+  });
+
+  it("uses a single token refresh queue for concurrent initialization", async () => {
+    await Promise.all([initializeVoice(), initializeVoice(), initializeVoice()]);
+
+    expect(hoisted.getTwilioToken).toHaveBeenCalledTimes(1);
+  });
+
+  it("cleans call session for cancel/reject/error", async () => {
+    await initializeVoice();
+    const device = getCallStoreState().device as unknown as MockDevice;
+    const incomingCall = hoisted.createCall?.("client_99");
+
+    if (!incomingCall) {
+      throw new Error("Mock call factory unavailable");
+    }
+
+    device.emit("incoming", incomingCall);
+    incomingCall.emit("cancel");
+    expect(getCallState().incomingCall).toBeNull();
+
+    device.emit("incoming", incomingCall);
+    incomingCall.emit("reject");
+    expect(getCallState().incomingCall).toBeNull();
+
+    device.emit("incoming", incomingCall);
+    incomingCall.emit("error");
     expect(getCallState().incomingCall).toBeNull();
   });
 });

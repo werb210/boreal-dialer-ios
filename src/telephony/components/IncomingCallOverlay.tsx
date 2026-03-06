@@ -5,6 +5,14 @@ function getCallerIdentifier(from: unknown) {
   return typeof from === "string" && from.length > 0 ? from : "Unknown";
 }
 
+function getClientName(from: string) {
+  if (from.startsWith("client:")) {
+    return `Client ${from.replace("client:", "")}`;
+  }
+
+  return "Unknown client";
+}
+
 export default function IncomingCallOverlay() {
   const { incomingCall } = useCallStore();
 
@@ -13,6 +21,7 @@ export default function IncomingCallOverlay() {
   }
 
   const caller = getCallerIdentifier(incomingCall.parameters.From);
+  const clientName = getClientName(caller);
 
   return (
     <div
@@ -37,9 +46,10 @@ export default function IncomingCallOverlay() {
       >
         <h2 style={{ marginTop: 0 }}>Incoming call</h2>
         <p>{caller}</p>
+        <p>{clientName}</p>
         <div style={{ display: "flex", justifyContent: "center", gap: 12 }}>
-          <button onClick={answerIncomingCall}>Answer</button>
-          <button onClick={rejectIncomingCall}>Decline</button>
+          <button onClick={answerIncomingCall}>Accept</button>
+          <button onClick={rejectIncomingCall}>Reject</button>
         </div>
       </div>
     </div>

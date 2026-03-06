@@ -5,6 +5,9 @@ export type CallStoreState = {
   device: Device | null;
   incomingCall: Call | null;
   activeCall: Call | null;
+  callStatus: "idle" | "incoming" | "connecting" | "connected" | "ended" | "error";
+  callDuration: number;
+  networkBanner: string | null;
 };
 
 type Listener = () => void;
@@ -12,7 +15,10 @@ type Listener = () => void;
 const state: CallStoreState = {
   device: null,
   incomingCall: null,
-  activeCall: null
+  activeCall: null,
+  callStatus: "idle",
+  callDuration: 0,
+  networkBanner: null
 };
 
 const listeners = new Set<Listener>();
@@ -46,6 +52,25 @@ export function clearIncomingCall() {
 export function clearAllCalls() {
   state.incomingCall = null;
   state.activeCall = null;
+  state.callStatus = "ended";
+  state.callDuration = 0;
+  emitChange();
+}
+
+export function setCallStatus(
+  callStatus: CallStoreState["callStatus"]
+) {
+  state.callStatus = callStatus;
+  emitChange();
+}
+
+export function setCallDuration(callDuration: number) {
+  state.callDuration = callDuration;
+  emitChange();
+}
+
+export function setNetworkBanner(networkBanner: string | null) {
+  state.networkBanner = networkBanner;
   emitChange();
 }
 
@@ -53,6 +78,9 @@ export function clearStore() {
   state.device = null;
   state.incomingCall = null;
   state.activeCall = null;
+  state.callStatus = "idle";
+  state.callDuration = 0;
+  state.networkBanner = null;
   emitChange();
 }
 

@@ -1,5 +1,5 @@
 import { Call, Device } from "@twilio/voice-sdk";
-import { fetchVoiceToken } from "../../services/twilioTokenService";
+import { fetchVoiceToken, getVoiceToken } from "../../services/twilioTokenService";
 import {
   clearIncomingCall,
   getCallStoreState,
@@ -37,25 +37,32 @@ function bindDeviceEvents(currentDevice: Device) {
   currentDevice.on("error", () => {
     setNetworkBanner("Connection lost. Attempting reconnect.");
   });
+
+  currentDevice.on("registered", () => {
+    setNetworkBanner(null);
+  });
 }
 
-export async function initVoiceDevice() {
+export async function initializeDevice() {
   if (device) {
     return device;
   }
 
-  if (!initializing) {
-    initializing = (async () => {
-      const token = await fetchVoiceToken();
-      const nextDevice = new Device(token, {
-        codecPreferences: [Call.Codec.Opus, Call.Codec.PCMU]
-      });
+  const token = await getVoiceToken();
+  const nextDevice = new Device(token, {
+    codecPreferences: [Call.Codec.Opus, Call.Codec.PCMU]
+  });
 
-      bindDeviceEvents(nextDevice);
-      setDevice(nextDevice);
-      device = nextDevice;
-      return nextDevice;
-    })().finally(() => {
+  bindDeviceEvents(nextDevice);
+  setDevice(nextDevice);
+  device = nextDevice;
+
+  return device;
+}
+
+export async function initVoiceDevice() {
+  if (!initializing) {
+    initializing = initializeDevice().finally(() => {
       initializing = null;
     });
   }
@@ -69,6 +76,10 @@ export async function initializeVoice() {
 
 export async function getVoiceDevice() {
   return initVoiceDevice();
+}
+
+export function getDevice() {
+  return device;
 }
 
 export function __resetVoiceDeviceForTests() {

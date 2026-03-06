@@ -6,21 +6,21 @@ type TokenResponse = {
 };
 
 let cachedToken: string | null = null;
-let expiry = 0;
+let tokenExpiry = 0;
 
 export async function getVoiceToken(): Promise<string> {
   const now = Date.now();
 
-  if (cachedToken && now < expiry) {
+  if (cachedToken && now < tokenExpiry) {
     return cachedToken;
   }
 
   const res = await axios.get<TokenResponse>("/api/calls/token");
 
   cachedToken = res.data.token;
-  expiry = now + (res.data.ttl ?? 3600) * 1000;
+  tokenExpiry = now + (res.data.ttl ?? 3600) * 1000;
 
-  return cachedToken;
+  return res.data.token;
 }
 
 export async function fetchVoiceToken(): Promise<string> {

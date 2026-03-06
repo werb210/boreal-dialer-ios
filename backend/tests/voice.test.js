@@ -23,7 +23,7 @@ test('token auth/role and success with request id', async () => {
     .set('Authorization', auth('u1', 'staff'))
     .set('x-request-id', 'rid-token')
     .expect(200);
-  assert.equal(ok.body.identity, 'staff:u1');
+  assert.equal(ok.body.identity, 'u1');
   assert.ok(ok.body.token);
   assert.equal(ok.body.requestId, 'rid-token');
   assert.equal(ok.headers['x-request-id'], 'rid-token');

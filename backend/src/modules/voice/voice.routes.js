@@ -38,7 +38,7 @@ function createVoiceRouter(opts) {
     const role = normalizeRole(req.user?.role);
     if (!ROLE_TOKEN_ALLOWED.has(role)) return makeError(res, req, 403, 'forbidden', 'forbidden');
 
-    const identity = role === 'client' ? `client:${req.user.id}` : `staff:${req.user.id}`;
+    const identity = String(req.user.id);
     const twilio = await loadTwilio();
     const token = new twilio.jwt.AccessToken(
       env.TWILIO_ACCOUNT_SID,

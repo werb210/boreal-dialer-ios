@@ -1,32 +1,77 @@
-import { getDialerAuthState } from "../auth/useDialerAuth";
-
 type CallLogPayload = {
-  staff_id: string;
-  client_id: string | null;
-  phone_number: string;
-  call_duration: number;
-  call_direction: "inbound" | "outbound";
-  timestamp: string;
+  direction: "inbound" | "outbound";
+  from: string;
+  to: string;
+  startedAt: string;
+  endedAt: string;
+  duration: number;
+  clientId?: string | null;
 };
 
-export async function logCall(payload: CallLogPayload): Promise<void> {
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
-  if (!apiBaseUrl) {
-    throw new Error("Missing VITE_API_BASE_URL");
-  }
+const queuedLogs: CallLogPayload[] = [];
+let flushing = false;
 
-  const { token } = getDialerAuthState();
-  const headers: HeadersInit = {
-    "Content-Type": "application/json"
-  };
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  await fetch(`${apiBaseUrl}/api/calls/log`, {
+async function postCallLog(payload: CallLogPayload): Promise<void> {
+  const response = await fetch("/api/calls/log", {
     method: "POST",
-    headers,
-    body: JSON.stringify(payload)
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      direction: payload.direction,
+      from: payload.from,
+      to: payload.to,
+      startedAt: payload.startedAt,
+      endedAt: payload.endedAt,
+      duration: payload.duration
+    })
   });
+
+  if (!response.ok) {
+    throw new Error(`Failed to log call: ${response.status}`);
+  }
+}
+
+async function flushQueuedLogs() {
+  if (flushing || queuedLogs.length === 0) {
+    return;
+  }
+
+  flushing = true;
+
+  while (queuedLogs.length > 0) {
+    const next = queuedLogs[0];
+
+    try {
+      await postCallLog(next);
+      queuedLogs.shift();
+    } catch {
+      break;
+    }
+  }
+
+  flushing = false;
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("online", () => {
+    void flushQueuedLogs();
+  });
+}
+
+export async function logCall(payload: CallLogPayload): Promise<void> {
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    queuedLogs.push(payload);
+    return;
+  }
+
+  try {
+    await postCallLog(payload);
+  } catch {
+    queuedLogs.push(payload);
+  }
+}
+
+export function __getQueuedCallLogsForTests() {
+  return queuedLogs;
 }

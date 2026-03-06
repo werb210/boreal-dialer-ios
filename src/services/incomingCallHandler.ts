@@ -1,11 +1,26 @@
 import type { Call, Device } from "@twilio/voice-sdk";
-import { setCallStatus, setIncomingCall } from "../telephony/state/callStore";
+import {
+  setActiveCall,
+  setCallStatus,
+  setIncomingCall
+} from "../telephony/state/callStore";
 
 export function handleIncomingCall(call: Call) {
   setIncomingCall(call);
   setCallStatus("ringing");
+
+  call.on("accept", () => {
+    setActiveCall(call);
+    setCallStatus("in-call");
+  });
+
+  call.on("disconnect", () => {
+    setCallStatus("ended");
+  });
 }
 
 export function registerIncomingCallHandler(device: Device) {
-  device.on("incoming", handleIncomingCall);
+  device.on("incoming", (call) => {
+    handleIncomingCall(call);
+  });
 }

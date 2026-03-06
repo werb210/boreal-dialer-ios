@@ -5,7 +5,8 @@ export type CallStoreState = {
   device: Device | null;
   incomingCall: Call | null;
   activeCall: Call | null;
-  callStatus: "idle" | "ringing" | "connecting" | "connected" | "ended" | "error";
+  incomingFrom: string | null;
+  callStatus: "idle" | "ringing" | "connecting" | "in-call" | "ended";
   callDuration: number;
   networkStatus: "online" | "offline";
   networkBanner: string | null;
@@ -17,9 +18,10 @@ const state: CallStoreState = {
   device: null,
   incomingCall: null,
   activeCall: null,
+  incomingFrom: null,
   callStatus: "idle",
   callDuration: 0,
-  networkStatus: "online",
+  networkStatus: typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "online",
   networkBanner: null
 };
 
@@ -31,6 +33,34 @@ function emitChange() {
   });
 }
 
+let networkListenersBound = false;
+
+export function updateNetworkStatus(networkStatus: CallStoreState["networkStatus"]) {
+  state.networkStatus = networkStatus;
+  if (networkStatus === "online" && state.networkBanner === "Connection lost. Attempting reconnect.") {
+    state.networkBanner = null;
+  }
+  emitChange();
+}
+
+function bindNetworkListeners() {
+  if (networkListenersBound || typeof window === "undefined") {
+    return;
+  }
+
+  networkListenersBound = true;
+
+  window.addEventListener("online", () => {
+    updateNetworkStatus("online");
+  });
+
+  window.addEventListener("offline", () => {
+    updateNetworkStatus("offline");
+  });
+}
+
+bindNetworkListeners();
+
 export function setDevice(device: Device | null) {
   state.device = device;
   emitChange();
@@ -38,6 +68,7 @@ export function setDevice(device: Device | null) {
 
 export function setIncomingCall(incomingCall: Call | null) {
   state.incomingCall = incomingCall;
+  state.incomingFrom = incomingCall ? String(incomingCall.parameters.From ?? "unknown") : null;
   emitChange();
 }
 
@@ -48,20 +79,20 @@ export function setActiveCall(activeCall: Call | null) {
 
 export function clearIncomingCall() {
   state.incomingCall = null;
+  state.incomingFrom = null;
   emitChange();
 }
 
 export function clearAllCalls() {
   state.incomingCall = null;
+  state.incomingFrom = null;
   state.activeCall = null;
   state.callStatus = "ended";
   state.callDuration = 0;
   emitChange();
 }
 
-export function setCallStatus(
-  callStatus: CallStoreState["callStatus"]
-) {
+export function setCallStatus(callStatus: CallStoreState["callStatus"]) {
   state.callStatus = callStatus;
   emitChange();
 }
@@ -80,6 +111,7 @@ export function setNetworkBanner(networkBanner: string | null) {
 export function clearStore() {
   state.device = null;
   state.incomingCall = null;
+  state.incomingFrom = null;
   state.activeCall = null;
   state.callStatus = "idle";
   state.callDuration = 0;

@@ -4,7 +4,7 @@ export type CallState =
   | "idle"
   | "ringing"
   | "connecting"
-  | "connected"
+  | "in-call"
   | "ended";
 
 export function useCallState() {

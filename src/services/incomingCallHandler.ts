@@ -3,7 +3,7 @@ import { setCallStatus, setIncomingCall } from "../telephony/state/callStore";
 
 export function handleIncomingCall(call: Call) {
   setIncomingCall(call);
-  setCallStatus("incoming");
+  setCallStatus("ringing");
 }
 
 export function registerIncomingCallHandler(device: Device) {

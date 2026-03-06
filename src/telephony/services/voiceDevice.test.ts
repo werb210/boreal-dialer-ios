@@ -4,11 +4,12 @@ import {
   answerIncomingCall,
   getCallState,
   initializeVoice,
-  startCall
+  startCall,
+  __resetVoiceDeviceForTests
 } from "./voiceDevice";
 
 type MockCall = {
-  parameters: { From?: string };
+  parameters: { From?: string; To?: string };
   on: (event: string, handler: () => void) => void;
   emit: (event: string) => void;
   accept: ReturnType<typeof vi.fn>;
@@ -20,6 +21,7 @@ type MockCall = {
 type MockDevice = {
   register: ReturnType<typeof vi.fn>;
   connect: ReturnType<typeof vi.fn>;
+  updateToken: ReturnType<typeof vi.fn>;
   on: (event: string, handler: (call?: MockCall) => void) => void;
   emit: (event: string, call?: MockCall) => void;
 };
@@ -66,6 +68,7 @@ vi.mock("@twilio/voice-sdk", () => {
   class Device {
     register = vi.fn(async () => undefined);
     connect = vi.fn(async () => createCall("outbound"));
+    updateToken = vi.fn(async () => undefined);
     private handlers: Record<string, Array<(call?: MockCall) => void>> = {};
 
     on(event: string, handler: (call?: MockCall) => void) {
@@ -82,12 +85,17 @@ vi.mock("@twilio/voice-sdk", () => {
 
   hoisted.createCall = createCall;
 
-  return { Device, Call: class {} };
+  class CallMock {
+    static Codec = { Opus: "opus", PCMU: "pcmu" };
+  }
+
+  return { Device, Call: CallMock };
 });
 
 describe("voiceDevice", () => {
   beforeEach(() => {
     clearStore();
+    __resetVoiceDeviceForTests();
     vi.clearAllMocks();
   });
 

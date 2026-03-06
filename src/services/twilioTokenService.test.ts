@@ -8,14 +8,11 @@ vi.mock("../auth/useDialerAuth", () => ({
 describe("twilioTokenService", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    (import.meta as ImportMeta & { env: Record<string, string> }).env = {
-      ...import.meta.env,
-      VITE_API_BASE_URL: "http://localhost:3000"
-    };
+    vi.stubEnv("VITE_API_BASE_URL", "http://localhost:3000");
   });
 
   it("queues concurrent refreshes into a single request", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch" as never).mockResolvedValue({
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
       json: async () => ({ token: "abc", identity: "staff-1" })
     } as Response);

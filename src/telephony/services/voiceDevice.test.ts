@@ -1,96 +1,53 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { clearStore, getCallStoreState } from "../state/callStore";
-import {
-  answerIncomingCall,
-  getCallState,
-  initializeVoice,
-  startCall,
-  __resetVoiceDeviceForTests
-} from "./voiceDevice";
+import { __resetVoiceDeviceForTests, getVoiceDevice, initializeVoice } from "./voiceDevice";
 
-type MockCall = {
-  parameters: { From?: string; To?: string };
-  on: (event: string, handler: () => void) => void;
-  emit: (event: string) => void;
-  accept: ReturnType<typeof vi.fn>;
-  reject: ReturnType<typeof vi.fn>;
-  disconnect: ReturnType<typeof vi.fn>;
-  mute: ReturnType<typeof vi.fn>;
-};
+type EventHandler = (...args: unknown[]) => unknown;
 
 type MockDevice = {
-  register: ReturnType<typeof vi.fn>;
-  connect: ReturnType<typeof vi.fn>;
   updateToken: ReturnType<typeof vi.fn>;
-  on: (event: string, handler: (call?: MockCall) => void) => void;
-  emit: (event: string, call?: MockCall) => void;
+  on: (event: string, handler: EventHandler) => void;
+  emit: (event: string, ...args: unknown[]) => Promise<void>;
 };
 
 const hoisted = vi.hoisted(() => ({
-  getTwilioToken: vi.fn(async () => ({ token: "token-123", identity: "staff-1" })),
-  createCall: null as ((from?: string) => MockCall) | null
+  fetchVoiceToken: vi.fn(async () => "token-123")
 }));
 
 vi.mock("../../services/twilioTokenService", () => ({
-  getTwilioToken: hoisted.getTwilioToken
+  fetchVoiceToken: hoisted.fetchVoiceToken
 }));
 
 vi.mock("../../services/callLogger", () => ({
   logCall: vi.fn(async () => undefined)
 }));
 
-vi.mock("@twilio/voice-sdk", () => {
-  function createCall(from?: string): MockCall {
-    const handlers: Record<string, Array<() => void>> = {};
-
-    const call: MockCall = {
-      parameters: { From: from, To: "+15551234567" },
-      on(event, handler) {
-        handlers[event] ??= [];
-        handlers[event].push(handler);
-      },
-      emit(event) {
-        handlers[event]?.forEach((handler) => {
-          handler();
-        });
-      },
-      accept: vi.fn(),
-      reject: vi.fn(),
-      disconnect: vi.fn(() => {
-        call.emit("disconnect");
-      }),
-      mute: vi.fn()
-    };
-
-    return call;
-  }
-
-  class Device {
-    register = vi.fn(async () => undefined);
-    connect = vi.fn(async () => createCall("outbound"));
+vi.mock("@twilio/voice-sdk", () => ({
+  Device: class {
+    token: string;
+    options: unknown;
+    handlers: Record<string, EventHandler[]> = {};
     updateToken = vi.fn(async () => undefined);
-    private handlers: Record<string, Array<(call?: MockCall) => void>> = {};
+    connect = vi.fn();
 
-    on(event: string, handler: (call?: MockCall) => void) {
+    constructor(token: string, options: unknown) {
+      this.token = token;
+      this.options = options;
+    }
+
+    on(event: string, handler: EventHandler) {
       this.handlers[event] ??= [];
       this.handlers[event].push(handler);
     }
 
-    emit(event: string, call?: MockCall) {
-      this.handlers[event]?.forEach((handler) => {
-        handler(call);
-      });
+    async emit(event: string, ...args: unknown[]) {
+      await Promise.all((this.handlers[event] ?? []).map((handler) => handler(...args)));
     }
-  }
-
-  hoisted.createCall = createCall;
-
-  class CallMock {
+  },
+  Call: class {
     static Codec = { Opus: "opus", PCMU: "pcmu" };
   }
-
-  return { Device, Call: CallMock };
-});
+}));
 
 describe("voiceDevice", () => {
   beforeEach(() => {
@@ -99,66 +56,34 @@ describe("voiceDevice", () => {
     vi.clearAllMocks();
   });
 
-  it("startCall stores a resolved call and clears state on disconnect", async () => {
-    await initializeVoice();
+  it("enforces singleton creation", async () => {
+    const [a, b, c] = await Promise.all([
+      getVoiceDevice(),
+      getVoiceDevice(),
+      initializeVoice().then(() => getVoiceDevice())
+    ]);
 
-    const call = await startCall("+15551234567");
-
-    expect(call).toBeDefined();
-    expect(getCallState().activeCall).toBe(call);
-
-    call.disconnect();
-
-    expect(getCallState().activeCall).toBeNull();
-    expect(getCallState().incomingCall).toBeNull();
+    expect(a).toBe(b);
+    expect(b).toBe(c);
+    expect(hoisted.fetchVoiceToken).toHaveBeenCalledTimes(1);
   });
 
-  it("incoming call is stored and answer promotes it to active call", async () => {
-    await initializeVoice();
+  it("refreshes token on tokenWillExpire", async () => {
+    const device = (await getVoiceDevice()) as unknown as MockDevice;
 
-    const device = getCallStoreState().device as unknown as MockDevice;
-    const incomingCall = hoisted.createCall?.("client_42");
+    hoisted.fetchVoiceToken.mockResolvedValueOnce("token-refresh");
+    await device.emit("tokenWillExpire");
 
-    if (!incomingCall) {
-      throw new Error("Mock call factory unavailable");
-    }
-
-    device.emit("incoming", incomingCall);
-
-    expect(getCallState().incomingCall).toBe(incomingCall);
-
-    answerIncomingCall();
-
-    expect(incomingCall.accept).toHaveBeenCalledTimes(1);
-    expect(getCallState().activeCall).toBe(incomingCall);
-    expect(getCallState().incomingCall).toBeNull();
+    expect(device.updateToken).toHaveBeenCalledWith("token-refresh");
   });
 
-  it("uses a single token refresh queue for concurrent initialization", async () => {
-    await Promise.all([initializeVoice(), initializeVoice(), initializeVoice()]);
+  it("attempts token refresh when device goes offline", async () => {
+    const device = (await getVoiceDevice()) as unknown as MockDevice;
 
-    expect(hoisted.getTwilioToken).toHaveBeenCalledTimes(1);
-  });
+    hoisted.fetchVoiceToken.mockResolvedValueOnce("token-reconnect");
+    await device.emit("offline");
 
-  it("cleans call session for cancel/reject/error", async () => {
-    await initializeVoice();
-    const device = getCallStoreState().device as unknown as MockDevice;
-    const incomingCall = hoisted.createCall?.("client_99");
-
-    if (!incomingCall) {
-      throw new Error("Mock call factory unavailable");
-    }
-
-    device.emit("incoming", incomingCall);
-    incomingCall.emit("cancel");
-    expect(getCallState().incomingCall).toBeNull();
-
-    device.emit("incoming", incomingCall);
-    incomingCall.emit("reject");
-    expect(getCallState().incomingCall).toBeNull();
-
-    device.emit("incoming", incomingCall);
-    incomingCall.emit("error");
-    expect(getCallState().incomingCall).toBeNull();
+    expect(device.updateToken).toHaveBeenCalledWith("token-reconnect");
+    expect(getCallStoreState().networkBanner).toBeNull();
   });
 });

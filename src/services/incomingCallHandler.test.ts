@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { clearStore, getCallStoreState } from "../telephony/state/callStore";
 import { handleIncomingCall } from "./incomingCallHandler";
 
@@ -6,7 +6,8 @@ describe("incomingCallHandler", () => {
   it("stores incoming call and sets incoming status", () => {
     clearStore();
     const call = {
-      parameters: { From: "+15550001111" }
+      parameters: { From: "+15550001111" },
+      on: vi.fn()
     } as never;
 
     handleIncomingCall(call);

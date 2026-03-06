@@ -1,9 +1,9 @@
 import { Call, Device } from "@twilio/voice-sdk";
-import { getTwilioToken } from "../../services/twilioTokenService";
 import { bindCallSession, cleanupCall } from "../../services/callSession";
 import { logCall } from "../../services/callLogger";
 import { emitPortalCallEvent } from "../../services/portalEvents";
 import { registerIncomingCallHandler } from "../../services/incomingCallHandler";
+import { fetchVoiceToken } from "../../services/twilioTokenService";
 import {
   clearIncomingCall,
   getCallStoreState,
@@ -14,20 +14,8 @@ import {
   useCallStore
 } from "../state/callStore";
 
-let device: Device | null = null;
-let initializePromise: Promise<Device> | null = null;
-
-async function retryConnect(device: Device, attempt = 0): Promise<void> {
-  try {
-    await device.register();
-    setNetworkBanner(null);
-  } catch {
-    const delay = Math.min(5000, 500 * 2 ** attempt);
-    setTimeout(() => {
-      void retryConnect(device, attempt + 1);
-    }, delay);
-  }
-}
+let deviceInstance: Device | null = null;
+let initializing: Promise<Device> | null = null;
 
 function getClientId(call: Call): string | null {
   const from = String(call.parameters.From ?? "");
@@ -40,15 +28,15 @@ function getClientId(call: Call): string | null {
 
 async function registerCallEnd(call: Call, direction: "inbound" | "outbound") {
   const { callDuration } = getCallStoreState();
-  const { identity } = await getTwilioToken();
 
   await logCall({
-    staff_id: identity ?? "unknown",
-    client_id: getClientId(call),
-    phone_number: String(call.parameters.To ?? call.parameters.From ?? "unknown"),
-    call_duration: callDuration,
-    call_direction: direction,
-    timestamp: new Date().toISOString()
+    direction,
+    from: String(call.parameters.From ?? "unknown"),
+    to: String(call.parameters.To ?? "unknown"),
+    startedAt: new Date(Date.now() - callDuration * 1000).toISOString(),
+    endedAt: new Date().toISOString(),
+    duration: callDuration,
+    clientId: getClientId(call)
   });
 
   emitPortalCallEvent("call_ended", {
@@ -66,72 +54,57 @@ function bindDeviceLifecycle(device: Device) {
   });
 
   device.on("tokenWillExpire", async () => {
-    const { token } = await getTwilioToken();
-    await device.updateToken(token);
+    const newToken = await fetchVoiceToken();
+    await device.updateToken(newToken);
   });
 
-  device.on("offline", () => {
+  device.on("offline", async () => {
     setNetworkBanner("Connection lost. Attempting reconnect.");
-    void retryConnect(device);
+
+    try {
+      const token = await fetchVoiceToken();
+      await device.updateToken(token);
+      setNetworkBanner(null);
+    } catch {
+      setNetworkBanner("Connection lost. Attempting reconnect.");
+    }
   });
 
-  if (typeof window !== "undefined") {
-    window.addEventListener("online", () => {
-      void retryConnect(device);
-    });
-  }
-
-  device.on("error", () => {
-    setCallStatus("error");
-    setNetworkBanner("Device error");
+  device.on("ready", () => {
+    setNetworkBanner(null);
   });
-}
-
-async function createAndRegisterDevice(): Promise<Device> {
-  const existing = getCallStoreState().device;
-  if (existing) {
-    return existing;
-  }
-
-  const { token } = await getTwilioToken();
-
-  const voiceDeviceOptions = {
-    codecPreferences: [Call.Codec.Opus, Call.Codec.PCMU],
-    fakeLocalDTMF: true,
-    enableRingingState: true
-  } as unknown as ConstructorParameters<typeof Device>[1];
-
-  const nextDevice = new Device(token, voiceDeviceOptions);
-
-  bindDeviceLifecycle(nextDevice);
-  await retryConnect(nextDevice);
-  setDevice(nextDevice);
-  device = nextDevice;
-
-  return nextDevice;
 }
 
 export async function getVoiceDevice(): Promise<Device> {
-  if (device) {
-    if (!getCallStoreState().device) {
-      setDevice(device);
-    }
+  if (deviceInstance) {
+    return deviceInstance;
+  }
+
+  if (initializing) {
+    return initializing;
+  }
+
+  initializing = (async () => {
+    const token = await fetchVoiceToken();
+
+    const options = {
+      codecPreferences: ["opus", "pcmu"],
+      enableRingingState: true,
+      logLevel: 1
+    } as unknown as ConstructorParameters<typeof Device>[1];
+
+    const device = new Device(token, options);
+
+    bindDeviceLifecycle(device);
+    setDevice(device);
+
+    deviceInstance = device;
     return device;
-  }
+  })().finally(() => {
+    initializing = null;
+  });
 
-  const storeDevice = getCallStoreState().device;
-  if (storeDevice) {
-    device = storeDevice;
-    return storeDevice;
-  }
-
-  if (!initializePromise) {
-    initializePromise = createAndRegisterDevice().finally(() => {
-      initializePromise = null;
-    });
-  }
-
-  return initializePromise;
+  return initializing;
 }
 
 export async function initializeVoice(): Promise<void> {
@@ -201,7 +174,7 @@ export function answerIncomingCall() {
   incomingCall.accept();
   setActiveCall(incomingCall);
   clearIncomingCall();
-  setCallStatus("connected");
+  setCallStatus("in-call");
 
   emitPortalCallEvent("call_answered", {
     phoneNumber: String(incomingCall.parameters.From ?? "unknown")
@@ -231,6 +204,6 @@ export function getCallState() {
 export { useCallStore };
 
 export function __resetVoiceDeviceForTests() {
-  device = null;
-  initializePromise = null;
+  deviceInstance = null;
+  initializing = null;
 }

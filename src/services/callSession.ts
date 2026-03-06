@@ -40,7 +40,7 @@ export function bindCallSession(call: Call) {
   call.on("accept", () => {
     setActiveCall(call);
     clearIncomingCall();
-    setCallStatus("connected");
+    setCallStatus("in-call");
     startTimer();
   });
 
@@ -48,7 +48,6 @@ export function bindCallSession(call: Call) {
   call.on("cancel", () => cleanupCall(call));
   call.on("reject", () => cleanupCall(call));
   call.on("error", () => {
-    setCallStatus("error");
     cleanupCall(call);
   });
 }

@@ -17,6 +17,10 @@ export function handleIncomingCall(call: Call) {
   call.on("disconnect", () => {
     setCallStatus("ended");
   });
+
+  call.on("reject", () => {
+    setCallStatus("ended");
+  });
 }
 
 export function registerIncomingCallHandler(device: Device) {

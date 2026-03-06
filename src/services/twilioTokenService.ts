@@ -18,3 +18,8 @@ export async function getTwilioToken(): Promise<{ token: string; identity?: stri
   const token = await fetchVoiceToken();
   return { token };
 }
+
+
+export async function getVoiceToken(): Promise<string> {
+  return fetchVoiceToken();
+}

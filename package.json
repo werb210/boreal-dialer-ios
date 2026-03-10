@@ -5,6 +5,7 @@
   "scripts": {
     "test": "node --test packages/dialer-server/tests/*.test.js",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
     "check": "npm test",
     "build:web": "vite build --config packages/dialer-web/vitest.config.ts",
     "dev:web": "vite --config packages/dialer-web/vitest.config.ts"

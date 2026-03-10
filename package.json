@@ -1,24 +1,27 @@
 {
-  "name": "boreal-dialer-backend",
+  "name": "boreal-dialer",
   "private": true,
   "type": "commonjs",
   "scripts": {
-    "test": "node --test backend/tests/*.test.js",
+    "test": "node --test packages/dialer-server/tests/*.test.js",
     "lint": "eslint .",
     "check": "npm test",
-    "build": "vite build",
-    "typecheck": "tsc --noEmit",
-    "dev": "vite",
-    "preview": "vite preview"
+    "build:web": "vite build --config packages/dialer-web/vitest.config.ts",
+    "dev:web": "vite --config packages/dialer-web/vitest.config.ts"
   },
   "dependencies": {
     "@twilio/conversations": "^2.7.0",
     "@types/react-dom": "^19.2.3",
+    "cors": "^2.8.5",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.1.0",
+    "ioredis": "^5.8.1",
     "jsonwebtoken": "^9.0.2",
+    "pino": "^10.1.0",
     "react-dom": "^19.2.4",
     "twilio": "^5.4.0",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.0",
+    "zod": "^4.1.11"
   },
   "devDependencies": {
     "@twilio/voice-sdk": "^2.18.0",

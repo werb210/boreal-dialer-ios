@@ -1,4 +1,4 @@
-const { z } = require('zod');
+import { z } from 'zod';
 
 const envSchema = z.object({
   TWILIO_ACCOUNT_SID: z.string().min(1),
@@ -24,4 +24,4 @@ function validateEnv(rawEnv = process.env) {
   return parsed.data;
 }
 
-module.exports = { validateEnv };
+export { validateEnv };

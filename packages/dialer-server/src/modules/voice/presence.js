@@ -23,7 +23,7 @@ function markAvailable(staffId) {
   if (rec) rec.status = 'online';
 }
 
-module.exports = {
+export {
   updatePresence,
   getOnlineStaff,
   markBusy,

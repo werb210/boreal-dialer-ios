@@ -1,3 +1,5 @@
+import twilio from 'twilio';
+
 function validateTwilioSignature(req, res, next) {
   if (process.env.NODE_ENV === 'test') {
     return next();
@@ -8,7 +10,6 @@ function validateTwilioSignature(req, res, next) {
     return res.status(403).json({ error: 'invalid_twilio_signature' });
   }
 
-  const twilio = require('twilio');
   const authToken = process.env.TWILIO_AUTH_TOKEN || req.app?.locals?.env?.TWILIO_AUTH_TOKEN;
   const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
   const url = `${baseUrl}${req.originalUrl}`;
@@ -21,4 +22,4 @@ function validateTwilioSignature(req, res, next) {
   return next();
 }
 
-module.exports = { validateTwilioSignature };
+export { validateTwilioSignature };

@@ -1,5 +1,5 @@
-const { createServer } = require('./server');
-const { validateEnv } = require('./config/env');
+import { createServer } from './server.js';
+import { validateEnv } from './config/env.js';
 
 const env = validateEnv(process.env);
 const { server } = createServer(env);

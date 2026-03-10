@@ -1,18 +1,18 @@
-const express = require('express');
-const crypto = require('crypto');
-const http = require('http');
-const cors = require('cors');
-const createVoiceRouter = require('./modules/voice/voice.routes');
-const { validateTwilioSignature } = require('./modules/voice/twilioWebhookGuard');
-const { authMiddleware } = require('./middleware/auth');
-const { voiceRateLimit } = require('./middleware/rateLimit');
-const { getRedisClient } = require('./infrastructure/redisClient');
-const { logger } = require('./infrastructure/logger');
-const { createCallsRepo } = require('./repositories/callsRepo');
-const { createPresenceRepo } = require('./repositories/presenceRepo');
-const { createVoiceSessionsRepo } = require('./repositories/voiceSessionsRepo');
-const { createDialerLogRepo } = require('./repositories/dialerLogRepo');
-const { startSessionCleanup } = require('./jobs/sessionCleanup');
+import express from 'express';
+import crypto from 'crypto';
+import http from 'http';
+import cors from 'cors';
+import createVoiceRouter from './modules/voice/voice.routes.js';
+import { validateTwilioSignature } from './modules/voice/twilioWebhookGuard.js';
+import { authMiddleware } from './middleware/auth.js';
+import { voiceRateLimit } from './middleware/rateLimit.js';
+import { getRedisClient } from './infrastructure/redisClient.js';
+import { logger } from './infrastructure/logger.js';
+import { createCallsRepo } from './repositories/callsRepo.js';
+import { createPresenceRepo } from './repositories/presenceRepo.js';
+import { createVoiceSessionsRepo } from './repositories/voiceSessionsRepo.js';
+import { createDialerLogRepo } from './repositories/dialerLogRepo.js';
+import { startSessionCleanup } from './jobs/sessionCleanup.js';
 
 const STATUS_MAP = { initiated: 'initiated', ringing: 'ringing', answered: 'answered', completed: 'completed', 'in-progress': 'active', failed: 'failed', busy: 'failed', 'no-answer': 'missed', canceled: 'failed' };
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'missed', 'voicemail']);
@@ -206,4 +206,4 @@ function createServer(env = process.env, deps = {}) {
   return { app, server, shutdown };
 }
 
-module.exports = { createApp, createServer, STATUS_MAP, normalizeStatus, isTerminal, toIdentity };
+export { createApp, createServer, STATUS_MAP, normalizeStatus, isTerminal, toIdentity };

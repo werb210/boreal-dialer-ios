@@ -1,4 +1,4 @@
-const jwt = require('jsonwebtoken');
+import jwt from 'jsonwebtoken';
 
 const TOKEN_REGEX = /^Bearer\s+(.+)$/i;
 
@@ -22,4 +22,4 @@ function authMiddleware(req, res, next) {
   }
 }
 
-module.exports = { authMiddleware };
+export { authMiddleware };

@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+import crypto from 'crypto';
 
 const SESSION_PREFIX = 'dialer:session:';
 const SESSION_INDEX = 'dialer:session:index';
@@ -52,4 +52,4 @@ function createVoiceSessionsRepo(redis) {
   };
 }
 
-module.exports = { createVoiceSessionsRepo };
+export { createVoiceSessionsRepo };

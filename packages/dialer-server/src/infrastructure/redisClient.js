@@ -1,4 +1,4 @@
-const Redis = require('ioredis');
+import Redis from 'ioredis';
 
 let redis;
 
@@ -13,4 +13,4 @@ function getRedisClient(redisUrl = process.env.REDIS_URL) {
   return redis;
 }
 
-module.exports = { getRedisClient };
+export { getRedisClient };

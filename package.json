@@ -8,7 +8,8 @@
     "typecheck": "tsc --noEmit",
     "check": "npm test",
     "build:web": "vite build --config packages/dialer-web/vitest.config.ts",
-    "dev:web": "vite --config packages/dialer-web/vitest.config.ts"
+    "dev:web": "vite --config packages/dialer-web/vitest.config.ts",
+    "build": "tsc"
   },
   "dependencies": {
     "@twilio/conversations": "^2.7.0",

@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+import crypto from 'crypto';
 
 const CALL_PREFIX = 'dialer:call:';
 const CALL_CLIENT_INDEX = 'dialer:call:clientKey';
@@ -77,4 +77,4 @@ function createCallsRepo(redis) {
   };
 }
 
-module.exports = { createCallsRepo };
+export { createCallsRepo };

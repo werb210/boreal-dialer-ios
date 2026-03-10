@@ -36,4 +36,4 @@ function createPresenceRepo(redis) {
   };
 }
 
-module.exports = { createPresenceRepo };
+export { createPresenceRepo };

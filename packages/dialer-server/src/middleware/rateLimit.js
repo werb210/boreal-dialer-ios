@@ -1,4 +1,4 @@
-const rateLimit = require('express-rate-limit');
+import rateLimit from 'express-rate-limit';
 
 const voiceRateLimit = rateLimit({
   windowMs: 60 * 1000,
@@ -7,4 +7,4 @@ const voiceRateLimit = rateLimit({
   legacyHeaders: false,
 });
 
-module.exports = { voiceRateLimit };
+export { voiceRateLimit };

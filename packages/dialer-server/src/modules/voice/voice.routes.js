@@ -1,4 +1,4 @@
-const express = require('express');
+import express from 'express';
 
 function createVoiceRouter(opts) {
   const { makeError, requireVoiceEnabled, voiceSessionsRepo, findAssignedStaffId } = opts;
@@ -30,4 +30,4 @@ function createVoiceRouter(opts) {
   return router;
 }
 
-module.exports = createVoiceRouter;
+export default createVoiceRouter;

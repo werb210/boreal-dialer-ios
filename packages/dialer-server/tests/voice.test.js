@@ -1,8 +1,8 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const request = require('supertest');
-const jwt = require('jsonwebtoken');
-const { createApp } = require('../src/server');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import request from 'supertest';
+import jwt from 'jsonwebtoken';
+import { createApp } from '../src/server.js';
 
 class RedisMock {
   constructor() { this.kv = new Map(); this.hash = new Map(); this.sets = new Map(); this.z = new Map(); }

@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+import crypto from 'crypto';
 
 const LOG_PREFIX = 'dialer:log:';
 const LOG_INDEX = 'dialer:log:index';
@@ -32,4 +32,4 @@ function createDialerLogRepo(redis) {
   };
 }
 
-module.exports = { createDialerLogRepo };
+export { createDialerLogRepo };

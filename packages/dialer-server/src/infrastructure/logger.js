@@ -1,4 +1,4 @@
-const pino = require('pino');
+import pino from 'pino';
 
 const logger = pino({
   base: null,
@@ -15,4 +15,4 @@ function logEvent(level, payload) {
   });
 }
 
-module.exports = { logger, logEvent };
+export { logger, logEvent };

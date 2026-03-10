@@ -14,4 +14,4 @@ function startSessionCleanup({ voiceSessionsRepo, presenceRepo, dialerLogRepo, l
   return () => clearInterval(timer);
 }
 
-module.exports = { startSessionCleanup };
+export { startSessionCleanup };

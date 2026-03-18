@@ -15,7 +15,8 @@ const hoisted = vi.hoisted(() => ({
 }));
 
 vi.mock("../../services/twilioTokenService", () => ({
-  fetchVoiceToken: hoisted.fetchVoiceToken
+  fetchVoiceToken: hoisted.fetchVoiceToken,
+  getVoiceToken: hoisted.fetchVoiceToken
 }));
 
 vi.mock("../../services/callLogger", () => ({

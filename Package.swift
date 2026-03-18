@@ -15,7 +15,7 @@ let package = Package(
             from: "6.10.0"
         ),
         .package(
-            url: "https://github.com/twilio/twilio-conversations-ios",
+            url: "https://github.com/twilio/conversations-ios",
             from: "4.0.0"
         )
     ],
@@ -24,7 +24,7 @@ let package = Package(
             name: "BorealDialer",
             dependencies: [
                 .product(name: "TwilioVoice", package: "twilio-voice-ios"),
-                .product(name: "TwilioConversationsClient", package: "twilio-conversations-ios")
+                .product(name: "TwilioConversationsClient", package: "conversations-ios")
             ],
             path: ".",
             sources: [

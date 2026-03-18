@@ -1,6 +1,25 @@
 // swift-tools-version: 5.9
 import PackageDescription
 
+#if os(Linux)
+let package = Package(
+    name: "BorealDialer",
+    products: [
+        .library(name: "BorealDialer", targets: ["BorealDialer"])
+    ],
+    targets: [
+        .target(
+            name: "BorealDialer",
+            path: "Sources/BorealDialerLinux"
+        ),
+        .testTarget(
+            name: "BorealDialerTests",
+            dependencies: ["BorealDialer"],
+            path: "Tests"
+        )
+    ]
+)
+#else
 let package = Package(
     name: "BorealDialer",
     platforms: [
@@ -41,3 +60,4 @@ let package = Package(
         )
     ]
 )
+#endif

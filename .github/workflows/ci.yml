@@ -11,11 +11,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Clean potentially invalid GitHub auth headers
+        run: |
+          git config --global --unset-all http.https://github.com/.extraheader || true
+          git config --global --unset-all http.extraheader || true
+
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Use Node 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm

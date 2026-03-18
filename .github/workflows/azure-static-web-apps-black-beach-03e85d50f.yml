@@ -15,7 +15,12 @@ jobs:
     runs-on: ubuntu-latest
     name: Build and Deploy Job
     steps:
-      - uses: actions/checkout@v3
+      - name: Clean potentially invalid GitHub auth headers
+        run: |
+          git config --global --unset-all http.https://github.com/.extraheader || true
+          git config --global --unset-all http.extraheader || true
+
+      - uses: actions/checkout@v5
         with:
           submodules: true
           lfs: false

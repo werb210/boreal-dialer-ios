@@ -5,12 +5,37 @@ import jwt from 'jsonwebtoken';
 import { createApp } from '../src/server.js';
 
 class RedisMock {
-  constructor() { this.kv = new Map(); this.hash = new Map(); this.sets = new Map(); this.z = new Map(); }
+  constructor({ now = () => Date.now() } = {}) {
+    this.kv = new Map();
+    this.hash = new Map();
+    this.sets = new Map();
+    this.z = new Map();
+    this.expiry = new Map();
+    this.now = now;
+  }
+
   multi() { const ops = []; const self = this; const chain = { set: (...a) => (ops.push(['set', a]), chain), sadd: (...a) => (ops.push(['sadd', a]), chain), zadd: (...a) => (ops.push(['zadd', a]), chain), hset: (...a) => (ops.push(['hset', a]), chain), exec: async () => { for (const [m, a] of ops) await self[m](...a); return []; } }; return chain; }
-  async set(key, value, ex, ttl) { this.kv.set(key, value); if (ex === 'EX') setTimeout(() => this.kv.delete(key), ttl * 1000); }
-  async get(key) { return this.kv.get(key) ?? null; }
-  async del(key) { this.kv.delete(key); }
-  async exists(key) { return this.kv.has(key) ? 1 : 0; }
+  _isExpired(key) {
+    const expiresAt = this.expiry.get(key);
+    if (expiresAt == null) return false;
+    if (expiresAt > this.now()) return false;
+    this.kv.delete(key);
+    this.expiry.delete(key);
+    return true;
+  }
+
+  async set(key, value, ex, ttl) {
+    this.kv.set(key, value);
+    if (ex === 'EX' && Number.isFinite(Number(ttl))) {
+      this.expiry.set(key, this.now() + Number(ttl) * 1000);
+    } else {
+      this.expiry.delete(key);
+    }
+  }
+
+  async get(key) { if (this._isExpired(key)) return null; return this.kv.get(key) ?? null; }
+  async del(key) { this.kv.delete(key); this.expiry.delete(key); }
+  async exists(key) { if (this._isExpired(key)) return 0; return this.kv.has(key) ? 1 : 0; }
   async hset(name, field, value) { if (!this.hash.has(name)) this.hash.set(name, new Map()); this.hash.get(name).set(field, value); }
   async hget(name, field) { return this.hash.get(name)?.get(field) ?? null; }
   async sadd(name, value) { if (!this.sets.has(name)) this.sets.set(name, new Set()); this.sets.get(name).add(value); }

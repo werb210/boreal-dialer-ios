@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "check": "echo \"no js runtime required\"",
-    "lint": "echo \"skipped\""
+    "lint": "echo \"skipped\"",
+    "test": "cd packages/dialer-web && npm run test"
   }
 }

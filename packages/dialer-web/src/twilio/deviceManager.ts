@@ -1,30 +1,29 @@
 import { Device, type Call } from "@twilio/voice-sdk";
-import { getDevice, setDevice, clearDevice } from "./deviceSingleton";
+import { assertApiResponse } from "../lib/assertApiResponse";
+import { api } from "../network/api";
 import { setCallStatus } from "../state/callState";
 import { twilioEnv } from "../config/env";
+import { getDevice, setDevice, clearDevice } from "./deviceSingleton";
 
 void twilioEnv;
 
 let tokenExpiryTimeout: ReturnType<typeof setTimeout> | null = null;
 let tokenRefreshPromise: Promise<void> | null = null;
 
+type VoiceTokenPayload = {
+  token: string;
+};
+
 async function logDialerConnect(call: Call): Promise<void> {
   const to = String(call.parameters?.To ?? "");
   const from = String(call.parameters?.From ?? "");
   const callSid = String(call.parameters?.CallSid ?? "");
 
-  await fetch("/api/dialer/log", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    credentials: "include",
-    body: JSON.stringify({
-      direction: "outbound",
-      to,
-      from,
-      callSid
-    })
+  await api.post("/api/dialer/log", {
+    direction: "outbound",
+    to,
+    from,
+    callSid
   });
 }
 
@@ -90,11 +89,8 @@ export async function refreshToken(): Promise<void> {
   }
 
   tokenRefreshPromise = (async () => {
-    const res = await fetch("/api/voice/token", {
-      credentials: "include"
-    });
-
-    const data: { token: string } = await res.json();
+    const response = await api.get("/api/voice/token");
+    const data = assertApiResponse<VoiceTokenPayload>(response.data);
 
     const deviceToRefresh = getDevice();
     if (!deviceToRefresh) return;

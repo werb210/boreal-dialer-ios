@@ -1,6 +1,7 @@
-import axios from "axios";
+import { assertApiResponse } from "../lib/assertApiResponse";
+import { api } from "../network/api";
 
-type TokenResponse = {
+type TokenPayload = {
   token: string;
   ttl?: number;
 };
@@ -15,25 +16,22 @@ export async function getVoiceToken(): Promise<string> {
     return cachedToken;
   }
 
-  const res = await axios.get<TokenResponse>("/api/calls/token");
+  const response = await api.get("/api/calls/token");
+  const data = assertApiResponse<TokenPayload>(response.data);
 
-  cachedToken = res.data.token;
-  tokenExpiry = now + (res.data.ttl ?? 3600) * 1000;
+  cachedToken = data.token;
+  tokenExpiry = now + (data.ttl ?? 3600) * 1000;
 
-  return res.data.token;
-}
-
-export async function fetchVoiceToken(): Promise<string> {
-  const response = await fetch("/api/twilio/voice-token");
-  if (!response.ok) {
-    throw new Error("Failed to fetch voice token");
-  }
-
-  const data = (await response.json()) as TokenResponse;
   return data.token;
 }
 
-export async function getTwilioToken(): Promise<TokenResponse> {
+export async function fetchVoiceToken(): Promise<string> {
+  const response = await api.get("/api/twilio/voice-token");
+  const data = assertApiResponse<TokenPayload>(response.data);
+  return data.token;
+}
+
+export async function getTwilioToken(): Promise<TokenPayload> {
   const token = await getVoiceToken();
   return { token };
 }

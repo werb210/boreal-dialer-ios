@@ -1,17 +1,16 @@
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
+import { assertApiResponse } from "../lib/assertApiResponse";
+import { api } from "../network/api";
+
+type VoiceTokenPayload = {
+  token: string;
+};
 
 export async function fetchVoiceToken(identity: string): Promise<string> {
-  if (!apiBaseUrl) {
-    throw new Error("Missing VITE_API_BASE_URL");
-  }
+  const response = await api.get("/api/voice/token", {
+    params: { identity }
+  });
 
-  const response = await fetch(`${apiBaseUrl}/api/voice/token?identity=${identity}`);
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch voice token: ${response.status}`);
-  }
-
-  const data = (await response.json()) as { token?: string };
+  const data = assertApiResponse<VoiceTokenPayload>(response.data);
 
   if (typeof data.token !== "string" || data.token.length === 0) {
     throw new Error("Voice token response did not include token");

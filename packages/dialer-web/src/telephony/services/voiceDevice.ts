@@ -1,5 +1,4 @@
 import { Call, Device } from "@twilio/voice-sdk";
-import { fetchVoiceToken, getVoiceToken } from "../../services/twilioTokenService";
 import {
   clearIncomingCall,
   getCallStoreState,
@@ -9,13 +8,15 @@ import {
   setIncomingCall,
   setNetworkBanner
 } from "../state/callStore";
+import { completeTelephonyAuthFlow } from "./telephonyAuthFlow";
 
 let device: Device | null = null;
+let deviceReady = false;
 let initializing: Promise<Device> | null = null;
 
 async function refreshToken(currentDevice: Device) {
-  const next = await fetchVoiceToken();
-  await currentDevice.updateToken(next);
+  const { token } = await completeTelephonyAuthFlow();
+  await currentDevice.updateToken(token);
   setNetworkBanner(null);
 }
 
@@ -30,15 +31,18 @@ function bindDeviceEvents(currentDevice: Device) {
   });
 
   currentDevice.on("offline", async () => {
+    deviceReady = false;
     setNetworkBanner("Connection lost. Attempting reconnect.");
     await refreshToken(currentDevice);
   });
 
   currentDevice.on("error", () => {
+    deviceReady = false;
     setNetworkBanner("Connection lost. Attempting reconnect.");
   });
 
   currentDevice.on("registered", () => {
+    deviceReady = true;
     setNetworkBanner(null);
   });
 }
@@ -48,7 +52,11 @@ export async function initializeDevice() {
     return device;
   }
 
-  const token = await getVoiceToken();
+  const { token } = await completeTelephonyAuthFlow();
+  if (!token) {
+    throw new Error("Request failed");
+  }
+
   const nextDevice = new Device(token, {
     codecPreferences: [Call.Codec.Opus, Call.Codec.PCMU]
   });
@@ -56,6 +64,9 @@ export async function initializeDevice() {
   bindDeviceEvents(nextDevice);
   setDevice(nextDevice);
   device = nextDevice;
+
+  await nextDevice.register();
+  deviceReady = true;
 
   return device;
 }
@@ -84,6 +95,7 @@ export function getDevice() {
 
 export function __resetVoiceDeviceForTests() {
   device = null;
+  deviceReady = false;
   initializing = null;
   setDevice(null);
   setIncomingCall(null);
@@ -94,6 +106,10 @@ export function __resetVoiceDeviceForTests() {
 
 export async function startCall(to: string) {
   const currentDevice = await initVoiceDevice();
+  if (!deviceReady) {
+    throw new Error("Device not ready");
+  }
+
   const call = await currentDevice.connect({ params: { to } });
   setActiveCall(call);
   setCallStatus("connecting");

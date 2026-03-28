@@ -1,18 +1,30 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fetchVoiceToken } from "./twilioTokenService";
+
+const hoisted = vi.hoisted(() => ({
+  get: vi.fn(async () => ({ data: { success: true, data: { token: "abc", ttl: 60 } } }))
+}));
+
+vi.mock("../network/api", () => ({
+  api: {
+    get: hoisted.get
+  }
+}));
+
+import { fetchVoiceToken, getVoiceToken } from "./twilioTokenService";
 
 describe("twilioTokenService", () => {
   beforeEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
-  it("fetches a voice token from staff API", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({ token: "abc" })
-    } as Response);
-
+  it("fetches a voice token from API envelope", async () => {
     await expect(fetchVoiceToken()).resolves.toBe("abc");
-    expect(globalThis.fetch).toHaveBeenCalledWith("/api/twilio/voice-token");
+    expect(hoisted.get).toHaveBeenCalledWith("/api/twilio/voice-token");
+  });
+
+  it("caches token responses", async () => {
+    await expect(getVoiceToken()).resolves.toBe("abc");
+    await expect(getVoiceToken()).resolves.toBe("abc");
+    expect(hoisted.get).toHaveBeenCalledTimes(1);
   });
 });

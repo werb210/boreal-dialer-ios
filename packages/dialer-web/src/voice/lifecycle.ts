@@ -1,13 +1,10 @@
 import type { Call, Device } from "@twilio/voice-sdk";
+import { api } from "../network/api";
 import { clearActiveCall, getActiveCall, setActiveCall } from "./callState";
 import { startHeartbeat, stopHeartbeat } from "./heartbeat";
 
 export async function syncVoiceState(status: "connected" | "ended") {
-  await fetch("/api/voice/state", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status })
-  });
+  await api.post("/api/voice/state", { status });
 }
 
 export function attachCallLifecycleHandlers(device: Device) {

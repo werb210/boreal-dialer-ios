@@ -1,3 +1,5 @@
+import { api } from "../network/api";
+
 type CallLogPayload = {
   direction: "inbound" | "outbound";
   from: string;
@@ -12,24 +14,14 @@ const queuedLogs: CallLogPayload[] = [];
 let flushing = false;
 
 async function postCallLog(payload: CallLogPayload): Promise<void> {
-  const response = await fetch("/api/calls/log", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      direction: payload.direction,
-      from: payload.from,
-      to: payload.to,
-      startedAt: payload.startedAt,
-      endedAt: payload.endedAt,
-      duration: payload.duration
-    })
+  await api.post("/api/calls/log", {
+    direction: payload.direction,
+    from: payload.from,
+    to: payload.to,
+    startedAt: payload.startedAt,
+    endedAt: payload.endedAt,
+    duration: payload.duration
   });
-
-  if (!response.ok) {
-    throw new Error(`Failed to log call: ${response.status}`);
-  }
 }
 
 async function flushQueuedLogs() {
@@ -39,18 +31,15 @@ async function flushQueuedLogs() {
 
   flushing = true;
 
-  while (queuedLogs.length > 0) {
-    const next = queuedLogs[0];
-
-    try {
+  try {
+    while (queuedLogs.length > 0) {
+      const next = queuedLogs[0];
       await postCallLog(next);
       queuedLogs.shift();
-    } catch {
-      break;
     }
+  } finally {
+    flushing = false;
   }
-
-  flushing = false;
 }
 
 if (typeof window !== "undefined") {
@@ -67,8 +56,9 @@ export async function logCall(payload: CallLogPayload): Promise<void> {
 
   try {
     await postCallLog(payload);
-  } catch {
+  } catch (error) {
     queuedLogs.push(payload);
+    throw error;
   }
 }
 

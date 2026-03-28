@@ -1,10 +1,12 @@
+import { api } from "../network/api";
+
 let interval: NodeJS.Timeout | null = null;
 
 export function startHeartbeat() {
   if (interval) return;
 
   interval = setInterval(() => {
-    fetch("/api/voice/ping").catch(() => {});
+    void api.post("/api/voice/ping");
   }, 15000);
 }
 

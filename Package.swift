@@ -47,8 +47,7 @@ let package = Package(
             ],
             path: ".",
             sources: [
-                "Sources/BorealDialer",
-                "Core",
+                "Sources",
                 "UI",
                 "Features"
             ]

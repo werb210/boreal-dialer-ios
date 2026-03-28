@@ -9,9 +9,6 @@ final class AuthService: ObservableObject {
     @Published var accessTokenExpiry: Date?
 
     private var refreshTask: Task<Void, Never>?
-    private lazy var secureSession: URLSession = {
-        URLSession(configuration: .default, delegate: PinnedSessionDelegate(), delegateQueue: nil)
-    }()
 
     private init() {
         if let accessToken = KeychainService.shared.load("accessToken") {
@@ -133,7 +130,7 @@ final class AuthService: ObservableObject {
                 throw URLError(.badURL)
             }
 
-            let (data, response) = try await secureSession.data(for: request)
+            let (data, response) = try await APIClient.shared.perform(request: request)
 
             if let httpResponse = response as? HTTPURLResponse,
                !(200...299).contains(httpResponse.statusCode) {
@@ -227,7 +224,7 @@ final class AuthService: ObservableObject {
         let accessToken = try await getValidAccessToken()
         authorizedRequest.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
 
-        let (data, response) = try await secureSession.data(for: authorizedRequest)
+        let (data, response) = try await APIClient.shared.perform(request: authorizedRequest)
 
         if let http = response as? HTTPURLResponse,
            http.statusCode == 401 {
@@ -236,7 +233,7 @@ final class AuthService: ObservableObject {
 
             authorizedRequest.setValue("Bearer \(refreshedToken)", forHTTPHeaderField: "Authorization")
 
-            let (retryData, retryResponse) = try await secureSession.data(for: authorizedRequest)
+            let (retryData, retryResponse) = try await APIClient.shared.perform(request: authorizedRequest)
 
             if let retryHTTP = retryResponse as? HTTPURLResponse,
                retryHTTP.statusCode == 401 {

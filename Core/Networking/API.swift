@@ -3,10 +3,11 @@ import Foundation
 enum API {
 
     static func getTwilioToken(line: VoiceEngine.Line) async throws -> String {
-        let baseURL = await MainActor.run { LineManager.shared.activeLine.baseURL }
-        let url = baseURL.appendingPathComponent("api/voice/token")
+        guard let requestURL = APIClient.shared.url(path: "/api/voice/token") else {
+            throw URLError(.badURL)
+        }
 
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: requestURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(await currentSiloHeader(), forHTTPHeaderField: "X-Silo")
@@ -24,10 +25,11 @@ enum API {
     }
 
     static func registerVoIPToken(_ token: String) async {
-        let baseURL = await MainActor.run { LineManager.shared.activeLine.baseURL }
-        let url = baseURL.appendingPathComponent("api/voice/device-token")
+        guard let requestURL = APIClient.shared.url(path: "/api/voice/device-token") else {
+            return
+        }
 
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: requestURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(await currentSiloHeader(), forHTTPHeaderField: "X-Silo")
@@ -44,7 +46,7 @@ enum API {
         ]
 
         request.httpBody = try? JSONEncoder().encode(body)
-        _ = try? await URLSession.shared.data(for: request)
+        _ = try? await AuthService.shared.performAuthorizedRequest(request)
     }
 
     static func answerCall(uuid: String) async throws {
@@ -56,10 +58,11 @@ enum API {
     }
 
     static func sendSMS(_ payload: SendSMSPayload) async throws {
-        let baseURL = await MainActor.run { LineManager.shared.activeLine.baseURL }
-        let url = baseURL.appendingPathComponent("api/sms/send")
+        guard let requestURL = APIClient.shared.url(path: "/api/sms/send") else {
+            throw URLError(.badURL)
+        }
 
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: requestURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(await currentSiloHeader(), forHTTPHeaderField: "X-Silo")
@@ -82,10 +85,11 @@ enum API {
     }
 
     static func logCall(duration: Int, status: String) async throws {
-        let baseURL = await MainActor.run { LineManager.shared.activeLine.baseURL }
-        let url = baseURL.appendingPathComponent("api/voice/calls/log")
+        guard let requestURL = APIClient.shared.url(path: "/api/voice/calls/log") else {
+            throw URLError(.badURL)
+        }
 
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: requestURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(await currentSiloHeader(), forHTTPHeaderField: "X-Silo")
@@ -121,10 +125,11 @@ enum API {
 
 
     private static func recordingAction(path: String, callSid: String) async throws {
-        let baseURL = await MainActor.run { LineManager.shared.activeLine.baseURL }
-        let url = baseURL.appendingPathComponent(path)
+        guard let requestURL = APIClient.shared.url(path: path) else {
+            throw URLError(.badURL)
+        }
 
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: requestURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(await currentSiloHeader(), forHTTPHeaderField: "X-Silo")
@@ -138,10 +143,11 @@ enum API {
     }
 
     private static func updateCallState(path: String, id: String) async throws {
-        let baseURL = await MainActor.run { LineManager.shared.activeLine.baseURL }
-        let url = baseURL.appendingPathComponent(path)
+        guard let requestURL = APIClient.shared.url(path: path) else {
+            throw URLError(.badURL)
+        }
 
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: requestURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(await currentSiloHeader(), forHTTPHeaderField: "X-Silo")

@@ -115,10 +115,11 @@ final class VoiceManager: NSObject, ObservableObject {
     }
 
     private func fetchToken() async -> String? {
-        let baseURL = await MainActor.run { LineManager.shared.activeLine.baseURL }
-        let url = baseURL.appendingPathComponent("api/voice/token")
+        guard let requestURL = APIClient.shared.url(path: "/api/voice/token") else {
+            return nil
+        }
 
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: requestURL)
         request.httpMethod = "POST"
         request.httpShouldHandleCookies = true
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -284,10 +285,11 @@ final class VoiceManager: NSObject, ObservableObject {
 
     func sendPresence(status: String) {
         Task {
-            let baseURL = await MainActor.run { LineManager.shared.activeLine.baseURL }
-            let url = baseURL.appendingPathComponent("api/voice/presence")
+            guard let requestURL = APIClient.shared.url(path: "/api/voice/presence") else {
+                return
+            }
 
-            var request = URLRequest(url: url)
+            var request = URLRequest(url: requestURL)
             request.httpMethod = "POST"
             request.httpShouldHandleCookies = true
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -344,10 +346,11 @@ extension VoiceManager: CallDelegate {
 
     private func notifyServerStatus(status: String) {
         Task {
-            let baseURL = await MainActor.run { LineManager.shared.activeLine.baseURL }
-            let url = baseURL.appendingPathComponent("api/voice/status")
+            guard let requestURL = APIClient.shared.url(path: "/api/voice/status") else {
+                return
+            }
 
-            var request = URLRequest(url: url)
+            var request = URLRequest(url: requestURL)
             request.httpMethod = "POST"
             request.httpShouldHandleCookies = true
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")

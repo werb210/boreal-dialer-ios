@@ -17,7 +17,7 @@ final class OTPService {
         guard let body else { return false }
 
         do {
-            let (_, response) = try await APIClient.shared.request(
+            let (_, response) = try await APIClient.shared.perform(
                 path: "/api/auth/otp/start",
                 method: "POST",
                 body: body,
@@ -43,7 +43,7 @@ final class OTPService {
         guard let body else { return nil }
 
         do {
-            let (data, response) = try await APIClient.shared.request(
+            let (data, response) = try await APIClient.shared.perform(
                 path: "/api/auth/otp/verify",
                 method: "POST",
                 body: body,

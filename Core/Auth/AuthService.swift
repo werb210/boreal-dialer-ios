@@ -42,40 +42,29 @@ final class AuthService: ObservableObject {
         return Date(timeIntervalSince1970: exp)
     }
 
-    private func baseURL() async -> URL {
-        await MainActor.run { LineManager.shared.activeLine.baseURL }
+    func startOTP(phone: String) async -> Bool {
+        await OTPService.shared.startOTP(phone: phone)
     }
 
     func login(phone: String, otp: String) async throws {
 
-        let url = await baseURL().appendingPathComponent("api/auth/otp/verify")
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            let silo = await MainActor.run { VoiceEngine.shared.silo.rawValue }
-            request.setValue(silo, forHTTPHeaderField: "X-Silo")
+        guard let tokens = await OTPService.shared.verifyOTP(phone: phone, code: otp) else {
+            throw URLError(.userAuthenticationRequired)
+        }
 
-        let body = ["phone": phone, "code": otp]
-        request.httpBody = try JSONEncoder().encode(body)
-
-        let (data, _) = try await secureSession.data(for: request)
-
-        let decoded = try JSONDecoder().decode(AuthResponse.self, from: data)
-
-        KeychainService.shared.save(decoded.accessToken, for: "accessToken")
-        KeychainService.shared.save(decoded.refreshToken, for: "refreshToken")
+        let accessToken = tokens.accessToken
 
         await MainActor.run {
-            self.accessTokenExpiry = self.decodeExpiry(from: decoded.accessToken)
+            self.accessTokenExpiry = self.decodeExpiry(from: accessToken)
             self.isAuthenticated = true
             self.scheduleRefresh()
             WebSocketManager.shared.connect(
                 line: LineManager.shared.activeLine,
-                accessToken: decoded.accessToken
+                accessToken: accessToken
             )
         }
 
-        if shouldInitializeVoice(from: decoded.accessToken) {
+        if shouldInitializeVoice(from: accessToken) {
             PushManager.shared.register()
             Task {
                 await VoiceManager.shared.initialize()
@@ -129,16 +118,20 @@ final class AuthService: ObservableObject {
                 throw URLError(.userAuthenticationRequired)
             }
 
-            let url = await baseURL().appendingPathComponent("api/auth/refresh")
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             let silo = await MainActor.run { VoiceEngine.shared.silo.rawValue }
-            request.setValue(silo, forHTTPHeaderField: "X-Silo")
-
-            request.httpBody = try JSONEncoder().encode([
+            let body = try JSONEncoder().encode([
                 "refreshToken": currentRefreshToken
             ])
+
+            guard let request = APIClient.shared.makeRequest(
+                path: "/api/auth/refresh",
+                method: "POST",
+                body: body,
+                includeAuthToken: false,
+                headers: ["X-Silo": silo]
+            ) else {
+                throw URLError(.badURL)
+            }
 
             let (data, response) = try await secureSession.data(for: request)
 

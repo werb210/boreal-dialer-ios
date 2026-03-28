@@ -8,9 +8,7 @@ final class BFTokenProvider: TokenProvider {
 
     func fetchAccessToken(forLine lineId: String) async throws -> String {
 
-        guard let requestURL = APIClient.shared.url(path: "/api/voice/token") else {
-            throw URLError(.badURL)
-        }
+        let requestURL = try APIClient.shared.url(path: "/api/voice/token")
 
         var request = URLRequest(url: requestURL)
         request.httpMethod = "POST"

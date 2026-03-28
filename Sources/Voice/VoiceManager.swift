@@ -107,7 +107,11 @@ final class VoiceManager: NSObject, ObservableObject {
         tokenRefreshTask?.cancel()
         tokenRefreshTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 50 * 60 * 1_000_000_000)
+                do {
+                    try await Task.sleep(nanoseconds: 50 * 60 * 1_000_000_000)
+                } catch {
+                    return
+                }
                 guard !Task.isCancelled else { return }
                 await self?.initialize()
             }
@@ -115,16 +119,14 @@ final class VoiceManager: NSObject, ObservableObject {
     }
 
     private func fetchToken() async -> String? {
-        guard let requestURL = APIClient.shared.url(path: "/api/voice/token") else {
-            return nil
-        }
-
-        var request = URLRequest(url: requestURL)
-        request.httpMethod = "POST"
-        request.httpShouldHandleCookies = true
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
         do {
+            let requestURL = try APIClient.shared.url(path: "/api/voice/token")
+
+            var request = URLRequest(url: requestURL)
+            request.httpMethod = "POST"
+            request.httpShouldHandleCookies = true
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
             let data = try await AuthService.shared.performAuthorizedRequest(request)
             let response = try JSONDecoder().decode(TokenResponse.self, from: data)
             return response.token
@@ -285,22 +287,26 @@ final class VoiceManager: NSObject, ObservableObject {
 
     func sendPresence(status: String) {
         Task {
-            guard let requestURL = APIClient.shared.url(path: "/api/voice/presence") else {
-                return
+            do {
+                let requestURL = try APIClient.shared.url(path: "/api/voice/presence")
+
+                var request = URLRequest(url: requestURL)
+                request.httpMethod = "POST"
+                request.httpShouldHandleCookies = true
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+                let body: [String: String] = [
+                    "status": status,
+                    "source": "dialer"
+                ]
+
+                request.httpBody = try JSONSerialization.data(withJSONObject: body)
+                _ = try await AuthService.shared.performAuthorizedRequest(request)
+            } catch {
+#if DEBUG
+                print("Failed to send presence:", error)
+#endif
             }
-
-            var request = URLRequest(url: requestURL)
-            request.httpMethod = "POST"
-            request.httpShouldHandleCookies = true
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-            let body: [String: String] = [
-                "status": status,
-                "source": "dialer"
-            ]
-
-            request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-            _ = try? await AuthService.shared.performAuthorizedRequest(request)
         }
     }
 }
@@ -346,21 +352,25 @@ extension VoiceManager: CallDelegate {
 
     private func notifyServerStatus(status: String) {
         Task {
-            guard let requestURL = APIClient.shared.url(path: "/api/voice/status") else {
-                return
+            do {
+                let requestURL = try APIClient.shared.url(path: "/api/voice/status")
+
+                var request = URLRequest(url: requestURL)
+                request.httpMethod = "POST"
+                request.httpShouldHandleCookies = true
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+                let body = [
+                    "callStatus": status
+                ]
+
+                request.httpBody = try JSONSerialization.data(withJSONObject: body)
+                _ = try await AuthService.shared.performAuthorizedRequest(request)
+            } catch {
+#if DEBUG
+                print("Failed to notify voice status:", error)
+#endif
             }
-
-            var request = URLRequest(url: requestURL)
-            request.httpMethod = "POST"
-            request.httpShouldHandleCookies = true
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-            let body = [
-                "callStatus": status
-            ]
-
-            request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-            _ = try? await AuthService.shared.performAuthorizedRequest(request)
         }
     }
 }

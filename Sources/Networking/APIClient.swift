@@ -4,6 +4,8 @@ final class APIClient {
 
     static let shared = APIClient()
 
+    private let session = URLSession.shared
+
     private init() {}
 
     private var token: String? {
@@ -11,8 +13,12 @@ final class APIClient {
             ?? UserDefaults.standard.string(forKey: "auth_token")
     }
 
-    func url(path: String) -> URL? {
-        URL(string: APIConfig.baseURL + normalized(path: path))
+    func url(path: String) throws -> URL {
+        guard let resolvedURL = URL(string: APIConfig.baseURL + normalized(path: path)) else {
+            throw URLError(.badURL)
+        }
+
+        return resolvedURL
     }
 
     func makeRequest(
@@ -21,10 +27,8 @@ final class APIClient {
         body: Data? = nil,
         includeAuthToken: Bool = true,
         headers: [String: String] = [:]
-    ) -> URLRequest? {
-        guard let url = url(path: path) else {
-            return nil
-        }
+    ) throws -> URLRequest {
+        let url = try url(path: path)
 
         var request = URLRequest(url: url)
         request.httpMethod = method
@@ -47,27 +51,20 @@ final class APIClient {
         method: String = "GET",
         body: Data? = nil,
         includeAuthToken: Bool = true,
-        headers: [String: String] = [:],
-        session: URLSession = .shared
+        headers: [String: String] = [:]
     ) async throws -> (Data, URLResponse) {
-        guard let request = makeRequest(
+        let request = try makeRequest(
             path: path,
             method: method,
             body: body,
             includeAuthToken: includeAuthToken,
             headers: headers
-        ) else {
-            throw URLError(.badURL)
-        }
+        )
 
-        return try await session.data(for: request)
+        return try await perform(request: request)
     }
 
-
-    func perform(
-        request: URLRequest,
-        session: URLSession = .shared
-    ) async throws -> (Data, URLResponse) {
+    func perform(request: URLRequest) async throws -> (Data, URLResponse) {
         try await session.data(for: request)
     }
 
@@ -76,16 +73,14 @@ final class APIClient {
         method: String = "GET",
         body: Data? = nil,
         includeAuthToken: Bool = true,
-        headers: [String: String] = [:],
-        session: URLSession = .shared
+        headers: [String: String] = [:]
     ) async throws -> (Data, URLResponse) {
         try await perform(
             path: path,
             method: method,
             body: body,
             includeAuthToken: includeAuthToken,
-            headers: headers,
-            session: session
+            headers: headers
         )
     }
 

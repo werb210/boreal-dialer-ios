@@ -40,16 +40,5 @@ final class LineManager: ObservableObject {
         VoiceEngine.shared.forceTerminate()
         ConversationsService.shared.reset()
 
-        WebSocketManager.shared.disconnect()
-
-        Task {
-            let refreshed = try? await AuthService.shared.refreshToken()
-            let accessToken = refreshed ?? KeychainService.shared.load("accessToken")
-            if let accessToken {
-                await MainActor.run {
-                    WebSocketManager.shared.connect(line: line, accessToken: accessToken)
-                }
-            }
-        }
     }
 }

@@ -3,9 +3,7 @@ import Foundation
 enum API {
 
     static func getTwilioToken(line: VoiceEngine.Line) async throws -> String {
-        guard let requestURL = APIClient.shared.url(path: "/api/voice/token") else {
-            throw URLError(.badURL)
-        }
+        let requestURL = try APIClient.shared.url(path: "/api/voice/token")
 
         var request = URLRequest(url: requestURL)
         request.httpMethod = "POST"
@@ -25,29 +23,31 @@ enum API {
     }
 
     static func registerVoIPToken(_ token: String) async {
-        guard let requestURL = APIClient.shared.url(path: "/api/voice/device-token") else {
-            return
+        do {
+            let requestURL = try APIClient.shared.url(path: "/api/voice/device-token")
+
+            var request = URLRequest(url: requestURL)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue(await currentSiloHeader(), forHTTPHeaderField: "X-Silo")
+
+            let accessToken = try await AuthService.shared.getValidAccessToken()
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+
+            let body = [
+                "deviceToken": token,
+                "platform": "ios"
+            ]
+
+            request.httpBody = try JSONEncoder().encode(body)
+            _ = try await AuthService.shared.performAuthorizedRequest(request)
+        } catch {
+#if DEBUG
+            print("Failed to register VoIP token:", error)
+#endif
         }
-
-        var request = URLRequest(url: requestURL)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(await currentSiloHeader(), forHTTPHeaderField: "X-Silo")
-
-        guard let accessToken = try? await AuthService.shared.getValidAccessToken() else {
-            return
-        }
-
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-
-        let body = [
-            "deviceToken": token,
-            "platform": "ios"
-        ]
-
-        request.httpBody = try? JSONEncoder().encode(body)
-        _ = try? await AuthService.shared.performAuthorizedRequest(request)
     }
+
 
     static func answerCall(uuid: String) async throws {
         try await updateCallState(path: "api/voice/calls/answer", id: uuid)
@@ -58,9 +58,7 @@ enum API {
     }
 
     static func sendSMS(_ payload: SendSMSPayload) async throws {
-        guard let requestURL = APIClient.shared.url(path: "/api/sms/send") else {
-            throw URLError(.badURL)
-        }
+        let requestURL = try APIClient.shared.url(path: "/api/sms/send")
 
         var request = URLRequest(url: requestURL)
         request.httpMethod = "POST"
@@ -85,9 +83,7 @@ enum API {
     }
 
     static func logCall(duration: Int, status: String) async throws {
-        guard let requestURL = APIClient.shared.url(path: "/api/voice/calls/log") else {
-            throw URLError(.badURL)
-        }
+        let requestURL = try APIClient.shared.url(path: "/api/voice/calls/log")
 
         var request = URLRequest(url: requestURL)
         request.httpMethod = "POST"
@@ -125,9 +121,7 @@ enum API {
 
 
     private static func recordingAction(path: String, callSid: String) async throws {
-        guard let requestURL = APIClient.shared.url(path: path) else {
-            throw URLError(.badURL)
-        }
+        let requestURL = try APIClient.shared.url(path: path)
 
         var request = URLRequest(url: requestURL)
         request.httpMethod = "POST"
@@ -143,9 +137,7 @@ enum API {
     }
 
     private static func updateCallState(path: String, id: String) async throws {
-        guard let requestURL = APIClient.shared.url(path: path) else {
-            throw URLError(.badURL)
-        }
+        let requestURL = try APIClient.shared.url(path: path)
 
         var request = URLRequest(url: requestURL)
         request.httpMethod = "POST"

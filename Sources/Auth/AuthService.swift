@@ -39,26 +39,19 @@ final class AuthService: ObservableObject {
         return Date(timeIntervalSince1970: exp)
     }
 
-    func startOTP(phone: String) async -> Bool {
-        await OTPService.shared.startOTP(phone: phone)
+    func startOTP(phone: String) async throws -> Bool {
+        try await OTPService.shared.startOTP(phone: phone)
     }
 
     func login(phone: String, otp: String) async throws {
 
-        guard let tokens = await OTPService.shared.verifyOTP(phone: phone, code: otp) else {
-            throw URLError(.userAuthenticationRequired)
-        }
-
+        let tokens = try await OTPService.shared.verifyOTP(phone: phone, code: otp)
         let accessToken = tokens.accessToken
 
         await MainActor.run {
             self.accessTokenExpiry = self.decodeExpiry(from: accessToken)
             self.isAuthenticated = true
             self.scheduleRefresh()
-            WebSocketManager.shared.connect(
-                line: LineManager.shared.activeLine,
-                accessToken: accessToken
-            )
         }
 
         if shouldInitializeVoice(from: accessToken) {
@@ -120,15 +113,13 @@ final class AuthService: ObservableObject {
                 "refreshToken": currentRefreshToken
             ])
 
-            guard let request = APIClient.shared.makeRequest(
+            let request = try APIClient.shared.makeRequest(
                 path: "/api/auth/refresh",
                 method: "POST",
                 body: body,
                 includeAuthToken: false,
                 headers: ["X-Silo": silo]
-            ) else {
-                throw URLError(.badURL)
-            }
+            )
 
             let (data, response) = try await APIClient.shared.perform(request: request)
 
@@ -145,10 +136,6 @@ final class AuthService: ObservableObject {
             await MainActor.run {
                 self.accessTokenExpiry = self.decodeExpiry(from: decoded.accessToken)
                 self.scheduleRefresh()
-                WebSocketManager.shared.connect(
-                    line: LineManager.shared.activeLine,
-                    accessToken: decoded.accessToken
-                )
             }
 
             await MainActor.run {
@@ -203,7 +190,11 @@ final class AuthService: ObservableObject {
         }
 
         refreshTask = Task {
-            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            do {
+                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            } catch {
+                return
+            }
 
             guard !Task.isCancelled else { return }
 
@@ -248,7 +239,6 @@ final class AuthService: ObservableObject {
 
     func logout() {
         refreshTask?.cancel()
-        WebSocketManager.shared.disconnect()
         KeychainService.shared.delete("accessToken")
         KeychainService.shared.delete("refreshToken")
         accessTokenExpiry = nil

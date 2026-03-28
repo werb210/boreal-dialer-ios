@@ -1,19 +1,27 @@
 export type ApiEnvelope<T> = {
   success: boolean;
-  data?: T;
+  data: T;
   error?: string;
 };
 
 export function assertApiResponse<T>(res: unknown): T {
   if (!res || typeof res !== "object") {
-    throw new Error("Invalid API response");
+    throw new Error("INVALID API RESPONSE");
   }
 
-  const envelope = res as ApiEnvelope<T>;
+  const envelope = res as Partial<ApiEnvelope<T>>;
 
   if (envelope.success !== true) {
-    throw new Error(envelope.error || "API failure");
+    throw new Error("INVALID API RESPONSE");
   }
 
-  return envelope.data as T;
+  if (!("data" in envelope)) {
+    throw new Error("MALFORMED_API_RESPONSE");
+  }
+
+  if (!envelope.data || typeof envelope.data !== "object") {
+    throw new Error("INVALID_DATA_PAYLOAD");
+  }
+
+  return envelope.data;
 }

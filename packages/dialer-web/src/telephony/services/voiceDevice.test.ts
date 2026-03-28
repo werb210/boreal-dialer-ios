@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { clearStore, getCallStoreState } from "../state/callStore";
-import { __resetVoiceDeviceForTests, getVoiceDevice, initializeVoice, startCall } from "./voiceDevice";
+import {
+  __getSessionForTests,
+  __resetVoiceDeviceForTests,
+  __setSessionForTests,
+  getDevice,
+  startDialerSession
+} from "./voiceDevice";
 
 type EventHandler = (...args: unknown[]) => unknown;
 
@@ -9,14 +15,15 @@ type MockDevice = {
   on: (event: string, handler: EventHandler) => void;
   emit: (event: string, ...args: unknown[]) => Promise<void>;
   connect: ReturnType<typeof vi.fn>;
+  state: string;
 };
 
 const hoisted = vi.hoisted(() => ({
-  completeTelephonyAuthFlow: vi.fn(async () => ({ token: "token-123" }))
+  runTelephonyAuthFlow: vi.fn(async () => ({ token: "token-123" }))
 }));
 
 vi.mock("./telephonyAuthFlow", () => ({
-  completeTelephonyAuthFlow: hoisted.completeTelephonyAuthFlow
+  runTelephonyAuthFlow: hoisted.runTelephonyAuthFlow
 }));
 
 vi.mock("../../services/callLogger", () => ({
@@ -63,38 +70,50 @@ describe("voiceDevice", () => {
   });
 
   it("enforces singleton creation", async () => {
-    const [a, b, c] = await Promise.all([
-      getVoiceDevice(),
-      getVoiceDevice(),
-      initializeVoice().then(() => getVoiceDevice())
-    ]);
+    const [a, b, c] = await Promise.all([startDialerSession(), startDialerSession(), startDialerSession()]);
 
     expect(a).toBe(b);
     expect(b).toBe(c);
-    expect(hoisted.completeTelephonyAuthFlow).toHaveBeenCalledTimes(1);
+    expect(hoisted.runTelephonyAuthFlow).toHaveBeenCalledTimes(1);
   });
 
   it("refreshes token on tokenWillExpire", async () => {
-    const device = (await getVoiceDevice()) as unknown as MockDevice;
+    const device = (await startDialerSession()) as unknown as MockDevice;
 
-    hoisted.completeTelephonyAuthFlow.mockResolvedValueOnce({ token: "token-refresh" });
+    hoisted.runTelephonyAuthFlow.mockResolvedValueOnce({ token: "token-refresh" });
     await device.emit("tokenWillExpire");
 
     expect(device.updateToken).toHaveBeenCalledWith("token-refresh");
   });
 
   it("attempts token refresh when device goes offline", async () => {
-    const device = (await getVoiceDevice()) as unknown as MockDevice;
+    const device = (await startDialerSession()) as unknown as MockDevice;
 
-    hoisted.completeTelephonyAuthFlow.mockResolvedValueOnce({ token: "token-reconnect" });
+    hoisted.runTelephonyAuthFlow.mockResolvedValueOnce({ token: "token-reconnect" });
     await device.emit("offline");
 
     expect(device.updateToken).toHaveBeenCalledWith("token-reconnect");
     expect(getCallStoreState().networkBanner).toBeNull();
   });
 
-  it("allows connect only after ready", async () => {
-    await getVoiceDevice();
-    await expect(startCall("+15551234567")).resolves.toBeTruthy();
+  it("blocks calls without an authenticated session", async () => {
+    await startDialerSession();
+    __setSessionForTests({ isAuthenticated: false });
+
+    await expect(startDialerSession("+15551234567")).rejects.toThrow("NOT_AUTHENTICATED");
+  });
+
+  it("allows connect only after registered state", async () => {
+    await startDialerSession();
+    await expect(startDialerSession("+15551234567")).resolves.toBeTruthy();
+  });
+
+  it("keeps state unregistered and token empty on auth failure", async () => {
+    hoisted.runTelephonyAuthFlow.mockRejectedValueOnce(new Error("AUTH FAILED"));
+
+    await expect(startDialerSession()).rejects.toThrow("AUTH FAILED");
+    expect((getDevice() as unknown as MockDevice | null)?.state ?? "unregistered").toBe("unregistered");
+    expect(__getSessionForTests().token).toBeUndefined();
+    expect(__getSessionForTests().isAuthenticated).toBe(false);
   });
 });

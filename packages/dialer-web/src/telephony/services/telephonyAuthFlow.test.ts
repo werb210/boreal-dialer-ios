@@ -1,11 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
-import { completeTelephonyAuthFlow } from "./telephonyAuthFlow";
-import { initializeDevice, __resetVoiceDeviceForTests } from "./voiceDevice";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { __resetAuthFlowForTests, runTelephonyAuthFlow } from "./telephonyAuthFlow";
 
 const order: string[] = [];
 
 const hoisted = vi.hoisted(() => ({
-  post: vi.fn(async (url: string) => {
+  post: vi.fn(async (url: string, _data: unknown, config?: { timeout?: number }) => {
+    if (config?.timeout !== 5000) {
+      throw new Error("TIMEOUT_NOT_SET");
+    }
+
     if (url === "/api/otp/start") {
       order.push("startOtp");
       return { data: { success: true, data: { challengeId: "challenge-1" } } };
@@ -18,7 +21,11 @@ const hoisted = vi.hoisted(() => ({
 
     throw new Error(`Unexpected POST URL: ${url}`);
   }),
-  get: vi.fn(async (url: string) => {
+  get: vi.fn(async (url: string, config?: { timeout?: number }) => {
+    if (config?.timeout !== 5000) {
+      throw new Error("TIMEOUT_NOT_SET");
+    }
+
     if (url === "/api/telephony/token") {
       order.push("getTelephonyToken");
       return { data: { success: true, data: { token: "token-xyz" } } };
@@ -35,32 +42,56 @@ vi.mock("../../network/api", () => ({
   }
 }));
 
-vi.mock("@twilio/voice-sdk", () => ({
-  Device: class {
-    register = vi.fn(async () => undefined);
-    on = vi.fn();
-    constructor(public token: string) {}
-  },
-  Call: class {
-    static Codec = { Opus: "opus", PCMU: "pcmu" };
-  }
-}));
-
 describe("telephonyAuthFlow", () => {
+  beforeEach(() => {
+    order.length = 0;
+    vi.clearAllMocks();
+    __resetAuthFlowForTests();
+  });
+
   it("runs otp -> verify -> telephony token in strict order", async () => {
-    const data = await completeTelephonyAuthFlow("+15550000000", "123456");
+    const data = await runTelephonyAuthFlow("+15550000000", "123456", async () => ({ deviceId: "device-1" }));
 
     expect(data.token).toBe("token-xyz");
     expect(order).toEqual(["startOtp", "verifyOtp", "getTelephonyToken"]);
   });
 
-  it("initializes device after telephony token is obtained", async () => {
-    __resetVoiceDeviceForTests();
-    order.length = 0;
+  it("fails hard for malformed API responses", async () => {
+    hoisted.post.mockResolvedValueOnce({ data: { success: false } });
 
-    const device = await initializeDevice();
+    await expect(
+      runTelephonyAuthFlow("+15550000000", "123456", async () => ({ deviceId: "device-1" }))
+    ).rejects.toThrow("INVALID API RESPONSE");
+  });
 
-    expect(device).toBeTruthy();
-    expect(order).toEqual(["startOtp", "verifyOtp", "getTelephonyToken"]);
+  it("fails fast on timeout errors", async () => {
+    hoisted.post.mockRejectedValueOnce(new Error("timeout of 5000ms exceeded"));
+
+    await expect(
+      runTelephonyAuthFlow("+15550000000", "123456", async () => ({ deviceId: "device-1" }))
+    ).rejects.toThrow("timeout");
+  });
+
+  it("rejects parallel auth executions", async () => {
+    hoisted.post.mockImplementationOnce(
+      async () =>
+        await new Promise((resolve) => {
+          setTimeout(() => resolve({ data: { success: true, data: { challengeId: "challenge-1" } } }), 20);
+        })
+    );
+
+    const runA = runTelephonyAuthFlow("+15550000000", "123456", async () => ({ deviceId: "device-1" }));
+
+    await expect(
+      runTelephonyAuthFlow("+15550000000", "123456", async () => ({ deviceId: "device-1" }))
+    ).rejects.toThrow("AUTH_ALREADY_RUNNING");
+
+    await expect(runA).resolves.toEqual({ token: "token-xyz" });
+  });
+
+  it("fails when auth output is incomplete", async () => {
+    await expect(runTelephonyAuthFlow("+15550000000", "123456", async () => ({ deviceId: "" }))).rejects.toThrow(
+      "AUTH FLOW INCOMPLETE"
+    );
   });
 });

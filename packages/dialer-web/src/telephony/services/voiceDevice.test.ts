@@ -28,9 +28,11 @@ vi.mock("@twilio/voice-sdk", () => ({
     token: string;
     options: unknown;
     handlers: Record<string, EventHandler[]> = {};
+    state = "unregistered";
     updateToken = vi.fn(async () => undefined);
     connect = vi.fn(async () => ({ id: "call-1" }));
     register = vi.fn(async () => {
+      this.state = "registered";
       await this.emit("registered");
     });
 

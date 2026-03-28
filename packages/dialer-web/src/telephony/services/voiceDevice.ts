@@ -106,7 +106,7 @@ export function __resetVoiceDeviceForTests() {
 
 export async function startCall(to: string) {
   const currentDevice = await initVoiceDevice();
-  if (!deviceReady) {
+  if (!device || (device as Device & { state?: string }).state !== "registered") {
     throw new Error("Device not ready");
   }
 

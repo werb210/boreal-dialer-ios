@@ -4,15 +4,15 @@ export type ApiEnvelope<T> = {
   error?: string;
 };
 
-export function assertApiResponse<T>(data: unknown): T {
-  if (!data || typeof data !== "object" || typeof (data as ApiEnvelope<T>).success !== "boolean") {
+export function assertApiResponse<T>(res: unknown): T {
+  if (!res || typeof res !== "object") {
     throw new Error("Invalid API response");
   }
 
-  const envelope = data as ApiEnvelope<T>;
+  const envelope = res as ApiEnvelope<T>;
 
-  if (!envelope.success) {
-    throw new Error(envelope.error || "Request failed");
+  if (envelope.success !== true) {
+    throw new Error(envelope.error || "API failure");
   }
 
   return envelope.data as T;

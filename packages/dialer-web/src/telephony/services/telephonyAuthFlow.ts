@@ -18,58 +18,90 @@ type AuthFlow = {
 };
 
 type AuthFlowHandlers = {
-  requestOTP: () => Promise<void>;
-  verifyOTP: () => Promise<void>;
+  requestOTP: () => Promise<OtpStartPayload>;
+  verifyOTP: () => Promise<OtpVerifyPayload>;
   getToken: () => Promise<TelephonyTokenPayload>;
-  initDevice: () => Promise<void>;
+  initDevice: () => Promise<{ deviceId: string }>;
 };
 
-export async function startOtp(phone: string): Promise<OtpStartPayload> {
-  const response = await api.post("/api/otp/start", { phone });
+let authInProgress = false;
+
+
+function assertEnvelopeShape(response: unknown) {
+  if (!response || typeof response !== "object" || !("success" in response) || (response as { success?: boolean }).success !== true) {
+    throw new Error("INVALID API RESPONSE");
+  }
+}
+
+async function startOtp(phone: string): Promise<OtpStartPayload> {
+  const response = await api.post("/api/otp/start", { phone }, { timeout: 5000 });
+  assertEnvelopeShape(response.data);
   return assertApiResponse<OtpStartPayload>(response.data);
 }
 
-export async function verifyOtp(code: string): Promise<OtpVerifyPayload> {
-  const response = await api.post("/api/otp/verify", { code });
+async function verifyOtp(code: string): Promise<OtpVerifyPayload> {
+  const response = await api.post("/api/otp/verify", { code }, { timeout: 5000 });
+  assertEnvelopeShape(response.data);
   return assertApiResponse<OtpVerifyPayload>(response.data);
 }
 
-export async function getTelephonyToken(): Promise<TelephonyTokenPayload> {
-  const response = await api.get("/api/telephony/token");
+async function getTelephonyToken(): Promise<TelephonyTokenPayload> {
+  const response = await api.get("/api/telephony/token", { timeout: 5000 });
+  assertEnvelopeShape(response.data);
   return assertApiResponse<TelephonyTokenPayload>(response.data);
 }
 
-export function createAuthFlow(handlers: AuthFlowHandlers): AuthFlow {
+function createAuthFlow(handlers: AuthFlowHandlers): AuthFlow {
   return {
     async run() {
-      await handlers.requestOTP();
-      await handlers.verifyOTP();
-      const token = await handlers.getToken();
-      await handlers.initDevice();
-      return token;
+      if (authInProgress) {
+        throw new Error("AUTH_ALREADY_RUNNING");
+      }
+
+      authInProgress = true;
+
+      try {
+        const otp = await handlers.requestOTP();
+        const verify = await handlers.verifyOTP();
+        const token = await handlers.getToken();
+        const { deviceId } = await handlers.initDevice();
+
+        if (verify.verified !== true || !otp.challengeId || !token.token || !deviceId) {
+          throw new Error("AUTH FLOW INCOMPLETE");
+        }
+
+        return token;
+      } finally {
+        authInProgress = false;
+      }
     }
   };
 }
 
-export async function completeTelephonyAuthFlow(
+export async function runTelephonyAuthFlow(
   phone = "system",
   code = "system",
-  initDevice: () => Promise<void> = async () => undefined
+  initDevice: () => Promise<{ deviceId: string }> = async () => ({ deviceId: "system" })
 ): Promise<TelephonyTokenPayload> {
   const flow = createAuthFlow({
     requestOTP: async () => {
-      await startOtp(phone);
+      const response = await startOtp(phone);
+      if (!response || typeof response !== "object") {
+        throw new Error("INVALID API RESPONSE");
+      }
+      return response;
     },
     verifyOTP: async () => {
       const verify = await verifyOtp(code);
-      if (verify.verified !== true) {
-        throw new Error("OTP verification failed");
+      if (!verify || typeof verify !== "object") {
+        throw new Error("INVALID API RESPONSE");
       }
+      return verify;
     },
     getToken: async () => {
       const token = await getTelephonyToken();
-      if (!token.token) {
-        throw new Error("Missing telephony token");
+      if (!token || typeof token !== "object") {
+        throw new Error("INVALID API RESPONSE");
       }
       return token;
     },
@@ -77,4 +109,8 @@ export async function completeTelephonyAuthFlow(
   });
 
   return flow.run();
+}
+
+export function __resetAuthFlowForTests() {
+  authInProgress = false;
 }

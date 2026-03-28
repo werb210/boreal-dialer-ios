@@ -8,15 +8,23 @@ import {
   setIncomingCall,
   setNetworkBanner
 } from "../state/callStore";
-import { completeTelephonyAuthFlow } from "./telephonyAuthFlow";
+import { runTelephonyAuthFlow } from "./telephonyAuthFlow";
 
 let device: Device | null = null;
 let deviceReady = false;
 let initializing: Promise<Device> | null = null;
+let session: { isAuthenticated: boolean; token?: string } = { isAuthenticated: false };
+
+function assertDeviceStateTransition(previousState: string | undefined, nextState: string | undefined) {
+  if (previousState === "registered" && nextState !== "registered") {
+    throw new Error("INVALID_STATE_REGRESSION");
+  }
+}
 
 async function refreshToken(currentDevice: Device) {
-  const { token } = await completeTelephonyAuthFlow();
+  const { token } = await runTelephonyAuthFlow();
   await currentDevice.updateToken(token);
+  session = { isAuthenticated: true, token };
   setNetworkBanner(null);
 }
 
@@ -31,30 +39,38 @@ function bindDeviceEvents(currentDevice: Device) {
   });
 
   currentDevice.on("offline", async () => {
+    const prevState = (currentDevice as Device & { state?: string }).state;
     deviceReady = false;
     setNetworkBanner("Connection lost. Attempting reconnect.");
     await refreshToken(currentDevice);
+    const nextState = (currentDevice as Device & { state?: string }).state;
+    assertDeviceStateTransition(prevState, nextState);
   });
 
   currentDevice.on("error", () => {
+    const prevState = (currentDevice as Device & { state?: string }).state;
     deviceReady = false;
     setNetworkBanner("Connection lost. Attempting reconnect.");
+    const nextState = (currentDevice as Device & { state?: string }).state;
+    assertDeviceStateTransition(prevState, nextState);
   });
 
   currentDevice.on("registered", () => {
+    const previousState = (currentDevice as Device & { state?: string }).state;
     deviceReady = true;
     setNetworkBanner(null);
+    assertDeviceStateTransition(previousState, "registered");
   });
 }
 
-export async function initializeDevice() {
+async function initializeDevice() {
   if (device) {
     return device;
   }
 
-  const { token } = await completeTelephonyAuthFlow();
+  const { token } = await runTelephonyAuthFlow();
   if (!token) {
-    throw new Error("Request failed");
+    throw new Error("AUTH FLOW INCOMPLETE");
   }
 
   const nextDevice = new Device(token, {
@@ -66,12 +82,18 @@ export async function initializeDevice() {
   device = nextDevice;
 
   await nextDevice.register();
+
+  if ((device as Device & { state?: string }).state !== "registered") {
+    throw new Error("DEVICE_NOT_READY");
+  }
+
   deviceReady = true;
+  session = { isAuthenticated: true, token };
 
   return device;
 }
 
-export async function initVoiceDevice() {
+async function initVoiceDevice() {
   if (!initializing) {
     initializing = initializeDevice().finally(() => {
       initializing = null;
@@ -81,12 +103,34 @@ export async function initVoiceDevice() {
   return initializing;
 }
 
-export async function initializeVoice() {
-  return initVoiceDevice();
+function assertAuthenticatedSession() {
+  if (!session.isAuthenticated) {
+    throw new Error("NOT_AUTHENTICATED");
+  }
 }
 
-export async function getVoiceDevice() {
-  return initVoiceDevice();
+async function startCall(to: string) {
+  assertAuthenticatedSession();
+
+  const currentDevice = await initVoiceDevice();
+  if (!device || (device as Device & { state?: string }).state !== "registered") {
+    throw new Error("DEVICE_NOT_READY");
+  }
+
+  const call = await currentDevice.connect({ params: { to } });
+  setActiveCall(call);
+  setCallStatus("connecting");
+  return call;
+}
+
+export async function startDialerSession(to?: string) {
+  await initVoiceDevice();
+
+  if (to) {
+    return startCall(to);
+  }
+
+  return getDevice();
 }
 
 export function getDevice() {
@@ -97,6 +141,7 @@ export function __resetVoiceDeviceForTests() {
   device = null;
   deviceReady = false;
   initializing = null;
+  session = { isAuthenticated: false };
   setDevice(null);
   setIncomingCall(null);
   setActiveCall(null);
@@ -104,16 +149,12 @@ export function __resetVoiceDeviceForTests() {
   setNetworkBanner(null);
 }
 
-export async function startCall(to: string) {
-  const currentDevice = await initVoiceDevice();
-  if (!device || (device as Device & { state?: string }).state !== "registered") {
-    throw new Error("Device not ready");
-  }
+export function __setSessionForTests(nextSession: { isAuthenticated: boolean; token?: string }) {
+  session = nextSession;
+}
 
-  const call = await currentDevice.connect({ params: { to } });
-  setActiveCall(call);
-  setCallStatus("connecting");
-  return call;
+export function __getSessionForTests() {
+  return session;
 }
 
 export function answerIncomingCall() {

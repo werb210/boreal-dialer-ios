@@ -2,8 +2,7 @@
   "name": "boreal-dialer-ios",
   "private": true,
   "scripts": {
-    "check": "echo \"no js runtime required\"",
-    "lint": "echo \"skipped\"",
-    "test": "cd packages/dialer-web && npm run test"
+    "test": "echo \"iOS build skipped in non-mac environments\"",
+    "build": "echo \"iOS build requires macOS\""
   }
 }

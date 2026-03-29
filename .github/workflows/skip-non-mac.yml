@@ -1,0 +1,13 @@
+name: ios-skip
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  skip:
+    runs-on: ubuntu-latest
+
+    steps:
+      - run: echo "iOS build skipped (requires macOS runner)"

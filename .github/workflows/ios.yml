@@ -1,0 +1,22 @@
+name: ios-build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Ruby + CocoaPods
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+
+      - run: sudo gem install cocoapods
+
+      - run: ./scripts/ci-safe.sh

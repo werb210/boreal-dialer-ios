@@ -1,9 +1,16 @@
 name: iOS CI
-on: [push]
+on:
+  push:
+    branches: [main]
 
 jobs:
   validate:
     runs-on: macos-latest
+
     steps:
       - uses: actions/checkout@v4
-      - run: echo "Skipping iOS build in CI"
+
+      - name: Validate repository
+        run: |
+          echo "Skipping iOS build - no valid Xcode scheme configured"
+          ls -la

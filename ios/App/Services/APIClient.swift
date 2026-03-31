@@ -49,6 +49,7 @@ struct APIClient {
 
         guard (200...299).contains(http.statusCode) else {
             let bodyText = String(data: data, encoding: .utf8) ?? ""
+            print("HTTP ERROR:", http.statusCode, bodyText)
             throw APIClientError.httpError(statusCode: http.statusCode, body: bodyText)
         }
 

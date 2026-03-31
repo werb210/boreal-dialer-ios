@@ -1,6 +1,5 @@
 import AVFAudio
 import Foundation
-import TwilioVoice
 
 enum CallState: Equatable {
     case idle
@@ -24,36 +23,35 @@ final class CallManager: NSObject {
     var onStateChange: ((CallState) -> Void)?
     var onCallStart: (() -> Void)?
     var onCallEnd: (() -> Void)?
-    var onAudioFrame: ((Data) -> Void)?
-    var onTranscript: ((String) -> Void)?
 
-    private var accessToken: String?
-    private var identity: String?
-    private var activeCall: Call?
-    private var device: Device?
     private let audioSessionManager = AudioSessionManager()
+    private var currentCallID: String?
 
     func initialize(completion: @escaping (Result<Void, Error>) -> Void) {
-        TokenService.shared.fetchToken { result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success(let tokenData):
-                    self.accessToken = tokenData.token
-                    self.identity = tokenData.identity
-                    self.registerDevice(token: tokenData.token)
+        if Environment.authToken.isEmpty {
+            let error = NSError(domain: "missing_auth_token", code: 0, userInfo: [NSLocalizedDescriptionKey: "Missing AUTH_TOKEN environment variable"])
+            callState = .failed(error.localizedDescription)
+            completion(.failure(error))
+            return
+        }
+
+        wireVoiceCallbacks()
+
+        Task {
+            do {
+                let token = try await DialerService.shared.fetchToken(authToken: Environment.authToken)
+                VoiceManager.shared.configure(with: token)
+                await MainActor.run {
                     self.callState = .idle
                     completion(.success(()))
-                case .failure(let error):
+                }
+            } catch {
+                await MainActor.run {
                     self.callState = .failed(error.localizedDescription)
                     completion(.failure(error))
                 }
             }
         }
-    }
-
-    private func registerDevice(token: String) {
-        let options = Device.Options(accessToken: token)
-        device = Device(options: options, delegate: self)
     }
 
     func startCall(to number: String) {
@@ -62,104 +60,88 @@ final class CallManager: NSObject {
             return
         }
 
-        guard let token = accessToken else {
-            callState = .failed("No token available. Initialize CallManager first.")
-            return
-        }
-
         do {
             try audioSessionManager.configureForVoiceChatIfNeeded()
         } catch {
             callState = .failed("Audio session configuration failed: \(error.localizedDescription)")
-            logCallFailure(reason: "Audio session configuration failed")
             return
         }
 
         callState = .connecting
-        logCallStart(number: number)
 
-        let connectOptions = ConnectOptions(accessToken: token) { builder in
-            builder.params = ["To": number]
-        }
+        Task {
+            do {
+                let callID = try await DialerService.shared.startCall(to: number, authToken: Environment.authToken)
+                currentCallID = callID
 
-        activeCall = TwilioVoiceSDK.connect(options: connectOptions, delegate: self)
-
-        if activeCall == nil {
-            callState = .failed("Twilio failed to create a call session")
-            logCallFailure(reason: "Twilio connect returned nil call")
+                let didStart = VoiceManager.shared.connectCall(to: number)
+                if !didStart {
+                    throw NSError(domain: "voice_connect_failed", code: 0, userInfo: [NSLocalizedDescriptionKey: "Twilio failed to create a call session"])
+                }
+            } catch {
+                await MainActor.run {
+                    self.callState = .failed(error.localizedDescription)
+                    self.audioSessionManager.deactivateSessionIfNeeded()
+                }
+            }
         }
     }
 
     func hangup() {
-        activeCall?.disconnect()
-        activeCall = nil
+        VoiceManager.shared.disconnect()
         callState = .ended
-        logCallEnd()
         onCallEnd?()
         audioSessionManager.deactivateSessionIfNeeded()
+        reportTerminalStatus(status: "completed")
     }
 
-    private func logCallStart(number: String) {
-        print("[CallManager] call_start to=\(number)")
-        // TODO: Forward to BF-Server call logging endpoint when available.
-    }
-
-    private func logCallEnd() {
-        print("[CallManager] call_end")
-        // TODO: Forward to BF-Server call logging endpoint when available.
-    }
-
-    private func logCallFailure(reason: String) {
-        print("[CallManager] call_failure reason=\(reason)")
-        // TODO: Forward to BF-Server call logging endpoint when available.
-    }
-}
-
-extension CallManager: DeviceDelegate {
-    func deviceDidStartListeningForIncomingCalls(_ device: Device) {
-        print("Device ready")
-    }
-
-    func device(_ device: Device, didFailToListenWithError error: Error) {
-        callState = .failed("Device listen failed: \(error.localizedDescription)")
-        logCallFailure(reason: "Device listen failed: \(error.localizedDescription)")
-    }
-
-    func device(_ device: Device, didReceiveIncomingCall callInvite: CallInvite) {
-        callState = .ringing
-        activeCall = callInvite.accept(with: self)
-    }
-}
-
-extension CallManager: CallDelegate {
-    func callDidStartRinging(_ call: Call) {
-        callState = .ringing
-    }
-
-    func callDidConnect(_ call: Call) {
-        callState = .connected
-        onCallStart?()
-    }
-
-    func callDidFailToConnect(_ call: Call, error: Error) {
-        callState = .failed("Failed to connect: \(error.localizedDescription)")
-        logCallFailure(reason: "Failed to connect: \(error.localizedDescription)")
-        activeCall = nil
-        audioSessionManager.deactivateSessionIfNeeded()
-    }
-
-    func callDidDisconnect(_ call: Call, error: Error?) {
-        if let error {
-            callState = .failed("Call disconnected with error: \(error.localizedDescription)")
-            logCallFailure(reason: "Disconnected with error: \(error.localizedDescription)")
-        } else {
-            callState = .ended
-            logCallEnd()
+    private func wireVoiceCallbacks() {
+        VoiceManager.shared.onIncomingCall = { [weak self] in
+            self?.callState = .ringing
         }
 
-        activeCall = nil
-        onCallEnd?()
-        audioSessionManager.deactivateSessionIfNeeded()
+        VoiceManager.shared.onCallRinging = { [weak self] in
+            self?.callState = .ringing
+        }
+
+        VoiceManager.shared.onCallConnected = { [weak self] in
+            self?.callState = .connected
+            self?.onCallStart?()
+        }
+
+        VoiceManager.shared.onCallConnectFailed = { [weak self] error in
+            self?.callState = .failed("Failed to connect: \(error.localizedDescription)")
+            self?.audioSessionManager.deactivateSessionIfNeeded()
+            self?.reportTerminalStatus(status: "failed")
+        }
+
+        VoiceManager.shared.onCallDisconnected = { [weak self] error in
+            guard let self else { return }
+            if let error {
+                self.callState = .failed("Call disconnected with error: \(error.localizedDescription)")
+                self.reportTerminalStatus(status: "failed")
+            } else {
+                self.callState = .ended
+                self.reportTerminalStatus(status: "completed")
+            }
+
+            self.onCallEnd?()
+            self.audioSessionManager.deactivateSessionIfNeeded()
+        }
+
+        VoiceManager.shared.onDeviceError = { [weak self] error in
+            self?.callState = .failed("Device listen failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func reportTerminalStatus(status: String) {
+        guard let callID = currentCallID else { return }
+
+        Task {
+            try? await DialerService.shared.sendCallStatus(status: status, callId: callID, authToken: Environment.authToken)
+        }
+
+        currentCallID = nil
     }
 }
 

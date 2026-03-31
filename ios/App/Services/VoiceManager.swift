@@ -23,7 +23,11 @@ final class VoiceManager: NSObject {
 
     @discardableResult
     func connectCall(to: String) -> Bool {
-        guard let token = accessToken else { return false }
+        guard let dialerToken = DialerService.shared.accessToken, !dialerToken.isEmpty else {
+            fatalError("Missing dialer token")
+        }
+        accessToken = dialerToken
+        let token = dialerToken
 
         let connectOptions = ConnectOptions(accessToken: token) { builder in
             builder.params = ["To": to]

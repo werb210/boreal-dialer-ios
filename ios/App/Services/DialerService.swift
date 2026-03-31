@@ -1,10 +1,5 @@
 import Foundation
 
-struct VoiceTokenResponse: Decodable {
-    let token: String
-    let identity: String
-}
-
 struct StartCallResponse: Decodable {
     struct CallPayload: Decodable {
         let id: String
@@ -21,26 +16,40 @@ final class DialerService {
     private init() {}
 
     func fetchToken(authToken: String) async throws -> String {
+        guard !authToken.isEmpty else {
+            throw APIClientError.httpError(statusCode: 401, body: "Missing auth token")
+        }
+
         let data = try await APIClient.request(
-            path: "api/voice/token",
-            method: "POST",
+            path: "dialer/token",
+            method: "GET",
             token: authToken
         )
 
-        let decoded = try JSONDecoder().decode(VoiceTokenResponse.self, from: data)
-        accessToken = decoded.token
-        identity = decoded.identity
-        return decoded.token
+        guard
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let token = json["token"] as? String,
+            !token.isEmpty
+        else {
+            throw APIClientError.invalidResponse
+        }
+
+        accessToken = token
+        identity = json["identity"] as? String
+        return token
     }
 
     func startCall(to: String, authToken: String) async throws -> String {
+        guard !authToken.isEmpty else {
+            throw APIClientError.httpError(statusCode: 401, body: "Missing auth token")
+        }
+
         let requestBody: [String: Any] = [
-            "to": to,
-            "applicationId": UUID().uuidString,
+            "to": to
         ]
 
         let data = try await APIClient.request(
-            path: "api/voice/calls/start",
+            path: "call/start",
             method: "POST",
             body: requestBody,
             token: authToken
@@ -51,14 +60,30 @@ final class DialerService {
     }
 
     func sendCallStatus(status: String, callId: String, authToken: String) async throws {
-        let normalizedStatus = status.lowercased()
-        if ["completed", "failed", "missed"].contains(normalizedStatus) {
-            _ = try await APIClient.request(
-                path: "api/voice/calls/end",
-                method: "POST",
-                body: ["id": callId],
-                token: authToken
-            )
+        guard !authToken.isEmpty else {
+            throw APIClientError.httpError(statusCode: 401, body: "Missing auth token")
         }
+
+        let normalizedStatus = status.lowercased()
+        let alignedStatus: String
+        switch normalizedStatus {
+        case "initiated":
+            alignedStatus = "initiated"
+        case "ringing":
+            alignedStatus = "ringing"
+        case "in-progress", "inprogress", "connected":
+            alignedStatus = "in-progress"
+        case "completed":
+            alignedStatus = "completed"
+        default:
+            alignedStatus = "failed"
+        }
+
+        _ = try await APIClient.request(
+            path: "voice/status",
+            method: "POST",
+            body: ["id": callId, "status": alignedStatus],
+            token: authToken
+        )
     }
 }

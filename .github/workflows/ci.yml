@@ -1,15 +1,9 @@
 name: CI
-
-on:
-  push:
-    branches: [main]
+on: [push]
 
 jobs:
-  basic-check:
-    runs-on: ubuntu-latest
+  validate:
+    runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Repo sanity check
-        run: |
-          echo "Repo OK"
+      - uses: actions/checkout@v4
+      - run: echo "iOS project - no build required"

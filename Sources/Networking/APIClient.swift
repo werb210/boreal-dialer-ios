@@ -1,5 +1,11 @@
 import Foundation
 
+enum APIError: Error {
+    case invalidResponse
+    case unauthorized
+    case notAuthenticated
+}
+
 final class APIClient {
 
     static let shared = APIClient()
@@ -7,11 +13,6 @@ final class APIClient {
     private let session = URLSession.shared
 
     private init() {}
-
-    private var token: String? {
-        KeychainService.shared.load("accessToken")
-            ?? TokenStorage.shared.getToken()
-    }
 
     func url(path: String) throws -> URL {
         guard let resolvedURL = URL(string: APIConfig.baseURL + normalized(path: path)) else {
@@ -28,15 +29,6 @@ final class APIClient {
         includeAuthToken: Bool = true,
         headers: [String: String] = [:]
     ) throws -> URLRequest {
-        if includeAuthToken {
-            return authorizedRequest(
-                endpoint: normalized(path: path),
-                method: method,
-                body: body,
-                headers: headers
-            )
-        }
-
         let url = try url(path: path)
         var request = URLRequest(url: url)
         request.httpMethod = method
@@ -48,30 +40,36 @@ final class APIClient {
         return request
     }
 
+    func authorizedRequest(_ urlRequest: URLRequest) -> URLRequest {
+        var request = urlRequest
+        let token = TokenStorage.shared.getTokenOrFail()
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        print("[AUTH HEADER ATTACHED]", token.prefix(12))
+        return request
+    }
+
     func authorizedRequest(
         endpoint: String,
         method: String = "GET",
         body: Data? = nil,
         headers: [String: String] = [:]
     ) -> URLRequest {
-
         let url = URL(string: "\(APIConfig.BASE_URL)\(endpoint)")!
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.httpBody = body
-
-        guard let token else {
-            fatalError("NO TOKEN — AUTH FLOW BROKEN")
-        }
-
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         for (key, value) in headers {
             request.setValue(value, forHTTPHeaderField: key)
         }
 
-        return request
+        return authorizedRequest(request)
+    }
+
+    func makeAuthorizedRequest(_ request: URLRequest) async throws -> Data {
+        let (data, _) = try await makeAuthorizedDataRequest(request)
+        return data
     }
 
     func perform(
@@ -89,24 +87,32 @@ final class APIClient {
             headers: headers
         )
 
+        if !includeAuthToken {
+            print("[REQUEST]", request.httpMethod ?? "", request.url?.absoluteString ?? "")
+            let (data, response) = try await session.data(for: request)
+            if let http = response as? HTTPURLResponse {
+                print("[RESPONSE STATUS]", http.statusCode)
+            }
+            return (data, response)
+        }
+
         return try await perform(request: request)
     }
 
     func perform(request: URLRequest) async throws -> (Data, URLResponse) {
+        print("[REQUEST]", request.httpMethod ?? "", request.url?.absoluteString ?? "")
+
         if requiresAuthorization(request: request) {
-            assert(
-                request.value(forHTTPHeaderField: "Authorization") != nil,
-                "AUTH HEADER MISSING"
-            )
+            guard TokenStorage.shared.getToken() != nil else {
+                throw APIError.notAuthenticated
+            }
+            return try await makeAuthorizedDataRequest(request)
         }
 
         do {
             let (data, response) = try await session.data(for: request)
             if let http = response as? HTTPURLResponse {
-                print("[STATUS]", http.statusCode)
-                if http.statusCode == 401 {
-                    print("[AUTH FAILED]")
-                }
+                print("[RESPONSE STATUS]", http.statusCode)
             }
             return (data, response)
         } catch {
@@ -133,6 +139,27 @@ final class APIClient {
 
     private func normalized(path: String) -> String {
         path.hasPrefix("/") ? path : "/\(path)"
+    }
+
+    private func makeAuthorizedDataRequest(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        let req = authorizedRequest(request)
+        print("[REQUEST]", req.httpMethod ?? "", req.url?.absoluteString ?? "")
+
+        let (data, response) = try await URLSession.shared.data(for: req)
+
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        print("[RESPONSE STATUS]", http.statusCode)
+
+        if http.statusCode == 401 {
+            print("[401 ERROR] TOKEN NOT ACCEPTED")
+            TokenStorage.shared.clear()
+            throw APIError.unauthorized
+        }
+
+        return (data, response)
     }
 
     private func requiresAuthorization(request: URLRequest) -> Bool {

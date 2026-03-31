@@ -47,6 +47,11 @@ final class AuthService: ObservableObject {
 
         let tokens = try await OTPService.shared.verifyOTP(phone: phone, code: otp)
         let accessToken = tokens.accessToken
+        guard !accessToken.isEmpty else {
+            fatalError("TOKEN MISSING — SERVER CONTRACT INVALID")
+        }
+        TokenStorage.shared.save(token: accessToken)
+        print("[TOKEN SAVED]", accessToken.prefix(12))
 
         await MainActor.run {
             self.accessTokenExpiry = self.decodeExpiry(from: accessToken)
@@ -214,31 +219,7 @@ final class AuthService: ObservableObject {
 
 
     func performAuthorizedRequest(_ request: URLRequest) async throws -> Data {
-
-        var authorizedRequest = request
-        let accessToken = try await getValidAccessToken()
-        authorizedRequest.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-
-        let (data, response) = try await APIClient.shared.perform(request: authorizedRequest)
-
-        if let http = response as? HTTPURLResponse,
-           http.statusCode == 401 {
-
-            let refreshedToken = try await refreshToken()
-
-            authorizedRequest.setValue("Bearer \(refreshedToken)", forHTTPHeaderField: "Authorization")
-
-            let (retryData, retryResponse) = try await APIClient.shared.perform(request: authorizedRequest)
-
-            if let retryHTTP = retryResponse as? HTTPURLResponse,
-               retryHTTP.statusCode == 401 {
-                throw URLError(.userAuthenticationRequired)
-            }
-
-            return retryData
-        }
-
-        return data
+        try await APIClient.shared.makeAuthorizedRequest(request)
     }
 
     func logout() {

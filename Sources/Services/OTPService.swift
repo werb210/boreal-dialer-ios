@@ -47,8 +47,13 @@ final class OTPService {
         }
 
         let decoded = try JSONDecoder().decode(AuthResponse.self, from: data)
+        guard !decoded.token.isEmpty else {
+            fatalError("TOKEN MISSING — SERVER CONTRACT INVALID")
+        }
+
         KeychainService.shared.save(decoded.token, for: "accessToken")
-        TokenStorage.shared.setToken(decoded.token)
+        TokenStorage.shared.save(token: decoded.token)
+        print("[TOKEN SAVED]", decoded.token.prefix(12))
 
         if let refreshToken = decoded.refreshToken {
             KeychainService.shared.save(refreshToken, for: "refreshToken")

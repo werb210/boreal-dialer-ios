@@ -6,37 +6,11 @@ final class AuthService: ObservableObject {
     static let shared = AuthService()
 
     @Published var isAuthenticated = false
-    @Published var accessTokenExpiry: Date?
-
-    private var refreshTask: Task<Void, Never>?
 
     private init() {
-        if let accessToken = KeychainService.shared.load("accessToken") {
+        if TokenStorage.shared.getToken() != nil {
             isAuthenticated = true
-            accessTokenExpiry = decodeExpiry(from: accessToken)
-            scheduleRefresh()
         }
-    }
-
-    private func decodeExpiry(from token: String) -> Date? {
-        let segments = token.split(separator: ".")
-        guard segments.count > 1 else { return nil }
-
-        var base64 = String(segments[1])
-            .replacingOccurrences(of: "-", with: "+")
-            .replacingOccurrences(of: "_", with: "/")
-
-        while base64.count % 4 != 0 {
-            base64.append("=")
-        }
-
-        guard let data = Data(base64Encoded: base64),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let exp = json["exp"] as? TimeInterval else {
-            return nil
-        }
-
-        return Date(timeIntervalSince1970: exp)
     }
 
     func startOTP(phone: String) async throws -> Bool {
@@ -44,27 +18,33 @@ final class AuthService: ObservableObject {
     }
 
     func login(phone: String, otp: String) async throws {
-
-        let tokens = try await OTPService.shared.verifyOTP(phone: phone, code: otp)
-        let accessToken = tokens.accessToken
-        guard !accessToken.isEmpty else {
-            fatalError("TOKEN MISSING — SERVER CONTRACT INVALID")
-        }
-        TokenStorage.shared.save(token: accessToken)
-        print("[TOKEN SAVED]", accessToken.prefix(12))
+        let data = try await OTPService.shared.verifyOTP(phone: phone, code: otp)
+        let token = try handleAuthResponse(data)
 
         await MainActor.run {
-            self.accessTokenExpiry = self.decodeExpiry(from: accessToken)
             self.isAuthenticated = true
-            self.scheduleRefresh()
         }
 
-        if shouldInitializeVoice(from: accessToken) {
+        if shouldInitializeVoice(from: token) {
             PushManager.shared.register()
             Task {
                 await VoiceManager.shared.initialize()
             }
         }
+    }
+
+    @discardableResult
+    func handleAuthResponse(_ data: Data) throws -> String {
+        let response = try JSONDecoder().decode(AuthResponse.self, from: data)
+
+        guard !response.token.trimmingCharacters(in: .whitespaces).isEmpty else {
+            throw APIError.invalidToken
+        }
+
+        TokenStorage.shared.save(token: response.token)
+
+        print("[TOKEN SAVED]", response.token.prefix(12))
+        return response.token
     }
 
     private func shouldInitializeVoice(from token: String) -> Bool {
@@ -97,137 +77,13 @@ final class AuthService: ObservableObject {
         return value
     }
 
-    func getValidAccessToken() async throws -> String {
-
-        if let token = KeychainService.shared.load("accessToken") {
-            return token
-        }
-
-        return try await refreshToken()
-    }
-
-    func refreshToken() async throws -> String {
-
-        do {
-            guard let currentRefreshToken = KeychainService.shared.load("refreshToken") else {
-                throw URLError(.userAuthenticationRequired)
-            }
-
-            let silo = await MainActor.run { VoiceEngine.shared.silo.rawValue }
-            let body = try JSONEncoder().encode([
-                "refreshToken": currentRefreshToken
-            ])
-
-            let request = try APIClient.shared.makeRequest(
-                path: "/api/auth/refresh",
-                method: "POST",
-                body: body,
-                includeAuthToken: false,
-                headers: ["X-Silo": silo]
-            )
-
-            let (data, response) = try await APIClient.shared.perform(request: request)
-
-            if let httpResponse = response as? HTTPURLResponse,
-               !(200...299).contains(httpResponse.statusCode) {
-                throw URLError(.userAuthenticationRequired)
-            }
-
-            let decoded = try JSONDecoder().decode(AuthResponse.self, from: data)
-
-            KeychainService.shared.save(decoded.token, for: "accessToken")
-            TokenStorage.shared.setToken(decoded.token)
-
-            if let refreshToken = decoded.refreshToken {
-                KeychainService.shared.save(refreshToken, for: "refreshToken")
-            }
-
-            await MainActor.run {
-                self.accessTokenExpiry = self.decodeExpiry(from: decoded.token)
-                self.scheduleRefresh()
-            }
-
-            await MainActor.run {
-                PushManager.shared.registerDeviceTokenWithTwilio()
-            }
-
-            return decoded.token
-        } catch {
-            await MainActor.run {
-                self.logout()
-            }
-            throw error
-        }
-    }
-
-    func refreshTokenIfNeededOnResume() async {
-        guard let expiry = await MainActor.run(body: { self.accessTokenExpiry }) else {
-            return
-        }
-
-        guard expiry < Date() else { return }
-
-        do {
-            _ = try await refreshToken()
-        } catch {
-            await MainActor.run {
-                self.logout()
-            }
-        }
-    }
-
-    @MainActor
-    func scheduleRefresh() {
-        refreshTask?.cancel()
-
-        guard let expiry = accessTokenExpiry else { return }
-
-        let refreshTime = expiry.addingTimeInterval(-60)
-        let delay = refreshTime.timeIntervalSinceNow
-
-        guard delay > 0 else {
-            refreshTask = Task {
-                do {
-                    _ = try await self.refreshToken()
-                } catch {
-                    await MainActor.run {
-                        self.logout()
-                    }
-                }
-            }
-            return
-        }
-
-        refreshTask = Task {
-            do {
-                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-            } catch {
-                return
-            }
-
-            guard !Task.isCancelled else { return }
-
-            do {
-                _ = try await self.refreshToken()
-            } catch {
-                await MainActor.run {
-                    self.logout()
-                }
-            }
-        }
-    }
-
 
     func performAuthorizedRequest(_ request: URLRequest) async throws -> Data {
         try await APIClient.shared.makeAuthorizedRequest(request)
     }
 
     func logout() {
-        refreshTask?.cancel()
-        KeychainService.shared.delete("accessToken")
-        KeychainService.shared.delete("refreshToken")
         TokenStorage.shared.clear()
-        accessTokenExpiry = nil
         isAuthenticated = false
     }
 }

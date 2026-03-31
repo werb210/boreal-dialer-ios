@@ -3,7 +3,7 @@ import Foundation
 enum API {
 
     static func getTwilioToken(line: VoiceEngine.Line) async throws -> String {
-        let requestURL = try APIClient.shared.url(path: "/api/voice/token")
+        let requestURL = try APIClient.shared.url(path: "/voice/token")
 
         var request = URLRequest(url: requestURL)
         request.httpMethod = "POST"
@@ -24,15 +24,12 @@ enum API {
 
     static func registerVoIPToken(_ token: String) async {
         do {
-            let requestURL = try APIClient.shared.url(path: "/api/voice/device-token")
+            let requestURL = try APIClient.shared.url(path: "/voice/device-token")
 
             var request = URLRequest(url: requestURL)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.setValue(await currentSiloHeader(), forHTTPHeaderField: "X-Silo")
-
-            let accessToken = try await AuthService.shared.getValidAccessToken()
-            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
 
             let body = [
                 "deviceToken": token,
@@ -50,15 +47,15 @@ enum API {
 
 
     static func answerCall(uuid: String) async throws {
-        try await updateCallState(path: "api/voice/calls/answer", id: uuid)
+        try await updateCallState(path: "/voice/calls/answer", id: uuid)
     }
 
     static func endCall(uuid: String) async throws {
-        try await updateCallState(path: "api/voice/calls/end", id: uuid)
+        try await updateCallState(path: "/voice/calls/end", id: uuid)
     }
 
     static func sendSMS(_ payload: SendSMSPayload) async throws {
-        let requestURL = try APIClient.shared.url(path: "/api/sms/send")
+        let requestURL = try APIClient.shared.url(path: "/sms/send")
 
         var request = URLRequest(url: requestURL)
         request.httpMethod = "POST"
@@ -71,11 +68,11 @@ enum API {
 
 
     static func startRecording(callSid: String) async throws {
-        try await recordingAction(path: "api/voice/record/start", callSid: callSid)
+        try await recordingAction(path: "/voice/record/start", callSid: callSid)
     }
 
     static func stopRecording(callSid: String) async throws {
-        try await recordingAction(path: "api/voice/record/stop", callSid: callSid)
+        try await recordingAction(path: "/voice/record/stop", callSid: callSid)
     }
 
     static func getActiveCalls() async throws -> [RemoteCallStatus] {
@@ -83,7 +80,7 @@ enum API {
     }
 
     static func logCall(duration: Int, status: String) async throws {
-        let requestURL = try APIClient.shared.url(path: "/api/voice/calls/log")
+        let requestURL = try APIClient.shared.url(path: "/voice/calls/log")
 
         var request = URLRequest(url: requestURL)
         request.httpMethod = "POST"

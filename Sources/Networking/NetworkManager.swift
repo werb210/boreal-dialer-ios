@@ -6,15 +6,11 @@ final class NetworkManager {
     private init() {}
 
     func url(for path: String) async throws -> URL {
-        guard let requestURL = APIClient.shared.url(path: path) else {
-            throw URLError(.badURL)
-        }
-
-        return requestURL
+        try APIClient.shared.url(path: path)
     }
 
     func fetchActiveCalls() async throws -> [RemoteCallStatus] {
-        let url = try await url(for: "api/voice/calls/active")
+        let url = try await url(for: "/voice/calls/active")
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         let silo = await MainActor.run { VoiceEngine.shared.silo.rawValue }

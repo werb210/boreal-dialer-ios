@@ -3,16 +3,12 @@ import Foundation
 final class TokenStorage {
     static let shared = TokenStorage()
 
-    private let key = "auth_token"
+    private let key = "token"
 
     private init() {}
 
-    func setToken(_ token: String) {
-        UserDefaults.standard.set(token, forKey: key)
-    }
-
     func save(token: String) {
-        setToken(token)
+        UserDefaults.standard.set(token, forKey: key)
     }
 
     func getToken() -> String? {
@@ -20,9 +16,11 @@ final class TokenStorage {
     }
 
     func getTokenOrFail() -> String {
-        guard let token = getToken(), !token.isEmpty else {
-            fatalError("NO TOKEN — REQUEST SHOULD NOT EXECUTE")
+        guard let token = UserDefaults.standard.string(forKey: key),
+              !token.isEmpty else {
+            fatalError("TOKEN MISSING AT REQUEST TIME")
         }
+
         return token
     }
 

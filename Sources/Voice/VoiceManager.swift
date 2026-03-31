@@ -120,7 +120,7 @@ final class VoiceManager: NSObject, ObservableObject {
 
     private func fetchToken() async -> String? {
         do {
-            let requestURL = try APIClient.shared.url(path: "/api/voice/token")
+            let requestURL = try APIClient.shared.url(path: "/voice/token")
 
             var request = URLRequest(url: requestURL)
             request.httpMethod = "POST"
@@ -288,7 +288,7 @@ final class VoiceManager: NSObject, ObservableObject {
     func sendPresence(status: String) {
         Task {
             do {
-                let requestURL = try APIClient.shared.url(path: "/api/voice/presence")
+                let requestURL = try APIClient.shared.url(path: "/voice/presence")
 
                 var request = URLRequest(url: requestURL)
                 request.httpMethod = "POST"
@@ -353,7 +353,7 @@ extension VoiceManager: CallDelegate {
     private func notifyServerStatus(status: String) {
         Task {
             do {
-                let requestURL = try APIClient.shared.url(path: "/api/voice/status")
+                let requestURL = try APIClient.shared.url(path: "/voice/status")
 
                 var request = URLRequest(url: requestURL)
                 request.httpMethod = "POST"

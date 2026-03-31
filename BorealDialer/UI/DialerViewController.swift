@@ -3,15 +3,24 @@ import UIKit
 final class DialerViewController: UIViewController {
 
     private let phoneField = UITextField()
+    private let stateLabel = UILabel()
     private let callButton = UIButton(type: .system)
     private let hangupButton = UIButton(type: .system)
 
+    static func embeddedInNavigationController() -> UINavigationController {
+        UINavigationController(rootViewController: DialerViewController())
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
+        title = "Dialer"
         view.backgroundColor = .white
 
         phoneField.placeholder = "Enter phone"
         phoneField.borderStyle = .roundedRect
+
+        stateLabel.text = "Idle"
+        stateLabel.textAlignment = .center
 
         callButton.setTitle("Call", for: .normal)
         hangupButton.setTitle("Hangup", for: .normal)
@@ -19,7 +28,7 @@ final class DialerViewController: UIViewController {
         callButton.addTarget(self, action: #selector(callTapped), for: .touchUpInside)
         hangupButton.addTarget(self, action: #selector(hangupTapped), for: .touchUpInside)
 
-        let stack = UIStackView(arrangedSubviews: [phoneField, callButton, hangupButton])
+        let stack = UIStackView(arrangedSubviews: [phoneField, stateLabel, callButton, hangupButton])
         stack.axis = .vertical
         stack.spacing = 12
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -28,20 +37,53 @@ final class DialerViewController: UIViewController {
         NSLayoutConstraint.activate([
             stack.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             stack.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            stack.widthAnchor.constraint(equalToConstant: 250),
+            stack.widthAnchor.constraint(equalToConstant: 280),
         ])
 
-        CallManager.shared.initialize { success in
-            print("Init:", success)
+        CallManager.shared.onStateChange = { [weak self] state in
+            DispatchQueue.main.async {
+                self?.render(state: state)
+            }
+        }
+
+        CallManager.shared.initialize { [weak self] result in
+            guard let self else { return }
+            if case .failure(let error) = result {
+                self.render(state: .failed(error.localizedDescription))
+            }
         }
     }
 
     @objc private func callTapped() {
-        guard let number = phoneField.text, !number.isEmpty else { return }
+        guard let number = phoneField.text, !number.isEmpty else {
+            render(state: .failed("Please enter a destination number"))
+            return
+        }
+
         CallManager.shared.startCall(to: number)
     }
 
     @objc private func hangupTapped() {
         CallManager.shared.hangup()
+    }
+
+    private func render(state: CallState) {
+        switch state {
+        case .idle:
+            stateLabel.text = "Idle"
+        case .connecting:
+            stateLabel.text = "Connecting…"
+        case .ringing:
+            stateLabel.text = "Ringing…"
+        case .connected:
+            stateLabel.text = "Connected"
+        case .ended:
+            stateLabel.text = "Ended"
+        case .failed(let message):
+            stateLabel.text = "Failed: \(message)"
+        }
+
+        callButton.isEnabled = state != .connecting && state != .connected
+        hangupButton.isEnabled = state == .connecting || state == .ringing || state == .connected
     }
 }

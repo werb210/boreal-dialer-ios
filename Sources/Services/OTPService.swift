@@ -46,24 +46,14 @@ final class OTPService {
             throw URLError(.badServerResponse)
         }
 
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw URLError(.cannotParseResponse)
-        }
+        let decoded = try JSONDecoder().decode(AuthResponse.self, from: data)
+        KeychainService.shared.save(decoded.token, for: "accessToken")
+        TokenStorage.shared.setToken(decoded.token)
 
-        let accessToken = (json["accessToken"] as? String) ?? (json["token"] as? String)
-        let refreshToken = json["refreshToken"] as? String
-
-        guard let accessToken else {
-            throw URLError(.userAuthenticationRequired)
-        }
-
-        KeychainService.shared.save(accessToken, for: "accessToken")
-        UserDefaults.standard.set(accessToken, forKey: "auth_token")
-
-        if let refreshToken {
+        if let refreshToken = decoded.refreshToken {
             KeychainService.shared.save(refreshToken, for: "refreshToken")
         }
 
-        return OTPTokens(accessToken: accessToken, refreshToken: refreshToken)
+        return OTPTokens(accessToken: decoded.token, refreshToken: decoded.refreshToken)
     }
 }

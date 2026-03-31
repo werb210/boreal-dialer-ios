@@ -130,11 +130,15 @@ final class AuthService: ObservableObject {
 
             let decoded = try JSONDecoder().decode(AuthResponse.self, from: data)
 
-            KeychainService.shared.save(decoded.accessToken, for: "accessToken")
-            KeychainService.shared.save(decoded.refreshToken, for: "refreshToken")
+            KeychainService.shared.save(decoded.token, for: "accessToken")
+            TokenStorage.shared.setToken(decoded.token)
+
+            if let refreshToken = decoded.refreshToken {
+                KeychainService.shared.save(refreshToken, for: "refreshToken")
+            }
 
             await MainActor.run {
-                self.accessTokenExpiry = self.decodeExpiry(from: decoded.accessToken)
+                self.accessTokenExpiry = self.decodeExpiry(from: decoded.token)
                 self.scheduleRefresh()
             }
 
@@ -142,7 +146,7 @@ final class AuthService: ObservableObject {
                 PushManager.shared.registerDeviceTokenWithTwilio()
             }
 
-            return decoded.accessToken
+            return decoded.token
         } catch {
             await MainActor.run {
                 self.logout()
@@ -241,6 +245,7 @@ final class AuthService: ObservableObject {
         refreshTask?.cancel()
         KeychainService.shared.delete("accessToken")
         KeychainService.shared.delete("refreshToken")
+        TokenStorage.shared.clear()
         accessTokenExpiry = nil
         isAuthenticated = false
     }

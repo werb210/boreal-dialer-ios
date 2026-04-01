@@ -171,7 +171,7 @@ final class DialerService {
                 try await APIClient.request(
                     path: "voice/status",
                     method: "POST",
-                    body: ["id": callId, "status": alignedStatus],
+                    body: ["callId": callId, "status": alignedStatus],
                     token: authToken
                 )
             }
@@ -217,12 +217,42 @@ final class DialerService {
         throw APIClientError.invalidResponse
     }
 
-    func debugPingServer() async {
-        _ = try? await APIClient.request(
-            path: "dialer/token",
-            method: "GET",
-            token: Environment.authToken
-        )
+    func debugValidateEndpoints() async {
+        let testEndpoints = [
+            "dialer/token",
+            "call/start",
+            "voice/status"
+        ]
+
+        for path in testEndpoints {
+            guard let baseURL = URL(string: Environment.serverURL) else { continue }
+            let url = baseURL.appendingPathComponent(path)
+            print("VALIDATING:", url.absoluteString)
+        }
+    }
+
+
+
+    private func retryWithBackoff<T>(
+        retries: Int = 3,
+        initialDelay: Double = 1.0,
+        task: @escaping () async throws -> T
+    ) async throws -> T {
+        var delay = initialDelay
+
+        for attempt in 0..<retries {
+            do {
+                return try await task()
+            } catch {
+                if attempt == retries - 1 {
+                    throw error
+                }
+                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                delay *= 2
+            }
+        }
+
+        throw APIClientError.invalidResponse
     }
 
     private func mapStatus(_ status: String) -> CallStatus {

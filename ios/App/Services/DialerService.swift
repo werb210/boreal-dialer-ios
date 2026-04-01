@@ -8,21 +8,70 @@ struct StartCallResponse: Decodable {
     let call: CallPayload
 }
 
+enum CallStatus: String {
+    case initiated
+    case ringing
+    case inProgress = "in-progress"
+    case completed
+    case failed
+}
+
 final class DialerService {
     static let shared = DialerService()
 
     private(set) var accessToken: String?
     private(set) var identity: String?
     private var isCalling = false
+    private var isFetchingToken = false
+    private var tokenWaiters: [CheckedContinuation<String, Error>] = []
+    private let callQueue = DispatchQueue(label: "dialer.call.lock")
+    private let tokenQueue = DispatchQueue(label: "dialer.token.lock")
     private init() {}
 
     func ensureValidToken(authToken: String) async throws {
-        if accessToken == nil {
-            _ = try await fetchToken(authToken: authToken)
+        if let token = currentToken(), !token.isEmpty {
+            return
         }
+        _ = try await fetchToken(authToken: authToken)
     }
 
     func fetchToken(authToken: String) async throws -> String {
+        if let token = currentToken(), !token.isEmpty {
+            return token
+        }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            var shouldStartFetch = false
+
+            tokenQueue.sync {
+                if let token = accessToken, !token.isEmpty {
+                    continuation.resume(returning: token)
+                    return
+                }
+
+                tokenWaiters.append(continuation)
+                if !isFetchingToken {
+                    isFetchingToken = true
+                    shouldStartFetch = true
+                }
+            }
+
+            guard shouldStartFetch else {
+                return
+            }
+
+            Task {
+                do {
+                    let token = try await self.fetchTokenFromServer(authToken: authToken)
+                    self.finishTokenFetch(result: .success(token))
+                } catch {
+                    self.finishTokenFetch(result: .failure(error))
+                }
+            }
+        }
+    }
+
+    private func fetchTokenFromServer(authToken: String) async throws -> String {
         guard !authToken.isEmpty else {
             throw APIClientError.httpError(statusCode: 401, body: "Missing auth token")
         }
@@ -47,17 +96,48 @@ final class DialerService {
         return token
     }
 
+    private func finishTokenFetch(result: Result<String, Error>) {
+        let waiters: [CheckedContinuation<String, Error>] = tokenQueue.sync {
+            isFetchingToken = false
+            let pending = tokenWaiters
+            tokenWaiters.removeAll()
+            return pending
+        }
+
+        waiters.forEach { waiter in
+            switch result {
+            case .success(let token):
+                waiter.resume(returning: token)
+            case .failure(let error):
+                waiter.resume(throwing: error)
+            }
+        }
+    }
+
+    private func currentToken() -> String? {
+        tokenQueue.sync { accessToken }
+    }
+
     func startCall(to: String, authToken: String) async throws -> String {
         guard !authToken.isEmpty else {
             throw APIClientError.httpError(statusCode: 401, body: "Missing auth token")
         }
 
-        if isCalling {
+        let canStartCall = callQueue.sync { () -> Bool in
+            guard !isCalling else { return false }
+            isCalling = true
+            return true
+        }
+
+        guard canStartCall else {
             print("Call blocked: already in progress")
             throw NSError(domain: "call_in_progress", code: 0)
         }
-        isCalling = true
-        defer { isCalling = false }
+        defer {
+            callQueue.sync {
+                isCalling = false
+            }
+        }
 
         try await ensureValidToken(authToken: authToken)
 
@@ -84,20 +164,7 @@ final class DialerService {
             throw APIClientError.httpError(statusCode: 401, body: "Missing auth token")
         }
 
-        let normalizedStatus = status.lowercased()
-        let alignedStatus: String
-        switch normalizedStatus {
-        case "initiated":
-            alignedStatus = "initiated"
-        case "ringing":
-            alignedStatus = "ringing"
-        case "in-progress", "inprogress", "connected":
-            alignedStatus = "in-progress"
-        case "completed":
-            alignedStatus = "completed"
-        default:
-            alignedStatus = "failed"
-        }
+        let alignedStatus = mapStatus(status).rawValue
 
         do {
             _ = try await requestWithAuthRetry(authToken: authToken) {
@@ -118,12 +185,58 @@ final class DialerService {
         authToken: String,
         request: () async throws -> Data
     ) async throws -> Data {
-        do {
-            return try await request()
-        } catch APIClientError.authExpired {
-            accessToken = nil
-            _ = try await fetchToken(authToken: authToken)
-            return try await request()
+        let maxAttempts = 4
+        var attempt = 0
+        var hasRefreshedAuth = false
+
+        while attempt < maxAttempts {
+            do {
+                return try await request()
+            } catch APIClientError.authExpired {
+                guard !hasRefreshedAuth else { throw APIClientError.authExpired }
+                hasRefreshedAuth = true
+                tokenQueue.sync { accessToken = nil }
+                _ = try await fetchToken(authToken: authToken)
+            } catch APIClientError.httpError(let statusCode, _) where (500...599).contains(statusCode) {
+                attempt += 1
+                guard attempt < maxAttempts else {
+                    throw APIClientError.httpError(statusCode: statusCode, body: "Server error after retries")
+                }
+                let delayNs = UInt64(pow(2.0, Double(attempt - 1)) * 500_000_000)
+                try await Task.sleep(nanoseconds: delayNs)
+            } catch let urlError as URLError where urlError.code == .timedOut {
+                attempt += 1
+                guard attempt < maxAttempts else { throw urlError }
+                let delayNs = UInt64(pow(2.0, Double(attempt - 1)) * 500_000_000)
+                try await Task.sleep(nanoseconds: delayNs)
+            } catch {
+                throw error
+            }
+        }
+
+        throw APIClientError.invalidResponse
+    }
+
+    func debugPingServer() async {
+        _ = try? await APIClient.request(
+            path: "dialer/token",
+            method: "GET",
+            token: Environment.authToken
+        )
+    }
+
+    private func mapStatus(_ status: String) -> CallStatus {
+        switch status.lowercased() {
+        case "initiated":
+            return .initiated
+        case "ringing":
+            return .ringing
+        case "in-progress", "inprogress", "connected":
+            return .inProgress
+        case "completed":
+            return .completed
+        default:
+            return .failed
         }
     }
 }

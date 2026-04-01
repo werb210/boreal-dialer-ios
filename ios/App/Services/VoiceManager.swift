@@ -32,6 +32,16 @@ final class VoiceManager: NSObject {
 
     @discardableResult
     func connectCall(to: String) -> Bool {
+        guard device != nil else {
+            print("Voice SDK not initialized")
+            return false
+        }
+
+        guard activeCall == nil else {
+            print("Already connected")
+            return false
+        }
+
         guard let dialerToken = DialerService.shared.accessToken, !dialerToken.isEmpty else {
             print("Dialer error: missing token")
             return false

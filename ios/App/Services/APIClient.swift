@@ -3,6 +3,7 @@ import Foundation
 enum APIClientError: LocalizedError {
     case invalidBaseURL
     case invalidResponse
+    case authExpired
     case httpError(statusCode: Int, body: String)
 
     var errorDescription: String? {
@@ -11,6 +12,8 @@ enum APIClientError: LocalizedError {
             return "Server URL is invalid."
         case .invalidResponse:
             return "Invalid HTTP response."
+        case .authExpired:
+            return "Authentication expired."
         case .httpError(let statusCode, let body):
             return "HTTP \(statusCode): \(body)"
         }
@@ -30,6 +33,7 @@ struct APIClient {
 
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.httpMethod = method
+        request.timeoutInterval = 10
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
@@ -49,6 +53,10 @@ struct APIClient {
 
         guard (200...299).contains(http.statusCode) else {
             let bodyText = String(data: data, encoding: .utf8) ?? ""
+            if http.statusCode == 401 {
+                print("Auth expired, refreshing token")
+                throw APIClientError.authExpired
+            }
             print("HTTP ERROR:", http.statusCode, bodyText)
             throw APIClientError.httpError(statusCode: http.statusCode, body: bodyText)
         }

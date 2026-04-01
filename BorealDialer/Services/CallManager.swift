@@ -39,7 +39,10 @@ final class CallManager: NSObject {
 
         Task {
             do {
-                let token = try await DialerService.shared.fetchToken(authToken: Environment.authToken)
+                try await DialerService.shared.ensureValidToken(authToken: Environment.authToken)
+                guard let token = DialerService.shared.accessToken else {
+                    throw NSError(domain: "missing_dialer_token", code: 0)
+                }
                 VoiceManager.shared.configure(with: token)
                 await MainActor.run {
                     self.callState = .idle
@@ -71,6 +74,12 @@ final class CallManager: NSObject {
 
         Task {
             do {
+                try await DialerService.shared.ensureValidToken(authToken: Environment.authToken)
+                guard let token = DialerService.shared.accessToken else {
+                    throw NSError(domain: "missing_dialer_token", code: 0)
+                }
+                VoiceManager.shared.configure(with: token)
+
                 let callID = try await DialerService.shared.startCall(to: number, authToken: Environment.authToken)
                 currentCallID = callID
 
@@ -107,6 +116,7 @@ final class CallManager: NSObject {
         VoiceManager.shared.onCallConnected = { [weak self] in
             self?.callState = .connected
             self?.onCallStart?()
+            print("[CallManager] call connected")
         }
 
         VoiceManager.shared.onCallConnectFailed = { [weak self] error in
@@ -124,6 +134,7 @@ final class CallManager: NSObject {
                 self.callState = .ended
                 self.reportTerminalStatus(status: "completed")
             }
+            print("[CallManager] call ended")
 
             self.onCallEnd?()
             self.audioSessionManager.deactivateSessionIfNeeded()
@@ -138,7 +149,11 @@ final class CallManager: NSObject {
         guard let callID = currentCallID else { return }
 
         Task {
-            try? await DialerService.shared.sendCallStatus(status: status, callId: callID, authToken: Environment.authToken)
+            do {
+                try await DialerService.shared.sendCallStatus(status: status, callId: callID, authToken: Environment.authToken)
+            } catch {
+                print("Failed to report call status:", error)
+            }
         }
 
         currentCallID = nil

@@ -15,6 +15,15 @@ final class VoiceManager: NSObject {
     private var device: Device?
     private var accessToken: String?
 
+    func configure(authToken: String) async throws {
+        try await DialerService.shared.ensureValidToken(authToken: authToken)
+        guard let token = DialerService.shared.accessToken else {
+            print("Dialer error: missing token")
+            return
+        }
+        configure(with: token)
+    }
+
     func configure(with token: String) {
         accessToken = token
         let options = Device.Options(accessToken: token)
@@ -24,7 +33,8 @@ final class VoiceManager: NSObject {
     @discardableResult
     func connectCall(to: String) -> Bool {
         guard let dialerToken = DialerService.shared.accessToken, !dialerToken.isEmpty else {
-            fatalError("Missing dialer token")
+            print("Dialer error: missing token")
+            return false
         }
         accessToken = dialerToken
         let token = dialerToken
@@ -34,6 +44,9 @@ final class VoiceManager: NSObject {
         }
 
         activeCall = TwilioVoiceSDK.connect(options: connectOptions, delegate: self)
+        if activeCall != nil {
+            print("[VoiceManager] call connected")
+        }
         return activeCall != nil
     }
 
@@ -74,6 +87,7 @@ extension VoiceManager: CallDelegate {
 
     func callDidDisconnect(_ call: Call, error: Error?) {
         activeCall = nil
+        print("[VoiceManager] call ended")
         onCallDisconnected?(error)
     }
 }

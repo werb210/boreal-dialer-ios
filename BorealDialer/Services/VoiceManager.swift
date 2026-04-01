@@ -23,13 +23,19 @@ final class VoiceManager: NSObject {
 
     @discardableResult
     func connectCall(to: String) -> Bool {
-        guard let token = accessToken else { return false }
+        guard let token = accessToken else {
+            print("Dialer error: missing token")
+            return false
+        }
 
         let connectOptions = ConnectOptions(accessToken: token) { builder in
             builder.params = ["To": to]
         }
 
         activeCall = TwilioVoiceSDK.connect(options: connectOptions, delegate: self)
+        if activeCall != nil {
+            print("[VoiceManager] call connected")
+        }
         return activeCall != nil
     }
 
@@ -70,6 +76,7 @@ extension VoiceManager: CallDelegate {
 
     func callDidDisconnect(_ call: Call, error: Error?) {
         activeCall = nil
+        print("[VoiceManager] call ended")
         onCallDisconnected?(error)
     }
 }

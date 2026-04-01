@@ -29,8 +29,8 @@ final class DialerService {
 
     func fetchToken(authToken: String) async throws -> String {
         let data = try await APIClient.request(
-            path: "api/voice/token",
-            method: "POST",
+            path: "dialer/token",
+            method: "GET",
             token: authToken
         )
 
@@ -59,12 +59,11 @@ final class DialerService {
 
         let requestBody: [String: Any] = [
             "to": to,
-            "applicationId": UUID().uuidString,
-        ]
+             ]
 
         let data = try await requestWithAuthRetry(authToken: authToken) {
             try await APIClient.request(
-                path: "api/voice/calls/start",
+                path: "call/start",
                 method: "POST",
                 body: requestBody,
                 token: authToken
@@ -81,21 +80,42 @@ final class DialerService {
 
     func sendCallStatus(status: String, callId: String, authToken: String) async throws {
         let normalizedStatus = status.lowercased()
-        if ["completed", "failed", "missed"].contains(normalizedStatus) {
+
+        do {
+            _ = try await requestWithAuthRetry(authToken: authToken) {
+                try await APIClient.request(
+                    path: "voice/status",
+                    method: "POST",
+                    body: ["callId": callId, "status": normalizedStatus],
+                    token: authToken
+                )
+            }
+            print("[DialerService] status sent")
+        } catch {
+            print("Failed to report call status:", error)
+        }
+    }
+
+    private func retryWithBackoff<T>(
+        retries: Int = 3,
+        initialDelay: Double = 1.0,
+        task: @escaping () async throws -> T
+    ) async throws -> T {
+        var delay = initialDelay
+
+        for attempt in 0..<retries {
             do {
-                _ = try await requestWithAuthRetry(authToken: authToken) {
-                    try await APIClient.request(
-                        path: "api/voice/calls/end",
-                        method: "POST",
-                        body: ["id": callId],
-                        token: authToken
-                    )
-                }
-                print("[DialerService] status sent")
+                return try await task()
             } catch {
-                print("Failed to report call status:", error)
+                if attempt == retries - 1 {
+                    throw error
+                }
+                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                delay *= 2
             }
         }
+
+        throw APIClientError.invalidResponse
     }
 
     private func requestWithAuthRetry(
@@ -108,6 +128,21 @@ final class DialerService {
             accessToken = nil
             _ = try await fetchToken(authToken: authToken)
             return try await request()
+        }
+    }
+
+    func debugValidateEndpoints() async {
+        let testEndpoints = [
+            "dialer/token",
+            "call/start",
+            "voice/status"
+        ]
+
+        guard let baseURL = URL(string: Environment.serverURL) else { return }
+
+        for path in testEndpoints {
+            let url = baseURL.appendingPathComponent(path)
+            print("VALIDATING:", url.absoluteString)
         }
     }
 }

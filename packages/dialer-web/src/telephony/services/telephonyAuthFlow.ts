@@ -33,12 +33,8 @@ function assertEnvelopeShape(response: unknown) {
 }
 
 function assertOtpVerifyPayload(payload: unknown): OtpVerifyPayload {
-  if (!payload || typeof payload !== "object") {
-    throw new Error("MALFORMED_OTP_RESPONSE");
-  }
-
-  const token = (payload as { token?: unknown }).token;
-  if (typeof token !== "string" || token.trim().length === 0) {
+  const token = (payload as { token?: string } | undefined)?.token;
+  if (!token) {
     throw new Error("MALFORMED_OTP_RESPONSE");
   }
 
@@ -46,16 +42,12 @@ function assertOtpVerifyPayload(payload: unknown): OtpVerifyPayload {
 }
 
 function assertTelephonyTokenPayload(payload: unknown): TelephonyTokenPayload {
-  if (!payload || typeof payload !== "object") {
+  const data = payload as { token?: string } | undefined;
+  if (!data?.token) {
     throw new Error("MALFORMED_TWILIO_TOKEN_RESPONSE");
   }
 
-  const token = (payload as { token?: unknown }).token;
-  if (typeof token !== "string" || token.trim().length === 0) {
-    throw new Error("MALFORMED_TWILIO_TOKEN_RESPONSE");
-  }
-
-  return { token };
+  return { token: data.token };
 }
 
 async function startOtp(phone: string): Promise<OtpStartPayload> {
@@ -65,15 +57,36 @@ async function startOtp(phone: string): Promise<OtpStartPayload> {
 }
 
 async function verifyOtp(phone: string, code: string): Promise<OtpVerifyPayload> {
-  const response = await api.post("/api/auth/otp/verify", { phone, code }, { timeout: 5000 });
-  assertEnvelopeShape(response.data);
-  return assertOtpVerifyPayload(assertApiResponse<unknown>(response.data));
+  const endpoint = "/api/auth/otp/verify";
+  try {
+    const response = await api.post(endpoint, { phone, code }, { timeout: 5000 });
+    assertEnvelopeShape(response.data);
+    const payload = assertApiResponse<unknown>(response.data);
+    return assertOtpVerifyPayload(payload);
+  } catch (error) {
+    const status = typeof error === "object" && error && "response" in error ? (error as { response?: { status?: number } }).response?.status : undefined;
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[auth] OTP failure", { endpoint, status: status ?? "unknown", message });
+    throw error;
+  }
 }
 
 async function getTelephonyToken(): Promise<TelephonyTokenPayload> {
-  const response = await api.get("/api/telephony/token", { timeout: 5000 });
-  assertEnvelopeShape(response.data);
-  return assertTelephonyTokenPayload(assertApiResponse<unknown>(response.data));
+  const endpoint = "/api/telephony/token";
+  try {
+    const response = await api.get(endpoint, { timeout: 5000 });
+    assertEnvelopeShape(response.data);
+    const data = assertTelephonyTokenPayload(assertApiResponse<unknown>(response.data));
+    if (!data?.token) {
+      throw new Error("MALFORMED_TWILIO_TOKEN_RESPONSE");
+    }
+    return data;
+  } catch (error) {
+    const status = typeof error === "object" && error && "response" in error ? (error as { response?: { status?: number } }).response?.status : undefined;
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[auth] token fetch failed", { endpoint, status: status ?? "unknown", message });
+    throw error;
+  }
 }
 
 function createAuthFlow(handlers: AuthFlowHandlers): AuthFlow {

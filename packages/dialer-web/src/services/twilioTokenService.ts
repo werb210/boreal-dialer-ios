@@ -33,19 +33,44 @@ export async function getVoiceToken(): Promise<string> {
     return cachedToken;
   }
 
-  const response = await api.get("/api/telephony/token");
-  const data = assertTwilioTokenPayload(assertApiResponse<unknown>(response.data));
+  try {
+    const response = await api.get("/api/telephony/token");
+    const data = assertTwilioTokenPayload(assertApiResponse<unknown>(response.data));
 
-  cachedToken = data.token;
-  tokenExpiry = now + (data.ttl ?? 3600) * 1000;
+    if (!data?.token) {
+      throw new Error("MALFORMED_TWILIO_TOKEN_RESPONSE");
+    }
 
-  return data.token;
+    cachedToken = data.token;
+    tokenExpiry = now + (data.ttl ?? 3600) * 1000;
+
+    return data.token;
+  } catch (error) {
+    const endpoint = "/api/telephony/token";
+    const status = typeof error === "object" && error && "response" in error ? (error as { response?: { status?: number } }).response?.status : undefined;
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[auth] token fetch failed", { endpoint, status: status ?? "unknown", message });
+    throw error;
+  }
 }
 
 export async function fetchVoiceToken(): Promise<string> {
-  const response = await api.get("/api/telephony/token");
-  const data = assertTwilioTokenPayload(assertApiResponse<unknown>(response.data));
-  return data.token;
+  try {
+    const response = await api.get("/api/telephony/token");
+    const data = assertTwilioTokenPayload(assertApiResponse<unknown>(response.data));
+
+    if (!data?.token) {
+      throw new Error("MALFORMED_TWILIO_TOKEN_RESPONSE");
+    }
+
+    return data.token;
+  } catch (error) {
+    const endpoint = "/api/telephony/token";
+    const status = typeof error === "object" && error && "response" in error ? (error as { response?: { status?: number } }).response?.status : undefined;
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[auth] token fetch failed", { endpoint, status: status ?? "unknown", message });
+    throw error;
+  }
 }
 
 export async function getTwilioToken(): Promise<TokenPayload> {

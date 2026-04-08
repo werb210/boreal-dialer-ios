@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "test": "echo \"iOS build skipped in non-mac environments\"",
-    "build": "echo \"iOS build requires macOS\""
+    "build": "echo \"iOS build requires macOS\"",
+    "ios:build": "echo 'iOS build requires macOS runner'"
   }
 }

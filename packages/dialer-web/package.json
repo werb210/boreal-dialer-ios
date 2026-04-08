@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "prebuild": "test -f index.html",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist node_modules/.vite",
     "test": "vitest run",
     "build": "vite build"
   },

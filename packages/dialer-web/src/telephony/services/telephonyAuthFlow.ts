@@ -36,7 +36,7 @@ function assertEnvelopeShape(response: unknown) {
 function assertOtpVerifyPayload(payload: unknown): OtpVerifyPayload {
   const token = (payload as { token?: string } | undefined)?.token;
   if (!token) {
-    throw new Error("MALFORMED_OTP_RESPONSE");
+    throw new Error("INVALID_OTP_RESPONSE");
   }
 
   return { token };

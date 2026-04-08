@@ -1,9 +1,25 @@
 name: CI
-on: [push]
+on:
+  push:
+  pull_request:
 
 jobs:
-  validate:
+  dialer-web-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install repo dependencies
+        run: npm ci
+      - name: Build dialer-web
+        run: |
+          cd packages/dialer-web
+          npm ci
+          npm run build
+
+  ios-build:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - run: echo "iOS project - no build required"
+      - name: iOS native build
+        if: runner.os == 'macOS'
+        run: npm run ios:build

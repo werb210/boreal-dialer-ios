@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prebuild": "test -f index.html",
     "test": "vitest run",
     "build": "vite build"
   },

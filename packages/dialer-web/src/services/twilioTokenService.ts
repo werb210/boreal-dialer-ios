@@ -1,6 +1,7 @@
 import { assertApiResponse } from "../lib/assertApiResponse";
 import { api } from "../network/api";
 import { TELEPHONY_TOKEN_ENDPOINT } from "../constants/endpoints";
+import { registerAuthResetter } from "../auth/useDialerAuth";
 
 type TokenPayload = {
   token: string;
@@ -10,14 +11,21 @@ type TokenPayload = {
 let cachedToken: string | null = null;
 let tokenExpiry = 0;
 
+function clearCachedToken(): void {
+  cachedToken = null;
+  tokenExpiry = 0;
+}
+
+registerAuthResetter(clearCachedToken);
+
 function assertTwilioTokenPayload(payload: unknown): TokenPayload {
   if (!payload || typeof payload !== "object") {
     throw new Error("MALFORMED_TWILIO_TOKEN_RESPONSE");
   }
 
   const { token, ttl } = payload as { token?: unknown; ttl?: unknown };
-  if (typeof token !== "string" || token.trim().length === 0) {
-    throw new Error("MALFORMED_TWILIO_TOKEN_RESPONSE");
+  if (typeof token !== "string" || token.trim().length < 10) {
+    throw new Error("MALFORMED_TWILIO_TOKEN");
   }
 
   if (ttl !== undefined && typeof ttl !== "number") {
@@ -39,7 +47,7 @@ export async function getVoiceToken(): Promise<string> {
     const data = assertTwilioTokenPayload(assertApiResponse<unknown>(response.data));
 
     if (!data?.token) {
-      throw new Error("MALFORMED_TWILIO_TOKEN_RESPONSE");
+      throw new Error("MALFORMED_TWILIO_TOKEN");
     }
 
     cachedToken = data.token;
@@ -61,7 +69,7 @@ export async function fetchVoiceToken(): Promise<string> {
     const data = assertTwilioTokenPayload(assertApiResponse<unknown>(response.data));
 
     if (!data?.token) {
-      throw new Error("MALFORMED_TWILIO_TOKEN_RESPONSE");
+      throw new Error("MALFORMED_TWILIO_TOKEN");
     }
 
     return data.token;

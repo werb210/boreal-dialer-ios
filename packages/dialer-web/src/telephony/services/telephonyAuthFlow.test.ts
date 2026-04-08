@@ -72,7 +72,7 @@ describe("telephonyAuthFlow", () => {
 
     await expect(
       runTelephonyAuthFlow("+15550000000", "123456", async () => ({ deviceId: "device-1" }))
-    ).rejects.toThrow("MALFORMED_OTP_RESPONSE");
+    ).rejects.toThrow("INVALID_OTP_RESPONSE");
   });
 
   it("fails fast on timeout errors", async () => {

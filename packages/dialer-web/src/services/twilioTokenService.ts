@@ -2,18 +2,31 @@ import { assertApiResponse } from "../lib/assertApiResponse";
 import { api } from "../network/api";
 import { TELEPHONY_TOKEN_ENDPOINT } from "../constants/endpoints";
 import { registerAuthResetter } from "../auth/useDialerAuth";
+import { isTokenExpired } from "../auth/token";
 
 type TokenPayload = {
   token: string;
   ttl?: number;
 };
 
-let cachedToken: string | null = null;
+let telephonyToken: string | null = null;
 let tokenExpiry = 0;
 
 function clearCachedToken(): void {
-  cachedToken = null;
+  telephonyToken = null;
   tokenExpiry = 0;
+}
+
+function isExpired(token: string): boolean {
+  if (!token) {
+    return true;
+  }
+
+  if (isTokenExpired(token)) {
+    return true;
+  }
+
+  return Date.now() >= tokenExpiry;
 }
 
 registerAuthResetter(clearCachedToken);
@@ -24,7 +37,7 @@ function assertTwilioTokenPayload(payload: unknown): TokenPayload {
   }
 
   const { token, ttl } = payload as { token?: unknown; ttl?: unknown };
-  if (typeof token !== "string" || token.trim().length < 10) {
+  if (typeof token !== "string" || token.trim().length === 0) {
     throw new Error("MALFORMED_TWILIO_TOKEN");
   }
 
@@ -35,49 +48,41 @@ function assertTwilioTokenPayload(payload: unknown): TokenPayload {
   return { token, ttl: ttl as number | undefined };
 }
 
-export async function getVoiceToken(): Promise<string> {
-  const now = Date.now();
+function logInvariantViolation(error: unknown): void {
+  console.error("[INVARIANT_VIOLATION]", error);
+}
 
-  if (cachedToken && now < tokenExpiry) {
-    return cachedToken;
+async function fetchTokenPayload(timeout?: number): Promise<TokenPayload> {
+  const response = timeout
+    ? await api.get(TELEPHONY_TOKEN_ENDPOINT, { timeout })
+    : await api.get(TELEPHONY_TOKEN_ENDPOINT);
+  return assertTwilioTokenPayload(assertApiResponse<unknown>(response.data));
+}
+
+export async function getVoiceToken(): Promise<string> {
+  if (telephonyToken && !isExpired(telephonyToken)) {
+    return telephonyToken;
   }
 
   try {
-    const response = await api.get(TELEPHONY_TOKEN_ENDPOINT);
-    const data = assertTwilioTokenPayload(assertApiResponse<unknown>(response.data));
+    const data = await fetchTokenPayload();
 
-    if (!data?.token) {
-      throw new Error("MALFORMED_TWILIO_TOKEN");
-    }
-
-    cachedToken = data.token;
-    tokenExpiry = now + (data.ttl ?? 3600) * 1000;
+    telephonyToken = data.token;
+    tokenExpiry = Date.now() + (data.ttl ?? 3600) * 1000;
 
     return data.token;
   } catch (error) {
-    const endpoint = TELEPHONY_TOKEN_ENDPOINT;
-    const status = typeof error === "object" && error && "response" in error ? (error as { response?: { status?: number } }).response?.status : undefined;
-    const message = error instanceof Error ? error.message : String(error);
-    console.error("[auth] token fetch failed", { endpoint, status: status ?? "unknown", message });
+    logInvariantViolation(error);
     throw error;
   }
 }
 
-export async function fetchVoiceToken(): Promise<string> {
+export async function fetchVoiceToken(timeout?: number): Promise<string> {
   try {
-    const response = await api.get(TELEPHONY_TOKEN_ENDPOINT);
-    const data = assertTwilioTokenPayload(assertApiResponse<unknown>(response.data));
-
-    if (!data?.token) {
-      throw new Error("MALFORMED_TWILIO_TOKEN");
-    }
-
+    const data = await fetchTokenPayload(timeout);
     return data.token;
   } catch (error) {
-    const endpoint = TELEPHONY_TOKEN_ENDPOINT;
-    const status = typeof error === "object" && error && "response" in error ? (error as { response?: { status?: number } }).response?.status : undefined;
-    const message = error instanceof Error ? error.message : String(error);
-    console.error("[auth] token fetch failed", { endpoint, status: status ?? "unknown", message });
+    logInvariantViolation(error);
     throw error;
   }
 }
@@ -85,4 +90,8 @@ export async function fetchVoiceToken(): Promise<string> {
 export async function getTwilioToken(): Promise<TokenPayload> {
   const token = await getVoiceToken();
   return { token };
+}
+
+export function clearTwilioTokenForTests(): void {
+  clearCachedToken();
 }

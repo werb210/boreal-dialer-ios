@@ -10,11 +10,17 @@ import {
   setUiError
 } from "../state/callStore";
 import { runTelephonyAuthFlow } from "./telephonyAuthFlow";
+import { clearAuth } from "../../auth/useDialerAuth";
+import { isTokenExpired } from "../../auth/token";
 
 let device: Device | null = null;
 let deviceReady = false;
 let initializing: Promise<Device> | null = null;
 let session: { isAuthenticated: boolean; token?: string } = { isAuthenticated: false };
+
+function isExpired(token: string): boolean {
+  return isTokenExpired(token);
+}
 
 function assertDeviceStateTransition(previousState: string | undefined, nextState: string | undefined) {
   if (previousState === "registered" && nextState !== "registered") {
@@ -25,13 +31,18 @@ function assertDeviceStateTransition(previousState: string | undefined, nextStat
 async function refreshToken(currentDevice: Device) {
   try {
     const { token } = await runTelephonyAuthFlow();
+    if (!token || isExpired(token)) {
+      throw new Error("DEVICE_INIT_WITH_INVALID_TOKEN");
+    }
     await currentDevice.updateToken(token);
     session = { isAuthenticated: true, token };
     setNetworkBanner(null);
     setUiError(null);
   } catch (error) {
     setUiError("Telephony token refresh failed.");
-    throw error;
+    clearAuth();
+    console.error("[INVARIANT_VIOLATION]", error);
+    throw new Error("TOKEN_REFRESH_FAILED");
   }
 }
 
@@ -76,8 +87,8 @@ async function initializeDevice() {
   }
 
   const { token } = await runTelephonyAuthFlow();
-  if (!token) {
-    throw new Error("AUTH FLOW INCOMPLETE");
+  if (!token || isExpired(token)) {
+    throw new Error("DEVICE_INIT_WITH_INVALID_TOKEN");
   }
 
   const nextDevice = new Device(token, {

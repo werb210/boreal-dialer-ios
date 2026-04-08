@@ -1,19 +1,11 @@
 import { Client } from "@twilio/conversations";
-import { assertApiResponse } from "../lib/assertApiResponse";
-import { api } from "../network/api";
-import { TELEPHONY_TOKEN_ENDPOINT } from "../constants/endpoints";
+import { getTwilioToken } from "./twilioTokenService";
 
 let client: Client | null = null;
 
-type TelephonyTokenPayload = {
-  token: string;
-};
-
-export async function initializeMessaging(identity: string) {
-  const response = await api.post(TELEPHONY_TOKEN_ENDPOINT, { identity });
-  const data = assertApiResponse<TelephonyTokenPayload>(response.data);
-
-  client = await Client.create(data.token);
+export async function initializeMessaging() {
+  const { token } = await getTwilioToken();
+  client = await Client.create(token);
 }
 
 export function getMessagingClient() {

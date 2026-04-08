@@ -8,6 +8,10 @@ if (!configuredApiUrl || configuredApiUrl.trim() === "") {
   throw new Error("MISSING_VITE_API_URL");
 }
 
+function logInvariantViolation(error: unknown): void {
+  console.error("[INVARIANT_VIOLATION]", error);
+}
+
 function toPathname(url: string): string {
   if (!url) {
     return "";
@@ -28,7 +32,7 @@ function withRequestGuards(config: InternalAxiosRequestConfig): InternalAxiosReq
   const path = toPathname(String(config.url ?? ""));
 
   if (!/^\/(api|voice|calls)\//.test(path)) {
-    throw new Error("INVALID_API_PATH");
+    throw new Error(`INVALID_API_PATH: ${path}`);
   }
 
   if (path.includes(TELEPHONY_TOKEN_ENDPOINT) && path !== TELEPHONY_TOKEN_ENDPOINT) {
@@ -36,10 +40,6 @@ function withRequestGuards(config: InternalAxiosRequestConfig): InternalAxiosReq
   }
 
   const token = getValidAuthToken();
-
-  if (import.meta.env.DEV && !token) {
-    console.warn("AUTH_MISSING_AT_RUNTIME");
-  }
 
   if (!token) {
     return config;
@@ -67,6 +67,7 @@ api.interceptors.request.use((config) => {
       clearAuth();
     }
 
+    logInvariantViolation(error);
     return Promise.reject(error);
   }
 });

@@ -5,17 +5,24 @@ export type DialerAuthState = {
   initialized: boolean;
 };
 
+const STORAGE_KEYS = {
+  AUTH: "bf_auth_token"
+} as const;
+
 let authState: DialerAuthState = { token: null, initialized: false };
-let initializing = false;
+let initPromise: Promise<void> | null = null;
 const authResetters = new Set<() => void>();
-const WEB_TOKEN_STORAGE_KEY = "bf_jwt_token";
+
+function logInvariantViolation(error: unknown): void {
+  console.error("[INVARIANT_VIOLATION]", error);
+}
 
 function readStoredToken(): string | null {
   if (typeof window === "undefined") {
     return null;
   }
 
-  return window.localStorage.getItem(WEB_TOKEN_STORAGE_KEY);
+  return window.localStorage.getItem(STORAGE_KEYS.AUTH);
 }
 
 function writeStoredToken(token: string): void {
@@ -23,7 +30,7 @@ function writeStoredToken(token: string): void {
     return;
   }
 
-  window.localStorage.setItem(WEB_TOKEN_STORAGE_KEY, token);
+  window.localStorage.setItem(STORAGE_KEYS.AUTH, token);
 }
 
 function clearStoredToken(): void {
@@ -31,8 +38,8 @@ function clearStoredToken(): void {
     return;
   }
 
-  window.localStorage.removeItem(WEB_TOKEN_STORAGE_KEY);
-  window.sessionStorage.removeItem(WEB_TOKEN_STORAGE_KEY);
+  window.localStorage.removeItem(STORAGE_KEYS.AUTH);
+  window.sessionStorage.removeItem(STORAGE_KEYS.AUTH);
 }
 
 function validateTokenOrNull(token: string | null): string | null {
@@ -41,11 +48,24 @@ function validateTokenOrNull(token: string | null): string | null {
   }
 
   if (!isPlausibleJwt(token) || isTokenExpired(token)) {
-    clearAuth();
-    return null;
+    throw new Error("INVALID_AUTH_TOKEN");
   }
 
   return token;
+}
+
+async function init(): Promise<void> {
+  try {
+    const storedToken = readStoredToken();
+    authState = {
+      token: storedToken ? validateTokenOrNull(storedToken) : null,
+      initialized: true
+    };
+  } catch (error) {
+    logInvariantViolation(error);
+    clearAuth();
+    throw error;
+  }
 }
 
 export function registerAuthResetter(resetter: () => void): () => void {
@@ -63,35 +83,29 @@ export function clearAuth(): void {
   }
 }
 
-export function initializeDialerAuthState(): DialerAuthState {
-  if (authState.initialized || initializing) {
-    return authState;
+export async function initializeDialerAuthState(): Promise<DialerAuthState> {
+  if (!initPromise) {
+    initPromise = init();
   }
 
-  initializing = true;
-
-  try {
-    const storedToken = readStoredToken();
-    authState = {
-      token: validateTokenOrNull(storedToken),
-      initialized: true
-    };
-
-    return authState;
-  } finally {
-    initializing = false;
-  }
+  await initPromise;
+  return authState;
 }
 
-export function login(token: string): void {
-  const validated = validateTokenOrNull(token);
-  if (!validated) {
-    clearAuth();
-    throw new Error("INVALID_AUTH_TOKEN");
-  }
+export async function login(token: string): Promise<void> {
+  try {
+    const validated = validateTokenOrNull(token);
+    if (!validated) {
+      throw new Error("INVALID_AUTH_TOKEN");
+    }
 
-  writeStoredToken(validated);
-  authState = { token: validated, initialized: true };
+    writeStoredToken(validated);
+    authState = { token: validated, initialized: true };
+  } catch (error) {
+    clearAuth();
+    logInvariantViolation(error);
+    throw error;
+  }
 }
 
 export function logout(): void {
@@ -99,16 +113,23 @@ export function logout(): void {
 }
 
 export function getDialerAuthState(): DialerAuthState {
-  return initializeDialerAuthState();
+  if (!authState.initialized) {
+    throw new Error("AUTH_NOT_INITIALIZED");
+  }
+
+  return authState;
 }
 
 export function getValidAuthToken(): string | null {
-  const state = initializeDialerAuthState();
-  const valid = validateTokenOrNull(state.token);
-
-  if (!valid && state.token) {
-    clearAuth();
+  if (!authState.initialized) {
+    throw new Error("AUTH_NOT_INITIALIZED");
   }
 
-  return valid;
+  try {
+    return validateTokenOrNull(authState.token);
+  } catch (error) {
+    clearAuth();
+    logInvariantViolation(error);
+    throw error;
+  }
 }

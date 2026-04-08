@@ -10,6 +10,7 @@ export type CallStoreState = {
   callDuration: number;
   networkStatus: "online" | "offline";
   networkBanner: string | null;
+  uiError: string | null;
 };
 
 type Listener = () => void;
@@ -22,7 +23,8 @@ const state: CallStoreState = {
   callStatus: "idle",
   callDuration: 0,
   networkStatus: typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "online",
-  networkBanner: null
+  networkBanner: null,
+  uiError: null
 };
 
 const listeners = new Set<Listener>();
@@ -108,6 +110,11 @@ export function setNetworkBanner(networkBanner: string | null) {
   emitChange();
 }
 
+export function setUiError(uiError: string | null) {
+  state.uiError = uiError;
+  emitChange();
+}
+
 export function clearStore() {
   state.device = null;
   state.incomingCall = null;
@@ -117,6 +124,7 @@ export function clearStore() {
   state.callDuration = 0;
   state.networkStatus = "online";
   state.networkBanner = null;
+  state.uiError = null;
   emitChange();
 }
 

@@ -6,7 +6,8 @@ import {
   setCallStatus,
   setDevice,
   setIncomingCall,
-  setNetworkBanner
+  setNetworkBanner,
+  setUiError
 } from "../state/callStore";
 import { runTelephonyAuthFlow } from "./telephonyAuthFlow";
 
@@ -22,10 +23,16 @@ function assertDeviceStateTransition(previousState: string | undefined, nextStat
 }
 
 async function refreshToken(currentDevice: Device) {
-  const { token } = await runTelephonyAuthFlow();
-  await currentDevice.updateToken(token);
-  session = { isAuthenticated: true, token };
-  setNetworkBanner(null);
+  try {
+    const { token } = await runTelephonyAuthFlow();
+    await currentDevice.updateToken(token);
+    session = { isAuthenticated: true, token };
+    setNetworkBanner(null);
+    setUiError(null);
+  } catch (error) {
+    setUiError("Telephony token refresh failed.");
+    throw error;
+  }
 }
 
 function bindDeviceEvents(currentDevice: Device) {
@@ -89,6 +96,7 @@ async function initializeDevice() {
 
   deviceReady = true;
   session = { isAuthenticated: true, token };
+  setUiError(null);
 
   return device;
 }
@@ -124,7 +132,12 @@ async function startCall(to: string) {
 }
 
 export async function startDialerSession(to?: string) {
-  await initVoiceDevice();
+  try {
+    await initVoiceDevice();
+  } catch (error) {
+    setUiError("Telephony initialization failed.");
+    throw error;
+  }
 
   if (to) {
     return startCall(to);
@@ -147,6 +160,7 @@ export function __resetVoiceDeviceForTests() {
   setActiveCall(null);
   setCallStatus("idle");
   setNetworkBanner(null);
+  setUiError(null);
 }
 
 export function __setSessionForTests(nextSession: { isAuthenticated: boolean; token?: string }) {

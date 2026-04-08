@@ -1,5 +1,6 @@
 import { assertApiResponse } from "../lib/assertApiResponse";
 import { api } from "../network/api";
+import { TELEPHONY_TOKEN_ENDPOINT } from "../constants/endpoints";
 
 type TokenPayload = {
   token: string;
@@ -34,7 +35,7 @@ export async function getVoiceToken(): Promise<string> {
   }
 
   try {
-    const response = await api.get("/api/telephony/token");
+    const response = await api.get(TELEPHONY_TOKEN_ENDPOINT);
     const data = assertTwilioTokenPayload(assertApiResponse<unknown>(response.data));
 
     if (!data?.token) {
@@ -46,7 +47,7 @@ export async function getVoiceToken(): Promise<string> {
 
     return data.token;
   } catch (error) {
-    const endpoint = "/api/telephony/token";
+    const endpoint = TELEPHONY_TOKEN_ENDPOINT;
     const status = typeof error === "object" && error && "response" in error ? (error as { response?: { status?: number } }).response?.status : undefined;
     const message = error instanceof Error ? error.message : String(error);
     console.error("[auth] token fetch failed", { endpoint, status: status ?? "unknown", message });
@@ -56,7 +57,7 @@ export async function getVoiceToken(): Promise<string> {
 
 export async function fetchVoiceToken(): Promise<string> {
   try {
-    const response = await api.get("/api/telephony/token");
+    const response = await api.get(TELEPHONY_TOKEN_ENDPOINT);
     const data = assertTwilioTokenPayload(assertApiResponse<unknown>(response.data));
 
     if (!data?.token) {
@@ -65,7 +66,7 @@ export async function fetchVoiceToken(): Promise<string> {
 
     return data.token;
   } catch (error) {
-    const endpoint = "/api/telephony/token";
+    const endpoint = TELEPHONY_TOKEN_ENDPOINT;
     const status = typeof error === "object" && error && "response" in error ? (error as { response?: { status?: number } }).response?.status : undefined;
     const message = error instanceof Error ? error.message : String(error);
     console.error("[auth] token fetch failed", { endpoint, status: status ?? "unknown", message });

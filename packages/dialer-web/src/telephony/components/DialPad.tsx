@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { startDialerSession } from "../services/voiceDevice";
+import { setUiError } from "../state/callStore";
 
 export default function DialPad() {
   const [number, setNumber] = useState("");
@@ -7,7 +8,13 @@ export default function DialPad() {
   const handleDial = async () => {
     if (!number) return;
 
-    await startDialerSession(number);
+    try {
+      await startDialerSession(number);
+      setUiError(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setUiError(`Call start failed: ${message}`);
+    }
   };
 
   return (

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetAuthFlowForTests, runTelephonyAuthFlow } from "./telephonyAuthFlow";
+import { TELEPHONY_TOKEN_ENDPOINT } from "../../constants/endpoints";
 
 const order: string[] = [];
 
@@ -27,7 +28,7 @@ const hoisted = vi.hoisted(() => ({
       throw new Error("TIMEOUT_NOT_SET");
     }
 
-    if (url === "/api/telephony/token") {
+    if (url === TELEPHONY_TOKEN_ENDPOINT) {
       order.push("getTelephonyToken");
       return { data: { success: true, data: { token: "token-xyz" } } };
     }

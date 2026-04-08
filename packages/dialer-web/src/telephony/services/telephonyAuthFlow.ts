@@ -1,5 +1,6 @@
 import { assertApiResponse } from "../../lib/assertApiResponse";
 import { api } from "../../network/api";
+import { TELEPHONY_TOKEN_ENDPOINT } from "../../constants/endpoints";
 
 type OtpStartPayload = {
   challengeId: string;
@@ -72,7 +73,7 @@ async function verifyOtp(phone: string, code: string): Promise<OtpVerifyPayload>
 }
 
 async function getTelephonyToken(): Promise<TelephonyTokenPayload> {
-  const endpoint = "/api/telephony/token";
+  const endpoint = TELEPHONY_TOKEN_ENDPOINT;
   try {
     const response = await api.get(endpoint, { timeout: 5000 });
     assertEnvelopeShape(response.data);

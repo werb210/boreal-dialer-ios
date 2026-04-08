@@ -16,7 +16,7 @@ export async function getVoiceToken(): Promise<string> {
     return cachedToken;
   }
 
-  const response = await api.get("/api/calls/token");
+  const response = await api.get("/api/telephony/token");
   const data = assertApiResponse<TokenPayload>(response.data);
 
   cachedToken = data.token;
@@ -26,7 +26,7 @@ export async function getVoiceToken(): Promise<string> {
 }
 
 export async function fetchVoiceToken(): Promise<string> {
-  const response = await api.get("/api/twilio/voice-token");
+  const response = await api.get("/api/telephony/token");
   const data = assertApiResponse<TokenPayload>(response.data);
   return data.token;
 }

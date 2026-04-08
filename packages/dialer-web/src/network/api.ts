@@ -1,12 +1,9 @@
 import { create } from "axios";
-import { getRuntimeEnv } from "../config/runtime";
-
-const runtimeEnv = getRuntimeEnv();
 
 const API_BASE =
-  runtimeEnv.NODE_ENV === "test"
+  import.meta.env.MODE === "test"
     ? "http://127.0.0.1:3000"
-    : (runtimeEnv.API_URL ?? "");
+    : (import.meta.env.VITE_API_URL ?? "");
 
 export const api = create({
   baseURL: API_BASE,

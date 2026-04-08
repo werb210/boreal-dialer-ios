@@ -34,13 +34,13 @@ function assertEnvelopeShape(response: unknown) {
 }
 
 async function startOtp(phone: string): Promise<OtpStartPayload> {
-  const response = await api.post("/api/otp/start", { phone }, { timeout: 5000 });
+  const response = await api.post("/api/auth/otp/start", { phone }, { timeout: 5000 });
   assertEnvelopeShape(response.data);
   return assertApiResponse<OtpStartPayload>(response.data);
 }
 
 async function verifyOtp(code: string): Promise<OtpVerifyPayload> {
-  const response = await api.post("/api/otp/verify", { code }, { timeout: 5000 });
+  const response = await api.post("/api/auth/otp/verify", { code }, { timeout: 5000 });
   assertEnvelopeShape(response.data);
   return assertApiResponse<OtpVerifyPayload>(response.data);
 }

@@ -89,7 +89,7 @@ export async function refreshToken(): Promise<void> {
   }
 
   tokenRefreshPromise = (async () => {
-    const response = await api.get("/api/voice/token");
+    const response = await api.get("/api/telephony/token");
     const data = assertApiResponse<VoiceTokenPayload>(response.data);
 
     const deviceToRefresh = getDevice();

@@ -1,38 +1,35 @@
 import axios, { type InternalAxiosRequestConfig } from "axios";
 import { clearAuth, getValidAuthToken } from "../auth/useDialerAuth";
-import { TELEPHONY_TOKEN_ENDPOINT } from "../constants/endpoints";
+import { API_BASE, API_ENDPOINTS, TELEPHONY_TOKEN_ENDPOINT } from "../constants/endpoints";
 
-const configuredApiUrl = import.meta.env.VITE_API_URL;
-
-if (!configuredApiUrl || configuredApiUrl.trim() === "") {
-  throw new Error("MISSING_VITE_API_URL");
-}
+const configuredApiUrl = API_BASE;
 
 function logInvariantViolation(error: unknown): void {
   console.error("[INVARIANT_VIOLATION]", error);
 }
 
-function toPathname(url: string): string {
+function toAbsoluteUrl(url: string): string {
   if (!url) {
     return "";
   }
 
-  if (url.startsWith("/")) {
-    return url;
-  }
-
   try {
-    return new URL(url, configuredApiUrl).pathname;
+    return new URL(url, configuredApiUrl).toString();
   } catch {
     return url;
   }
 }
 
 function withRequestGuards(config: InternalAxiosRequestConfig): InternalAxiosRequestConfig {
-  const path = toPathname(String(config.url ?? ""));
+  const rawUrl = String(config.url ?? "");
+  const absoluteUrl = toAbsoluteUrl(rawUrl);
+  const path = new URL(absoluteUrl, configuredApiUrl).pathname;
 
-  if (!/^\/(api|voice|calls)\//.test(path)) {
-    throw new Error(`INVALID_API_PATH: ${path}`);
+  const allowedPaths = new Set<string>(Object.values(API_ENDPOINTS));
+  const isAllowed = [...allowedPaths].some((allowedPath) => path === allowedPath || path.startsWith(`${allowedPath}/`));
+
+  if (!isAllowed || !absoluteUrl.startsWith(API_BASE)) {
+    throw new Error(`INVALID_API_PATH: ${absoluteUrl}`);
   }
 
   if (path.includes(TELEPHONY_TOKEN_ENDPOINT) && path !== TELEPHONY_TOKEN_ENDPOINT) {
@@ -58,6 +55,11 @@ export const api = axios.create({
     "Content-Type": "application/json"
   }
 });
+
+if (import.meta.env.DEV) {
+  console.assert(Object.isFrozen(API_ENDPOINTS), "API_ENDPOINTS must be frozen");
+  console.assert(API_BASE.startsWith("http"), "API_BASE must be absolute");
+}
 
 api.interceptors.request.use((config) => {
   try {

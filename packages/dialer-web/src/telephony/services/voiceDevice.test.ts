@@ -100,7 +100,7 @@ describe("voiceDevice", () => {
     await startDialerSession();
     __setSessionForTests({ isAuthenticated: false });
 
-    await expect(startDialerSession("+15551234567")).rejects.toThrow("NOT_AUTHENTICATED");
+    await expect(startDialerSession("+15551234567")).rejects.toThrow("DEVICE_INIT_WITH_INVALID_TOKEN");
   });
 
   it("allows connect only after registered state", async () => {

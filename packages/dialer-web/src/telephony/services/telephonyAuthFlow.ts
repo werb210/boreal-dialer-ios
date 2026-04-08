@@ -1,6 +1,6 @@
 import { assertApiResponse } from "../../lib/assertApiResponse";
 import { api } from "../../network/api";
-import { TELEPHONY_TOKEN_ENDPOINT } from "../../constants/endpoints";
+import { fetchVoiceToken } from "../../services/twilioTokenService";
 
 type OtpStartPayload = {
   challengeId: string;
@@ -42,15 +42,6 @@ function assertOtpVerifyPayload(payload: unknown): OtpVerifyPayload {
   return { token };
 }
 
-function assertTelephonyTokenPayload(payload: unknown): TelephonyTokenPayload {
-  const data = payload as { token?: string } | undefined;
-  if (!data?.token) {
-    throw new Error("MALFORMED_TWILIO_TOKEN_RESPONSE");
-  }
-
-  return { token: data.token };
-}
-
 async function startOtp(phone: string): Promise<OtpStartPayload> {
   const response = await api.post("/api/auth/otp/start", { phone }, { timeout: 5000 });
   assertEnvelopeShape(response.data);
@@ -65,29 +56,18 @@ async function verifyOtp(phone: string, code: string): Promise<OtpVerifyPayload>
     const payload = assertApiResponse<unknown>(response.data);
     return assertOtpVerifyPayload(payload);
   } catch (error) {
-    const status = typeof error === "object" && error && "response" in error ? (error as { response?: { status?: number } }).response?.status : undefined;
-    const message = error instanceof Error ? error.message : String(error);
-    console.error("[auth] OTP failure", { endpoint, status: status ?? "unknown", message });
+    console.error("[INVARIANT_VIOLATION]", error);
     throw error;
   }
 }
 
 async function getTelephonyToken(): Promise<TelephonyTokenPayload> {
-  const endpoint = TELEPHONY_TOKEN_ENDPOINT;
-  try {
-    const response = await api.get(endpoint, { timeout: 5000 });
-    assertEnvelopeShape(response.data);
-    const data = assertTelephonyTokenPayload(assertApiResponse<unknown>(response.data));
-    if (!data?.token) {
-      throw new Error("MALFORMED_TWILIO_TOKEN_RESPONSE");
-    }
-    return data;
-  } catch (error) {
-    const status = typeof error === "object" && error && "response" in error ? (error as { response?: { status?: number } }).response?.status : undefined;
-    const message = error instanceof Error ? error.message : String(error);
-    console.error("[auth] token fetch failed", { endpoint, status: status ?? "unknown", message });
-    throw error;
+  const token = await fetchVoiceToken(5000);
+  if (!token) {
+    throw new Error("MALFORMED_TWILIO_TOKEN_RESPONSE");
   }
+
+  return { token };
 }
 
 function createAuthFlow(handlers: AuthFlowHandlers): AuthFlow {

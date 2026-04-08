@@ -21,7 +21,9 @@ jobs:
           npm --prefix packages/dialer-web ci
           git diff --exit-code packages/dialer-web/package-lock.json
       - name: Clean dialer-web build artifacts
-        run: npm --prefix packages/dialer-web run clean
+        run: |
+          rm -rf packages/dialer-web/node_modules/.vite packages/dialer-web/dist
+          npm --prefix packages/dialer-web run clean
       - name: Build dialer-web
         run: npm --prefix packages/dialer-web run build
       - name: Test dialer-web

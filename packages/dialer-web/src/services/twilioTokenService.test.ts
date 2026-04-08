@@ -19,7 +19,7 @@ describe("twilioTokenService", () => {
 
   it("fetches a voice token from API envelope", async () => {
     await expect(fetchVoiceToken()).resolves.toBe("abc");
-    expect(hoisted.get).toHaveBeenCalledWith("/api/twilio/voice-token");
+    expect(hoisted.get).toHaveBeenCalledWith("/api/telephony/token");
   });
 
   it("caches token responses", async () => {

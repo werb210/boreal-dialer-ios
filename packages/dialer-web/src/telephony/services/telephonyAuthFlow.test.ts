@@ -9,12 +9,12 @@ const hoisted = vi.hoisted(() => ({
       throw new Error("TIMEOUT_NOT_SET");
     }
 
-    if (url === "/api/otp/start") {
+    if (url === "/api/auth/otp/start") {
       order.push("startOtp");
       return { data: { success: true, data: { challengeId: "challenge-1" } } };
     }
 
-    if (url === "/api/otp/verify") {
+    if (url === "/api/auth/otp/verify") {
       order.push("verifyOtp");
       return { data: { success: true, data: { verified: true } } };
     }

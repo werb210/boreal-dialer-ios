@@ -1,7 +1,7 @@
 import { assertApiResponse } from "../lib/assertApiResponse";
 import { api } from "../network/api";
 import { TELEPHONY_TOKEN_ENDPOINT } from "../constants/endpoints";
-import { registerAuthResetter } from "../auth/useDialerAuth";
+import { getDialerAuthState, registerAuthResetter } from "../auth/useDialerAuth";
 import { isTokenExpired } from "../auth/token";
 
 type TokenPayload = {
@@ -11,10 +11,22 @@ type TokenPayload = {
 
 let telephonyToken: string | null = null;
 let tokenExpiry = 0;
+let tokenInvalidated = false;
+let refreshPromise: Promise<string> | null = null;
 
 function clearCachedToken(): void {
+  if (telephonyToken) {
+    tokenInvalidated = true;
+  }
   telephonyToken = null;
   tokenExpiry = 0;
+  refreshPromise = null;
+}
+
+function ensureAuthInitialized(): void {
+  if (!getDialerAuthState().initialized) {
+    throw new Error("AUTH_NOT_INITIALIZED");
+  }
 }
 
 function isExpired(token: string): boolean {
@@ -37,7 +49,7 @@ function assertTwilioTokenPayload(payload: unknown): TokenPayload {
   }
 
   const { token, ttl } = payload as { token?: unknown; ttl?: unknown };
-  if (typeof token !== "string" || token.trim().length === 0) {
+  if (typeof token !== "string" || token.trim().length < 100) {
     throw new Error("MALFORMED_TWILIO_TOKEN");
   }
 
@@ -60,24 +72,43 @@ async function fetchTokenPayload(timeout?: number): Promise<TokenPayload> {
 }
 
 export async function getVoiceToken(): Promise<string> {
+  ensureAuthInitialized();
+
+  if (tokenInvalidated && telephonyToken) {
+    throw new Error("TOKEN_ALREADY_INVALIDATED");
+  }
+
   if (telephonyToken && !isExpired(telephonyToken)) {
     return telephonyToken;
   }
 
-  try {
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
+  refreshPromise = (async () => {
     const data = await fetchTokenPayload();
 
     telephonyToken = data.token;
+    tokenInvalidated = false;
     tokenExpiry = Date.now() + (data.ttl ?? 3600) * 1000;
 
     return data.token;
+  })();
+
+  try {
+    return await refreshPromise;
   } catch (error) {
     logInvariantViolation(error);
     throw error;
+  } finally {
+    refreshPromise = null;
   }
 }
 
 export async function fetchVoiceToken(timeout?: number): Promise<string> {
+  ensureAuthInitialized();
+
   try {
     const data = await fetchTokenPayload(timeout);
     return data.token;
@@ -94,4 +125,5 @@ export async function getTwilioToken(): Promise<TokenPayload> {
 
 export function clearTwilioTokenForTests(): void {
   clearCachedToken();
+  tokenInvalidated = false;
 }

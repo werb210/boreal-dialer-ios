@@ -10,12 +10,13 @@ import {
   setUiError
 } from "../state/callStore";
 import { runTelephonyAuthFlow } from "./telephonyAuthFlow";
-import { clearAuth } from "../../auth/useDialerAuth";
+import { clearAuth, registerAuthResetter } from "../../auth/useDialerAuth";
 import { isTokenExpired } from "../../auth/token";
 
 let device: Device | null = null;
 let deviceReady = false;
 let initializing: Promise<Device> | null = null;
+let refreshPromise: Promise<void> | null = null;
 let session: { isAuthenticated: boolean; token?: string } = { isAuthenticated: false };
 
 function isExpired(token: string): boolean {
@@ -29,6 +30,11 @@ function assertDeviceStateTransition(previousState: string | undefined, nextStat
 }
 
 async function refreshToken(currentDevice: Device) {
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
+  refreshPromise = (async () => {
   try {
     const { token } = await runTelephonyAuthFlow();
     if (!token || isExpired(token)) {
@@ -44,6 +50,17 @@ async function refreshToken(currentDevice: Device) {
     console.error("[INVARIANT_VIOLATION]", error);
     throw new Error("TOKEN_REFRESH_FAILED");
   }
+  })();
+
+  try {
+    await refreshPromise;
+  } finally {
+    refreshPromise = null;
+  }
+}
+
+function tokenValidForDevice(existingDevice: Device, token: string | undefined): boolean {
+  return Boolean(existingDevice && token && !isExpired(token));
 }
 
 function bindDeviceEvents(currentDevice: Device) {
@@ -83,6 +100,9 @@ function bindDeviceEvents(currentDevice: Device) {
 
 async function initializeDevice() {
   if (device) {
+    if (!tokenValidForDevice(device, session.token)) {
+      throw new Error("DEVICE_INIT_WITH_INVALID_TOKEN");
+    }
     return device;
   }
 
@@ -128,6 +148,22 @@ function assertAuthenticatedSession() {
   }
 }
 
+function resetVoiceState(): void {
+  device = null;
+  deviceReady = false;
+  initializing = null;
+  refreshPromise = null;
+  session = { isAuthenticated: false };
+  setDevice(null);
+  setIncomingCall(null);
+  setActiveCall(null);
+  setCallStatus("idle");
+  setNetworkBanner(null);
+  setUiError(null);
+}
+
+registerAuthResetter(resetVoiceState);
+
 async function startCall(to: string) {
   assertAuthenticatedSession();
 
@@ -162,16 +198,7 @@ export function getDevice() {
 }
 
 export function __resetVoiceDeviceForTests() {
-  device = null;
-  deviceReady = false;
-  initializing = null;
-  session = { isAuthenticated: false };
-  setDevice(null);
-  setIncomingCall(null);
-  setActiveCall(null);
-  setCallStatus("idle");
-  setNetworkBanner(null);
-  setUiError(null);
+  resetVoiceState();
 }
 
 export function __setSessionForTests(nextSession: { isAuthenticated: boolean; token?: string }) {

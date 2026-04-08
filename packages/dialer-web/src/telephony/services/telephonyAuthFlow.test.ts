@@ -30,11 +30,13 @@ const hoisted = vi.hoisted(() => ({
 
     if (url === TELEPHONY_TOKEN_ENDPOINT) {
       order.push("getTelephonyToken");
-      return { data: { success: true, data: { token: "token-xyz" } } };
+      return { data: { success: true, data: { token: "token-xyz".padEnd(120, "x") } } };
     }
 
     throw new Error(`Unexpected GET URL: ${url}`);
-  })
+  }),
+  getDialerAuthState: vi.fn(() => ({ token: null, initialized: true })),
+  registerAuthResetter: vi.fn(() => () => undefined)
 }));
 
 vi.mock("../../network/api", () => ({
@@ -42,6 +44,11 @@ vi.mock("../../network/api", () => ({
     post: hoisted.post,
     get: hoisted.get
   }
+}));
+
+vi.mock("../../auth/useDialerAuth", () => ({
+  getDialerAuthState: hoisted.getDialerAuthState,
+  registerAuthResetter: hoisted.registerAuthResetter
 }));
 
 describe("telephonyAuthFlow", () => {
@@ -54,7 +61,7 @@ describe("telephonyAuthFlow", () => {
   it("runs otp -> verify -> telephony token in strict order", async () => {
     const data = await runTelephonyAuthFlow("+15550000000", "123456", async () => ({ deviceId: "device-1" }));
 
-    expect(data.token).toBe("token-xyz");
+    expect(data.token).toBe("token-xyz".padEnd(120, "x"));
     expect(order).toEqual(["startOtp", "verifyOtp", "getTelephonyToken"]);
   });
 
@@ -97,7 +104,7 @@ describe("telephonyAuthFlow", () => {
       runTelephonyAuthFlow("+15550000000", "123456", async () => ({ deviceId: "device-1" }))
     ).rejects.toThrow("AUTH_ALREADY_RUNNING");
 
-    await expect(runA).resolves.toEqual({ token: "token-xyz" });
+    await expect(runA).resolves.toEqual({ token: "token-xyz".padEnd(120, "x") });
   });
 
   it("fails when auth output is incomplete", async () => {

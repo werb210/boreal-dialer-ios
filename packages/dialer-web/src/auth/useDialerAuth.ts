@@ -5,9 +5,13 @@ export type DialerAuthState = {
   initialized: boolean;
 };
 
-const STORAGE_KEYS = {
+export const STORAGE_KEYS = Object.freeze({
   AUTH: "bf_auth_token"
-} as const;
+} as const);
+
+if (import.meta.env.DEV) {
+  console.assert(Object.isFrozen(STORAGE_KEYS), "STORAGE_KEYS must be frozen");
+}
 
 let authState: DialerAuthState = { token: null, initialized: false };
 let initPromise: Promise<void> | null = null;
@@ -39,7 +43,7 @@ function clearStoredToken(): void {
   }
 
   window.localStorage.removeItem(STORAGE_KEYS.AUTH);
-  window.sessionStorage.removeItem(STORAGE_KEYS.AUTH);
+  window.sessionStorage.clear();
 }
 
 function validateTokenOrNull(token: string | null): string | null {
@@ -77,16 +81,25 @@ export function registerAuthResetter(resetter: () => void): () => void {
 
 export function clearAuth(): void {
   clearStoredToken();
-  authState = { token: null, initialized: true };
+  authState = { token: null, initialized: false };
+  initPromise = null;
   for (const resetter of authResetters) {
     resetter();
   }
 }
 
 export async function initializeDialerAuthState(): Promise<DialerAuthState> {
-  if (!initPromise) {
-    initPromise = init();
+  if (initPromise) {
+    await initPromise;
+    return authState;
   }
+
+  initPromise = (async () => {
+    if (authState.initialized) {
+      throw new Error("AUTH_ALREADY_INITIALIZED");
+    }
+    await init();
+  })();
 
   await initPromise;
   return authState;

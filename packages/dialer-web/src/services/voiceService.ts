@@ -1,6 +1,7 @@
 import { Device, Call } from "@twilio/voice-sdk";
 import { assertApiResponse } from "../lib/assertApiResponse";
 import { api } from "../network/api";
+import { TELEPHONY_TOKEN_ENDPOINT } from "../constants/endpoints";
 
 let device: Device | null = null;
 
@@ -9,7 +10,7 @@ type TelephonyTokenPayload = {
 };
 
 export async function initializeVoice(identity: string) {
-  const response = await api.post("/api/telephony/token", { identity });
+  const response = await api.post(TELEPHONY_TOKEN_ENDPOINT, { identity });
   const data = assertApiResponse<TelephonyTokenPayload>(response.data);
 
   if (!data.token) {

@@ -11,6 +11,7 @@ vi.mock("../network/api", () => ({
 }));
 
 import { fetchVoiceToken, getVoiceToken } from "./twilioTokenService";
+import { TELEPHONY_TOKEN_ENDPOINT } from "../constants/endpoints";
 
 describe("twilioTokenService", () => {
   beforeEach(() => {
@@ -19,7 +20,7 @@ describe("twilioTokenService", () => {
 
   it("fetches a voice token from API envelope", async () => {
     await expect(fetchVoiceToken()).resolves.toBe("abc");
-    expect(hoisted.get).toHaveBeenCalledWith("/api/telephony/token");
+    expect(hoisted.get).toHaveBeenCalledWith(TELEPHONY_TOKEN_ENDPOINT);
   });
 
   it("caches token responses", async () => {

@@ -6,15 +6,27 @@ on:
 jobs:
   dialer-web-build:
     runs-on: ubuntu-latest
+    env:
+      VITE_API_URL: https://server.boreal.financial
     steps:
       - uses: actions/checkout@v4
       - name: Install repo dependencies
         run: npm ci
-      - name: Build dialer-web
+      - name: Verify dialer-web entrypoint
+        run: grep -q '/src/main.ts' packages/dialer-web/index.html
+      - name: Ensure dialer-web lockfile is deterministic
         run: |
-          cd packages/dialer-web
           npm ci
-          npm run build
+          git diff --exit-code package-lock.json
+          npm --prefix packages/dialer-web ci
+          git diff --exit-code packages/dialer-web/package-lock.json
+      - name: Clean dialer-web build artifacts
+        run: npm --prefix packages/dialer-web run clean
+      - name: Build dialer-web
+        run: npm --prefix packages/dialer-web run build
+      - name: Test dialer-web
+        run: |
+          CI=1 npm --prefix packages/dialer-web run test
 
   ios-build:
     runs-on: macos-latest

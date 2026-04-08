@@ -4,6 +4,7 @@ import { api } from "../network/api";
 import { setCallStatus } from "../state/callState";
 import { twilioEnv } from "../config/env";
 import { getDevice, setDevice, clearDevice } from "./deviceSingleton";
+import { TELEPHONY_TOKEN_ENDPOINT } from "../constants/endpoints";
 
 void twilioEnv;
 
@@ -89,7 +90,7 @@ export async function refreshToken(): Promise<void> {
   }
 
   tokenRefreshPromise = (async () => {
-    const response = await api.get("/api/telephony/token");
+    const response = await api.get(TELEPHONY_TOKEN_ENDPOINT);
     const data = assertApiResponse<VoiceTokenPayload>(response.data);
 
     const deviceToRefresh = getDevice();

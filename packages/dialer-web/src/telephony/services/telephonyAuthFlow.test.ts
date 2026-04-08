@@ -4,7 +4,7 @@ import { __resetAuthFlowForTests, runTelephonyAuthFlow } from "./telephonyAuthFl
 const order: string[] = [];
 
 const hoisted = vi.hoisted(() => ({
-  post: vi.fn(async (url: string, _data: unknown, config?: { timeout?: number }) => {
+  post: vi.fn(async (url: string, data: unknown, config?: { timeout?: number }) => {
     if (config?.timeout !== 5000) {
       throw new Error("TIMEOUT_NOT_SET");
     }
@@ -16,7 +16,8 @@ const hoisted = vi.hoisted(() => ({
 
     if (url === "/api/auth/otp/verify") {
       order.push("verifyOtp");
-      return { data: { success: true, data: { verified: true } } };
+      expect(data).toEqual({ phone: "+15550000000", code: "123456" });
+      return { data: { success: true, data: { token: "jwt-abc" } } };
     }
 
     throw new Error(`Unexpected POST URL: ${url}`);
@@ -62,6 +63,15 @@ describe("telephonyAuthFlow", () => {
     await expect(
       runTelephonyAuthFlow("+15550000000", "123456", async () => ({ deviceId: "device-1" }))
     ).rejects.toThrow("INVALID API RESPONSE");
+  });
+
+  it("fails on malformed otp verify responses", async () => {
+    hoisted.post.mockImplementationOnce(async () => ({ data: { success: true, data: { challengeId: "challenge-1" } } }));
+    hoisted.post.mockImplementationOnce(async () => ({ data: { success: true, data: { token: "" } } }));
+
+    await expect(
+      runTelephonyAuthFlow("+15550000000", "123456", async () => ({ deviceId: "device-1" }))
+    ).rejects.toThrow("MALFORMED_OTP_RESPONSE");
   });
 
   it("fails fast on timeout errors", async () => {

@@ -9,6 +9,23 @@ type TokenPayload = {
 let cachedToken: string | null = null;
 let tokenExpiry = 0;
 
+function assertTwilioTokenPayload(payload: unknown): TokenPayload {
+  if (!payload || typeof payload !== "object") {
+    throw new Error("MALFORMED_TWILIO_TOKEN_RESPONSE");
+  }
+
+  const { token, ttl } = payload as { token?: unknown; ttl?: unknown };
+  if (typeof token !== "string" || token.trim().length === 0) {
+    throw new Error("MALFORMED_TWILIO_TOKEN_RESPONSE");
+  }
+
+  if (ttl !== undefined && typeof ttl !== "number") {
+    throw new Error("MALFORMED_TWILIO_TOKEN_RESPONSE");
+  }
+
+  return { token, ttl: ttl as number | undefined };
+}
+
 export async function getVoiceToken(): Promise<string> {
   const now = Date.now();
 
@@ -17,7 +34,7 @@ export async function getVoiceToken(): Promise<string> {
   }
 
   const response = await api.get("/api/telephony/token");
-  const data = assertApiResponse<TokenPayload>(response.data);
+  const data = assertTwilioTokenPayload(assertApiResponse<unknown>(response.data));
 
   cachedToken = data.token;
   tokenExpiry = now + (data.ttl ?? 3600) * 1000;
@@ -27,7 +44,7 @@ export async function getVoiceToken(): Promise<string> {
 
 export async function fetchVoiceToken(): Promise<string> {
   const response = await api.get("/api/telephony/token");
-  const data = assertApiResponse<TokenPayload>(response.data);
+  const data = assertTwilioTokenPayload(assertApiResponse<unknown>(response.data));
   return data.token;
 }
 

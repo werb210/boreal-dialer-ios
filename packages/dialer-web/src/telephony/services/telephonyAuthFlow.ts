@@ -6,7 +6,7 @@ type OtpStartPayload = {
 };
 
 type OtpVerifyPayload = {
-  verified: boolean;
+  token: string;
 };
 
 type TelephonyTokenPayload = {
@@ -26,11 +26,36 @@ type AuthFlowHandlers = {
 
 let authInProgress = false;
 
-
 function assertEnvelopeShape(response: unknown) {
   if (!response || typeof response !== "object" || !("success" in response) || (response as { success?: boolean }).success !== true) {
     throw new Error("INVALID API RESPONSE");
   }
+}
+
+function assertOtpVerifyPayload(payload: unknown): OtpVerifyPayload {
+  if (!payload || typeof payload !== "object") {
+    throw new Error("MALFORMED_OTP_RESPONSE");
+  }
+
+  const token = (payload as { token?: unknown }).token;
+  if (typeof token !== "string" || token.trim().length === 0) {
+    throw new Error("MALFORMED_OTP_RESPONSE");
+  }
+
+  return { token };
+}
+
+function assertTelephonyTokenPayload(payload: unknown): TelephonyTokenPayload {
+  if (!payload || typeof payload !== "object") {
+    throw new Error("MALFORMED_TWILIO_TOKEN_RESPONSE");
+  }
+
+  const token = (payload as { token?: unknown }).token;
+  if (typeof token !== "string" || token.trim().length === 0) {
+    throw new Error("MALFORMED_TWILIO_TOKEN_RESPONSE");
+  }
+
+  return { token };
 }
 
 async function startOtp(phone: string): Promise<OtpStartPayload> {
@@ -39,16 +64,16 @@ async function startOtp(phone: string): Promise<OtpStartPayload> {
   return assertApiResponse<OtpStartPayload>(response.data);
 }
 
-async function verifyOtp(code: string): Promise<OtpVerifyPayload> {
-  const response = await api.post("/api/auth/otp/verify", { code }, { timeout: 5000 });
+async function verifyOtp(phone: string, code: string): Promise<OtpVerifyPayload> {
+  const response = await api.post("/api/auth/otp/verify", { phone, code }, { timeout: 5000 });
   assertEnvelopeShape(response.data);
-  return assertApiResponse<OtpVerifyPayload>(response.data);
+  return assertOtpVerifyPayload(assertApiResponse<unknown>(response.data));
 }
 
 async function getTelephonyToken(): Promise<TelephonyTokenPayload> {
   const response = await api.get("/api/telephony/token", { timeout: 5000 });
   assertEnvelopeShape(response.data);
-  return assertApiResponse<TelephonyTokenPayload>(response.data);
+  return assertTelephonyTokenPayload(assertApiResponse<unknown>(response.data));
 }
 
 function createAuthFlow(handlers: AuthFlowHandlers): AuthFlow {
@@ -66,7 +91,7 @@ function createAuthFlow(handlers: AuthFlowHandlers): AuthFlow {
         const token = await handlers.getToken();
         const { deviceId } = await handlers.initDevice();
 
-        if (verify.verified !== true || !otp.challengeId || !token.token || !deviceId) {
+        if (!otp.challengeId || !verify.token || !token.token || !deviceId) {
           throw new Error("AUTH FLOW INCOMPLETE");
         }
 
@@ -91,20 +116,8 @@ export async function runTelephonyAuthFlow(
       }
       return response;
     },
-    verifyOTP: async () => {
-      const verify = await verifyOtp(code);
-      if (!verify || typeof verify !== "object") {
-        throw new Error("INVALID API RESPONSE");
-      }
-      return verify;
-    },
-    getToken: async () => {
-      const token = await getTelephonyToken();
-      if (!token || typeof token !== "object") {
-        throw new Error("INVALID API RESPONSE");
-      }
-      return token;
-    },
+    verifyOTP: async () => verifyOtp(phone, code),
+    getToken: async () => getTelephonyToken(),
     initDevice
   });
 

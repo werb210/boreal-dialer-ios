@@ -37,14 +37,20 @@ final class AuthService: ObservableObject {
     func handleAuthResponse(_ data: Data) throws -> String {
         let response = try JSONDecoder().decode(AuthResponse.self, from: data)
 
-        guard !response.token.trimmingCharacters(in: .whitespaces).isEmpty else {
+        guard response.status.lowercased() == "ok" else {
+            throw APIError.invalidResponse
+        }
+
+        let token = response.data.token
+
+        guard !token.trimmingCharacters(in: .whitespaces).isEmpty else {
             throw APIError.invalidToken
         }
 
-        TokenStorage.shared.save(token: response.token)
+        TokenStorage.shared.save(token: token)
 
-        print("[TOKEN SAVED]", response.token.prefix(12))
-        return response.token
+        print("[TOKEN SAVED]", token.prefix(12))
+        return token
     }
 
     private func shouldInitializeVoice(from token: String) -> Bool {

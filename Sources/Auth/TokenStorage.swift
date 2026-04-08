@@ -8,15 +8,15 @@ final class TokenStorage {
     private init() {}
 
     func save(token: String) {
-        UserDefaults.standard.set(token, forKey: key)
+        KeychainService.shared.save(token, for: key)
     }
 
     func getToken() -> String? {
-        UserDefaults.standard.string(forKey: key)
+        KeychainService.shared.load(key)
     }
 
     func getTokenOrFail() -> String {
-        guard let token = UserDefaults.standard.string(forKey: key),
+        guard let token = KeychainService.shared.load(key),
               !token.isEmpty else {
             fatalError("TOKEN MISSING AT REQUEST TIME")
         }
@@ -25,6 +25,6 @@ final class TokenStorage {
     }
 
     func clear() {
-        UserDefaults.standard.removeObject(forKey: key)
+        KeychainService.shared.delete(key)
     }
 }

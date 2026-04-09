@@ -12,7 +12,7 @@ function authMiddleware(req, res, next) {
 
   try {
     const payload = jwt.verify(token, process.env.BF_JWT_SECRET || req.app?.locals?.env?.BF_JWT_SECRET);
-    if (!payload?.id || !['admin', 'staff', 'client'].includes(payload.role)) {
+    if (!payload?.id || !['admin', 'staff', 'Admin', 'Staff', 'client'].includes(payload.role)) {
       throw new Error('invalid_payload');
     }
     req.user = { id: String(payload.id), role: payload.role };

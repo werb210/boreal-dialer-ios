@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 
 const TOKEN_REGEX = /^Bearer\s+(.+)$/i;
+const ALLOWED_ROLES = ['admin', 'staff'];
 
 function authMiddleware(req, res, next) {
   const auth = req.headers.authorization;
@@ -12,10 +13,14 @@ function authMiddleware(req, res, next) {
 
   try {
     const payload = jwt.verify(token, process.env.BF_JWT_SECRET || req.app?.locals?.env?.BF_JWT_SECRET);
-    if (!payload?.id || !['admin', 'staff', 'Admin', 'Staff', 'client'].includes(payload.role)) {
+    const userId = payload.sub || payload.id;
+    const role = (payload.role || '').toLowerCase();
+
+    if (!userId || !ALLOWED_ROLES.includes(role)) {
       throw new Error('invalid_payload');
     }
-    req.user = { id: String(payload.id), role: payload.role };
+
+    req.user = { id: String(userId), role };
     return next();
   } catch {
     return res.status(401).json({ code: 'unauthorized', message: 'Invalid token', requestId: req.requestId });

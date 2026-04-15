@@ -1,43 +1,83 @@
 import SwiftUI
+import TwilioVoice
 
 struct IncomingCallView: View {
-
-    let caller: String
-    let onAccept: () -> Void
-    let onDecline: () -> Void
+    let call: Call
+    @State private var contactName: String = "Unknown Caller"
+    @State private var company: String = ""
 
     var body: some View {
+        VStack(spacing: 32) {
+            Spacer()
 
-        VStack(spacing: 40) {
+            // Caller info
+            VStack(spacing: 8) {
+                Image(systemName: "person.circle.fill")
+                    .font(.system(size: 80))
+                    .foregroundColor(.gray)
+                Text(contactName)
+                    .font(.largeTitle)
+                    .bold()
+                if !company.isEmpty {
+                    Text(company)
+                        .foregroundColor(.secondary)
+                }
+                Text("Incoming Call")
+                    .foregroundColor(.secondary)
+            }
 
-            Text("Incoming Call")
-                .font(.title)
+            Spacer()
 
-            Text(caller)
-                .font(.largeTitle)
-                .bold()
-
+            // Accept / Decline
             HStack(spacing: 60) {
-
-                Button(action: onDecline) {
-                    Circle()
-                        .fill(Color.red)
-                        .frame(width: 80, height: 80)
-                        .overlay(Image(systemName: "phone.down.fill")
-                            .foregroundColor(.white)
-                            .font(.title))
+                Button {
+                    call.reject()
+                } label: {
+                    Image(systemName: "phone.down.fill")
+                        .font(.system(size: 32))
+                        .foregroundColor(.white)
+                        .padding(24)
+                        .background(Color.red)
+                        .clipShape(Circle())
                 }
 
-                Button(action: onAccept) {
-                    Circle()
-                        .fill(Color.green)
-                        .frame(width: 80, height: 80)
-                        .overlay(Image(systemName: "phone.fill")
-                            .foregroundColor(.white)
-                            .font(.title))
+                Button {
+                    call.accept()
+                } label: {
+                    Image(systemName: "phone.fill")
+                        .font(.system(size: 32))
+                        .foregroundColor(.white)
+                        .padding(24)
+                        .background(Color.green)
+                        .clipShape(Circle())
+                }
+            }
+
+            Spacer()
+        }
+        .onAppear { lookupCaller() }
+    }
+
+    private func lookupCaller() {
+        let from = call.from ?? ""
+        guard !from.isEmpty,
+              let encodedPhone = from.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "\(APIConfig.baseURL)/crm/contacts?phone=\(encodedPhone)") else { return }
+
+        Task {
+            var request = URLRequest(url: url)
+            if let token = TokenStorage.shared.getToken() {
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
+
+            if let (data, _) = try? await URLSession.shared.data(for: request),
+               let contacts = try? JSONDecoder().decode([[String: String]].self, from: data),
+               let contact = contacts.first {
+                await MainActor.run {
+                    contactName = contact["name"] ?? contactName
+                    company = contact["company"] ?? ""
                 }
             }
         }
-        .padding()
     }
 }

@@ -33,6 +33,12 @@ final class VoiceManager: NSObject, ObservableObject {
         super.init()
     }
 
+    func reinitialize() async {
+        cleanup()
+        registrationState = .unregistered
+        await initialize()
+    }
+
     func initialize() async {
         guard let token = await fetchToken() else { return }
 

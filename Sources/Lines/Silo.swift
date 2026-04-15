@@ -1,6 +1,6 @@
 import Foundation
 
-enum Silo: String {
+enum Silo: String, Codable {
     case bf
     case bi
     case slf

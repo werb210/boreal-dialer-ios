@@ -47,6 +47,19 @@ final class VoiceEngine: NSObject, ObservableObject {
     @Published private(set) var callDuration: Int = 0
     @Published var activeLine: Line = .bf
     @Published var silo: Silo = .bf
+    @Published var isMuted = false
+    @Published var isOnHold = false
+    @Published var showKeypad = false
+
+    var activeCallSid: String? {
+        if case .active(let uuid) = state {
+            return uuid.uuidString
+        }
+        if case .dialing(let uuid) = state {
+            return uuid.uuidString
+        }
+        return nil
+    }
 
     private var provider: CXProvider!
     private var timer: Timer?
@@ -108,6 +121,16 @@ final class VoiceEngine: NSObject, ObservableObject {
         silo = Silo(rawValue: line.rawValue) ?? .bf
     }
 
+    func toggleMute() {
+        isMuted.toggle()
+        Telemetry.event("call_mute_toggled", metadata: ["isMuted": "\(isMuted)"])
+    }
+
+    func toggleHold(onHold: Bool) {
+        isOnHold = onHold
+        Telemetry.event("call_hold_toggled", metadata: ["isOnHold": "\(onHold)"])
+    }
+
     func forceTerminate() {
         TwilioVoiceManager.shared.disconnect()
         finishCall(status: .ended)
@@ -165,6 +188,9 @@ final class VoiceEngine: NSObject, ObservableObject {
     private func finishCall(status: State) {
         stopTimer()
         state = status
+        isMuted = false
+        isOnHold = false
+        showKeypad = false
 
         Task {
             try? await API.logCall(duration: callDuration, status: "\(status)")

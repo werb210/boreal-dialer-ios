@@ -27,6 +27,10 @@ final class CallManager: NSObject {
     private let audioSessionManager = AudioSessionManager()
     private var currentCallID: String?
 
+    var activeCallSid: String? {
+        currentCallID
+    }
+
     func initialize(completion: @escaping (Result<Void, Error>) -> Void) {
         if Environment.authToken.isEmpty {
             let error = NSError(domain: "missing_auth_token", code: 0, userInfo: [NSLocalizedDescriptionKey: "Missing AUTH_TOKEN environment variable"])

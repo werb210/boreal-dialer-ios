@@ -11,6 +11,11 @@ final class PushManager: NSObject, PKPushRegistryDelegate {
     private var registry: PKPushRegistry?
     private var deviceToken: Data?
 
+    var deviceTokenString: String? {
+        guard let deviceToken else { return nil }
+        return deviceToken.map { String(format: "%02x", $0) }.joined()
+    }
+
     private override init() {
         super.init()
     }

@@ -6,6 +6,7 @@ final class DialerViewController: UIViewController {
     private let stateLabel = UILabel()
     private let callButton = UIButton(type: .system)
     private let hangupButton = UIButton(type: .system)
+    private let parkButton = UIButton(type: .system)
 
     static func embeddedInNavigationController() -> UINavigationController {
         UINavigationController(rootViewController: DialerViewController())
@@ -24,11 +25,15 @@ final class DialerViewController: UIViewController {
 
         callButton.setTitle("Call", for: .normal)
         hangupButton.setTitle("Hangup", for: .normal)
+        parkButton.setTitle("Park", for: .normal)
+        parkButton.setTitleColor(.systemOrange, for: .normal)
+        parkButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
 
         callButton.addTarget(self, action: #selector(callTapped), for: .touchUpInside)
         hangupButton.addTarget(self, action: #selector(hangupTapped), for: .touchUpInside)
+        parkButton.addTarget(self, action: #selector(parkCall), for: .touchUpInside)
 
-        let stack = UIStackView(arrangedSubviews: [phoneField, stateLabel, callButton, hangupButton])
+        let stack = UIStackView(arrangedSubviews: [phoneField, stateLabel, callButton, hangupButton, parkButton])
         stack.axis = .vertical
         stack.spacing = 12
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -67,6 +72,27 @@ final class DialerViewController: UIViewController {
         CallManager.shared.hangup()
     }
 
+    @objc private func parkCall() {
+        guard let callSid = CallManager.shared.activeCallSid else { return }
+
+        Task {
+            do {
+                _ = try await APIClient.request(
+                    path: "api/telephony/park",
+                    method: "POST",
+                    body: ["callSid": callSid],
+                    token: Environment.authToken
+                )
+                await MainActor.run {
+                    self.parkButton.setTitle("Parked ✓", for: .normal)
+                    self.parkButton.isEnabled = false
+                }
+            } catch {
+                print("[PARK ERROR]", error)
+            }
+        }
+    }
+
     private func render(state: CallState) {
         switch state {
         case .idle:
@@ -85,5 +111,9 @@ final class DialerViewController: UIViewController {
 
         callButton.isEnabled = state != .connecting && state != .connected
         hangupButton.isEnabled = state == .connecting || state == .ringing || state == .connected
+        parkButton.isEnabled = state == .connected
+        if state != .connected {
+            parkButton.setTitle("Park", for: .normal)
+        }
     }
 }

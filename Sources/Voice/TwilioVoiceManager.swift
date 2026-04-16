@@ -104,6 +104,7 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
 
         let log = CallLog(
             id: activeUUID ?? UUID(),
+            callSid: activeCall?.sid,
             direction: callDirection,
             timestamp: startedAt,
             duration: duration

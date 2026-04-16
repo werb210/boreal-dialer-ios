@@ -30,3 +30,8 @@ final class PersistedCallLog {
         self.duration = duration
     }
 }
+
+struct TranscriptResponse: Decodable {
+    let transcript: String?
+    let callSid: String
+}

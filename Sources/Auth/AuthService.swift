@@ -49,6 +49,27 @@ final class AuthService: ObservableObject {
 
         TokenStorage.shared.save(token: token)
 
+        // After saving the auth token, register the push token with BF-Server.
+        if let pushToken = PushManager.shared.deviceTokenString {
+            Task {
+                do {
+                    let body = try JSONSerialization.data(withJSONObject: [
+                        "token": pushToken,
+                        "platform": "ios"
+                    ])
+                    let request = try APIClient.shared.authorizedRequest(
+                        endpoint: "/auth/device-token",
+                        method: "POST",
+                        body: body
+                    )
+                    _ = try await APIClient.shared.execute(request)
+                    print("[PUSH] Device token registered with BF-Server")
+                } catch {
+                    print("[PUSH] Failed to register device token:", error)
+                }
+            }
+        }
+
         print("[TOKEN SAVED]", token.prefix(12))
         return token
     }

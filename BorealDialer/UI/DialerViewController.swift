@@ -78,7 +78,7 @@ final class DialerViewController: UIViewController {
         Task {
             do {
                 _ = try await APIClient.request(
-                    path: "api/telephony/park",
+                    path: "/api/telephony/park",
                     method: "POST",
                     body: ["callSid": callSid],
                     token: Environment.authToken

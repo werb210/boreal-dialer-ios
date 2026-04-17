@@ -11,21 +11,21 @@ final class LineManager: ObservableObject {
         Line(
             id: "BF",
             name: "Boreal Financial",
-            baseURL: URL(string: APIConfig.BF_BASE_URL)!,
+            baseURL: URL(string: APIConfig.BASE_URL)!,
             wsURL: nil,
             silo: .bf
         ),
         Line(
             id: "BI",
             name: "Boreal Insurance",
-            baseURL: URL(string: APIConfig.BI_BASE_URL)!,
+            baseURL: URL(string: APIConfig.BASE_URL)!,
             wsURL: nil,
             silo: .bi
         ),
         Line(
             id: "SLF",
-            name: "SLF",
-            baseURL: URL(string: APIConfig.SLF_BASE_URL)!,
+            name: "Site Level Financial",
+            baseURL: URL(string: APIConfig.BASE_URL)!,
             wsURL: nil,
             silo: .slf
         )

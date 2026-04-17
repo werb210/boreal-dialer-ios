@@ -1,19 +1,21 @@
 import Foundation
 
 struct APIConfig {
-    static let BF_BASE_URL  = "https://server.boreal.financial/api"
-    static let BI_BASE_URL  = "https://bi-server.boreal.financial/api"
-    static let SLF_BASE_URL = "https://slf-server.boreal.financial/api"
+    static let BASE_URL = "https://server.boreal.financial/api"
 
-    static var activeBaseURL: String = BF_BASE_URL
+    // All silos use the same server — silo is sent as X-Silo header
+    static var activeBaseURL: String = BASE_URL
+    static var activeSilo: Silo = .bf
 
-    static var baseURL: String { activeBaseURL }
+    static var baseURL: String { BASE_URL }
 
-    static func url(for silo: Silo) -> String {
+    static func url(for silo: Silo) -> String { BASE_URL }
+
+    static func siloHeader(for silo: Silo) -> String {
         switch silo {
-        case .bf:  return BF_BASE_URL
-        case .bi:  return BI_BASE_URL
-        case .slf: return SLF_BASE_URL
+        case .bf:  return "BF"
+        case .bi:  return "BI"
+        case .slf: return "SLF"
         }
     }
 }

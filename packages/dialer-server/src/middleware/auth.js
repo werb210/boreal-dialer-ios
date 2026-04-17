@@ -21,6 +21,14 @@ function authMiddleware(req, res, next) {
     }
 
     req.user = { id: String(userId), role };
+
+    const siloHeader = req.headers['x-silo'];
+    if (typeof siloHeader === 'string' && ['BF', 'BI', 'SLF'].includes(siloHeader)) {
+      req.silo = siloHeader;
+    } else {
+      req.silo = 'BF';
+    }
+
     return next();
   } catch {
     return res.status(401).json({ code: 'unauthorized', message: 'Invalid token', requestId: req.requestId });

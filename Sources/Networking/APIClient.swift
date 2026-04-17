@@ -33,6 +33,10 @@ final class APIClient {
         request.httpMethod = method
         request.httpBody = body
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(
+            APIConfig.siloHeader(for: LineManager.shared.activeLine.silo),
+            forHTTPHeaderField: "X-Silo"
+        )
 
         for (key, value) in headers {
             request.setValue(value, forHTTPHeaderField: key)

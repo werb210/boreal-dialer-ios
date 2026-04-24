@@ -17,6 +17,7 @@ let device: Device | null = null;
 let deviceReady = false;
 let initializing: Promise<Device> | null = null;
 let refreshPromise: Promise<void> | null = null;
+let audioPermissionPrimePromise: Promise<void> | null = null;
 let session: { isAuthenticated: boolean; token?: string } = { isAuthenticated: false };
 
 function isExpired(token: string): boolean {
@@ -63,6 +64,52 @@ function tokenValidForDevice(existingDevice: Device, token: string | undefined):
   return Boolean(existingDevice && token && !isExpired(token));
 }
 
+export async function setOutputSafe(currentDevice: Device, deviceId = "default"): Promise<void> {
+  try {
+    const available = currentDevice.audio?.availableOutputDevices;
+    if (!available || available.size === 0) {
+      return;
+    }
+
+    if (!available.has(deviceId)) {
+      const first = available.keys().next().value;
+      if (!first) {
+        return;
+      }
+      await currentDevice.audio.setOutputDevice(first);
+      return;
+    }
+
+    await currentDevice.audio.setOutputDevice(deviceId);
+  } catch (error) {
+    console.warn("[dialer] setOutputDevice failed, using OS default", error);
+  }
+}
+
+function primeAudioDeviceEnumeration(): Promise<void> {
+  if (audioPermissionPrimePromise) {
+    return audioPermissionPrimePromise;
+  }
+
+  audioPermissionPrimePromise = (async () => {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track) => {
+        track.stop();
+      });
+    } catch (error) {
+      setUiError("Microphone permission denied. Dialer controls are disabled until access is granted.");
+      console.warn("[dialer] microphone permission request failed", error);
+    }
+  })();
+
+  return audioPermissionPrimePromise;
+}
+
 function bindDeviceEvents(currentDevice: Device) {
   currentDevice.on("incoming", (call: Call) => {
     setIncomingCall(call);
@@ -96,6 +143,10 @@ function bindDeviceEvents(currentDevice: Device) {
     setNetworkBanner(null);
     assertDeviceStateTransition(previousState, "registered");
   });
+
+  currentDevice.on("deviceChange", async () => {
+    await setOutputSafe(currentDevice);
+  });
 }
 
 async function initializeDevice() {
@@ -119,7 +170,9 @@ async function initializeDevice() {
   setDevice(nextDevice);
   device = nextDevice;
 
+  void primeAudioDeviceEnumeration();
   await nextDevice.register();
+  await setOutputSafe(nextDevice);
 
   if ((device as Device & { state?: string }).state !== "registered") {
     throw new Error("DEVICE_NOT_READY");
@@ -153,6 +206,7 @@ function resetVoiceState(): void {
   deviceReady = false;
   initializing = null;
   refreshPromise = null;
+  audioPermissionPrimePromise = null;
   session = { isAuthenticated: false };
   setDevice(null);
   setIncomingCall(null);

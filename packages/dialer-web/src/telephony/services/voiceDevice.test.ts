@@ -5,6 +5,7 @@ import {
   __resetVoiceDeviceForTests,
   __setSessionForTests,
   getDevice,
+  setOutputSafe,
   startDialerSession
 } from "./voiceDevice";
 
@@ -15,6 +16,10 @@ type MockDevice = {
   on: (event: string, handler: EventHandler) => void;
   emit: (event: string, ...args: unknown[]) => Promise<void>;
   connect: ReturnType<typeof vi.fn>;
+  audio: {
+    availableOutputDevices: Map<string, { deviceId: string }>;
+    setOutputDevice: ReturnType<typeof vi.fn>;
+  };
   state: string;
 };
 
@@ -38,6 +43,10 @@ vi.mock("@twilio/voice-sdk", () => ({
     state = "unregistered";
     updateToken = vi.fn(async () => undefined);
     connect = vi.fn(async () => ({ id: "call-1" }));
+    audio = {
+      availableOutputDevices: new Map([["default", { deviceId: "default" }]]),
+      setOutputDevice: vi.fn(async () => undefined)
+    };
     register = vi.fn(async () => {
       this.state = "registered";
       await this.emit("registered");
@@ -115,5 +124,63 @@ describe("voiceDevice", () => {
     expect((getDevice() as unknown as MockDevice | null)?.state ?? "unregistered").toBe("unregistered");
     expect(__getSessionForTests().token).toBeUndefined();
     expect(__getSessionForTests().isAuthenticated).toBe(false);
+  });
+});
+
+describe("setOutputSafe", () => {
+  it("is a no-op when availableOutputDevices is empty", async () => {
+    const setOutputDevice = vi.fn(async () => undefined);
+    const fakeDevice = {
+      audio: {
+        availableOutputDevices: new Map(),
+        setOutputDevice
+      }
+    } as unknown as Parameters<typeof setOutputSafe>[0];
+
+    await expect(setOutputSafe(fakeDevice)).resolves.toBeUndefined();
+    expect(setOutputDevice).not.toHaveBeenCalled();
+  });
+
+  it("falls back to first available output id when default is missing", async () => {
+    const setOutputDevice = vi.fn(async () => undefined);
+    const fakeDevice = {
+      audio: {
+        availableOutputDevices: new Map([
+          ["communications", { deviceId: "communications" }],
+          ["speaker-1", { deviceId: "speaker-1" }]
+        ]),
+        setOutputDevice
+      }
+    } as unknown as Parameters<typeof setOutputSafe>[0];
+
+    await setOutputSafe(fakeDevice, "default");
+    expect(setOutputDevice).toHaveBeenCalledWith("communications");
+  });
+
+  it("never throws when setOutputDevice rejects", async () => {
+    const setOutputDevice = vi.fn(async () => {
+      throw new Error("InvalidArgumentError: Devices not found: default");
+    });
+    const fakeDevice = {
+      audio: {
+        availableOutputDevices: new Map([["default", { deviceId: "default" }]]),
+        setOutputDevice
+      }
+    } as unknown as Parameters<typeof setOutputSafe>[0];
+
+    await expect(setOutputSafe(fakeDevice, "default")).resolves.toBeUndefined();
+  });
+
+  it("calls setOutputDevice with default when available", async () => {
+    const setOutputDevice = vi.fn(async () => undefined);
+    const fakeDevice = {
+      audio: {
+        availableOutputDevices: new Map([["default", { deviceId: "default" }], ["speaker-1", { deviceId: "speaker-1" }]]),
+        setOutputDevice
+      }
+    } as unknown as Parameters<typeof setOutputSafe>[0];
+
+    await setOutputSafe(fakeDevice, "default");
+    expect(setOutputDevice).toHaveBeenCalledWith("default");
   });
 });

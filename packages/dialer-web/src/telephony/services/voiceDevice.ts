@@ -144,8 +144,8 @@ function bindDeviceEvents(currentDevice: Device) {
     assertDeviceStateTransition(previousState, "registered");
   });
 
-  currentDevice.on("deviceChange", async () => {
-    await setOutputSafe(currentDevice);
+  currentDevice.audio?.on?.("deviceChange", () => {
+    void setOutputSafe(currentDevice);
   });
 }
 
@@ -170,7 +170,7 @@ async function initializeDevice() {
   setDevice(nextDevice);
   device = nextDevice;
 
-  void primeAudioDeviceEnumeration();
+  await primeAudioDeviceEnumeration();
   await nextDevice.register();
   await setOutputSafe(nextDevice);
 

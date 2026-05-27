@@ -117,6 +117,13 @@ describe("voiceDevice", () => {
     await expect(startDialerSession("+15551234567")).resolves.toBeTruthy();
   });
 
+
+
+  it("passes TwiML To param shape when connecting", async () => {
+    const device = (await startDialerSession()) as unknown as MockDevice;
+    await startDialerSession("+15551234567");
+    expect(device.connect).toHaveBeenCalledWith({ params: { To: "+15551234567" } });
+  });
   it("keeps state unregistered and token empty on auth failure", async () => {
     hoisted.runTelephonyAuthFlow.mockRejectedValueOnce(new Error("AUTH FAILED"));
 

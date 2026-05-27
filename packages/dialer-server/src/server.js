@@ -16,7 +16,7 @@ import { startSessionCleanup } from './jobs/sessionCleanup.js';
 
 const STATUS_MAP = { initiated: 'initiated', ringing: 'ringing', answered: 'answered', completed: 'completed', 'in-progress': 'active', failed: 'failed', busy: 'failed', 'no-answer': 'missed', canceled: 'failed' };
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'missed', 'voicemail']);
-const WEBHOOK_PATHS = new Set(['/api/voice/status', '/api/voice/recording']);
+const WEBHOOK_PATHS = new Set(['/api/voice/status', '/api/voice/recording', '/api/voice/twiml']);
 
 function normalizeStatus(rawStatus) { return !rawStatus ? 'unknown' : STATUS_MAP[String(rawStatus).toLowerCase()] || 'unknown'; }
 function isTerminal(status) { return TERMINAL_STATUSES.has(status); }
@@ -93,8 +93,26 @@ function createApp(env = process.env, deps = {}) {
     const twilioModule = await import('twilio'); const twilio = twilioModule.default || twilioModule;
     const identity = toIdentity(req.user.role, req.user.id);
     const token = new twilio.jwt.AccessToken(env.TWILIO_ACCOUNT_SID, env.TWILIO_API_KEY, env.TWILIO_API_SECRET, { identity });
-    token.addGrant(new twilio.jwt.AccessToken.VoiceGrant({ outgoingApplicationSid: env.TWILIO_VOICE_APP_SID || env.TWILIO_TWIML_APP_SID }));
+    const grant = new twilio.jwt.AccessToken.VoiceGrant({
+      outgoingApplicationSid: env.TWILIO_VOICE_APP_SID || env.TWILIO_TWIML_APP_SID,
+      incomingAllow: true,
+    });
+    token.addGrant(grant);
+    log.info({ identity, hasOutgoingApp: !!grant.outgoingApplicationSid }, 'dialer_token_issued');
     res.status(200).json({ token: token.toJwt(), identity, requestId: req.requestId });
+  });
+
+
+
+  app.post('/api/voice/twiml', requireVoiceEnabled, async (req, res) => {
+    const to = String(req.body?.To || req.query?.To || req.body?.to || req.query?.to || '').trim();
+    const callerId = String(env.VERIFIED_TWILIO_NUMBER || '').trim();
+    if (!to) return makeError(res, req, 400, 'bad_request', 'To is required');
+    if (!callerId) return makeError(res, req, 500, 'misconfigured', 'VERIFIED_TWILIO_NUMBER is required');
+
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Dial callerId="${callerId}" timeout="30" answerOnBridge="true" record="record-from-answer-dual"><Number>${to}</Number></Dial></Response>`;
+    log.info({ to, callerId, twiml }, 'dialer_twiml_outbound');
+    res.type('text/xml').status(200).send(twiml);
   });
 
   app.post('/api/voice/presence/heartbeat', requireStaff, requireVoiceEnabled, async (req, res) => {

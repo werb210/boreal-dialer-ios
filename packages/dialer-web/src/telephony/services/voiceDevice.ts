@@ -226,7 +226,7 @@ async function startCall(to: string) {
     throw new Error("DEVICE_NOT_READY");
   }
 
-  const call = await currentDevice.connect({ params: { to } });
+  const call = await currentDevice.connect({ params: { To: to } });
   setActiveCall(call);
   setCallStatus("connecting");
   return call;

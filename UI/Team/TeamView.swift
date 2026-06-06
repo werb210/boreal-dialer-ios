@@ -1,0 +1,353 @@
+import Foundation
+import SwiftUI
+
+struct TeamMessage: Identifiable, Decodable, Equatable {
+    let id: String
+    let channel_id: String
+    let sender_id: String?
+    let body: String
+    let created_at: String?
+}
+
+struct TeamChannel: Identifiable, Decodable {
+    let id: String
+    let kind: String
+    let name: String?
+    let member_ids: [String]
+    let last_message: TeamMessage?
+    let unread_count: Int
+}
+
+struct TeamUser: Identifiable, Decodable {
+    let id: String
+    let name: String
+    let email: String?
+}
+
+@MainActor
+final class TeamStore: ObservableObject {
+    static let shared = TeamStore()
+
+    @Published var channels: [TeamChannel] = []
+    @Published var users: [TeamUser] = []
+    @Published var messages: [TeamMessage] = []
+    @Published var activeId: String?
+
+    private var ws: URLSessionWebSocketTask?
+
+    var myId: String? {
+        guard let token = TokenStorage.shared.getToken() else { return nil }
+        let parts = token.split(separator: ".")
+        guard parts.count >= 2 else { return nil }
+        var b64 = String(parts[1])
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        while b64.count % 4 != 0 { b64 += "=" }
+        guard let data = Data(base64Encoded: b64),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return (obj["sub"] as? String) ?? (obj["id"] as? String)
+    }
+
+    func name(for id: String?) -> String {
+        guard let id else { return "Staff" }
+        return users.first(where: { $0.id == id })?.name ?? "Staff"
+    }
+
+    func label(_ channel: TeamChannel) -> String {
+        if let name = channel.name, !name.isEmpty {
+            return channel.kind == "channel" ? "# \(name)" : name
+        }
+
+        let others = channel.member_ids.filter { $0 != myId }.map { name(for: $0) }
+        return others.isEmpty ? "Direct message" : others.joined(separator: ", ")
+    }
+
+    func loadChannels() async {
+        do {
+            let req = try APIClient.shared.makeRequest(path: "/team/channels")
+            let data = try await APIClient.shared.makeAuthorizedRequest(req)
+            struct Resp: Decodable { let channels: [TeamChannel] }
+            channels = try JSONDecoder().decode(Resp.self, from: data).channels
+        } catch { /* ignore */ }
+    }
+
+    func loadUsers() async {
+        do {
+            let req = try APIClient.shared.makeRequest(path: "/team/users")
+            let data = try await APIClient.shared.makeAuthorizedRequest(req)
+            struct Resp: Decodable { let users: [TeamUser] }
+            users = try JSONDecoder().decode(Resp.self, from: data).users
+        } catch { /* ignore */ }
+    }
+
+    func open(_ id: String) async {
+        activeId = id
+        do {
+            let req = try APIClient.shared.makeRequest(path: "/team/channels/\(id)/messages")
+            let data = try await APIClient.shared.makeAuthorizedRequest(req)
+            struct Resp: Decodable { let messages: [TeamMessage] }
+            messages = try JSONDecoder().decode(Resp.self, from: data).messages
+        } catch {
+            messages = []
+        }
+        await markRead(id)
+        await loadChannels()
+    }
+
+    func markRead(_ id: String) async {
+        if let req = try? APIClient.shared.makeRequest(path: "/team/channels/\(id)/read", method: "POST") {
+            _ = try? await APIClient.shared.makeAuthorizedRequest(req)
+        }
+    }
+
+    func send(_ body: String) async {
+        guard let id = activeId else { return }
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        do {
+            let payload = try JSONSerialization.data(withJSONObject: ["body": trimmed])
+            let req = try APIClient.shared.makeRequest(path: "/team/channels/\(id)/messages", method: "POST", body: payload)
+            let data = try await APIClient.shared.makeAuthorizedRequest(req)
+            struct Resp: Decodable { let message: TeamMessage }
+            let message = try JSONDecoder().decode(Resp.self, from: data).message
+            if !messages.contains(where: { $0.id == message.id }) {
+                messages.append(message)
+            }
+            await loadChannels()
+        } catch { /* ignore */ }
+    }
+
+    func createChannel(kind: String, name: String, memberIds: [String]) async -> String? {
+        do {
+            var obj: [String: Any] = ["kind": kind, "member_ids": memberIds]
+            if kind != "dm" { obj["name"] = name }
+            let payload = try JSONSerialization.data(withJSONObject: obj)
+            let req = try APIClient.shared.makeRequest(path: "/team/channels", method: "POST", body: payload)
+            let data = try await APIClient.shared.makeAuthorizedRequest(req)
+            struct Resp: Decodable { let channel_id: String }
+            return try JSONDecoder().decode(Resp.self, from: data).channel_id
+        } catch {
+            return nil
+        }
+    }
+
+    func connect() {
+        guard ws == nil,
+              let token = TokenStorage.shared.getToken(),
+              let encodedToken = token.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "wss://server.boreal.financial/api/team/ws?token=\(encodedToken)") else { return }
+        let task = URLSession.shared.webSocketTask(with: url)
+        ws = task
+        task.resume()
+        receive(on: task)
+    }
+
+    private func receive(on task: URLSessionWebSocketTask) {
+        task.receive { [weak self, weak task] result in
+            guard let self, let task else { return }
+            Task { @MainActor in
+                guard self.ws === task else { return }
+                if case .success(let message) = result {
+                    await self.handle(message)
+                    self.receive(on: task)
+                }
+            }
+        }
+    }
+
+    private func handle(_ message: URLSessionWebSocketTask.Message) async {
+        if case .string(let text) = message,
+           let data = text.data(using: .utf8),
+           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            let type = obj["type"] as? String
+            if type == "message" {
+                await loadChannels()
+                if let channelId = obj["channel_id"] as? String, channelId == activeId {
+                    await open(channelId)
+                }
+            } else if type == "channel" {
+                await loadChannels()
+            }
+        }
+    }
+
+    func disconnect() {
+        ws?.cancel(with: .goingAway, reason: nil)
+        ws = nil
+    }
+}
+
+struct TeamView: View {
+    @StateObject private var store = TeamStore.shared
+    @State private var showNew = false
+
+    var body: some View {
+        NavigationView {
+            List(store.channels) { channel in
+                NavigationLink {
+                    TeamChannelView(channelId: channel.id, title: store.label(channel))
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(store.label(channel)).fontWeight(.semibold)
+                            if let lastMessage = channel.last_message {
+                                Text(lastMessage.body)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        Spacer()
+                        if channel.unread_count > 0 {
+                            Text("\(channel.unread_count)")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.red)
+                                .clipShape(Capsule())
+                        }
+                    }
+                }
+            }
+            .listStyle(.plain)
+            .navigationTitle("Team")
+            .navigationBarItems(trailing: Button { showNew = true } label: { Image(systemName: "square.and.pencil") })
+            .sheet(isPresented: $showNew) {
+                NewTeamChatView { kind, name, ids in
+                    Task {
+                        if let id = await store.createChannel(kind: kind, name: name, memberIds: ids) {
+                            await store.loadChannels()
+                            await store.open(id)
+                        }
+                        showNew = false
+                    }
+                }
+            }
+        }
+        .navigationViewStyle(.stack)
+        .task {
+            await store.loadUsers()
+            await store.loadChannels()
+            store.connect()
+        }
+        .onDisappear { store.disconnect() }
+    }
+}
+
+struct TeamChannelView: View {
+    let channelId: String
+    let title: String
+    @ObservedObject private var store = TeamStore.shared
+    @State private var draft = ""
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 8) {
+                    ForEach(store.messages) { message in
+                        let mine = message.sender_id == store.myId
+                        HStack {
+                            if mine { Spacer() }
+                            VStack(alignment: mine ? .trailing : .leading, spacing: 2) {
+                                if !mine {
+                                    Text(store.name(for: message.sender_id))
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                                Text(message.body)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(mine ? Color.accentColor : Color(.systemGray5))
+                                    .foregroundColor(mine ? .white : .primary)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                            if !mine { Spacer() }
+                        }
+                    }
+                }
+                .padding()
+            }
+            Divider()
+            HStack {
+                TextField("Message…", text: $draft)
+                    .textFieldStyle(.roundedBorder)
+                Button {
+                    let body = draft
+                    draft = ""
+                    Task { await store.send(body) }
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill").font(.title2)
+                }
+                .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            .padding(8)
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await store.open(channelId) }
+    }
+}
+
+struct NewTeamChatView: View {
+    let onCreate: (_ kind: String, _ name: String, _ memberIds: [String]) -> Void
+    @ObservedObject private var store = TeamStore.shared
+    @Environment(\.dismiss) private var dismiss
+    @State private var mode = "dm"
+    @State private var name = ""
+    @State private var picked: Set<String> = []
+
+    private var canCreate: Bool {
+        if mode == "dm" { return picked.count == 1 }
+        if mode == "group" { return !picked.isEmpty }
+        return !name.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Picker("Type", selection: $mode) {
+                    Text("Direct").tag("dm")
+                    Text("Group").tag("group")
+                    Text("Channel").tag("channel")
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: mode) { _ in picked.removeAll() }
+
+                if mode != "dm" {
+                    TextField(mode == "channel" ? "Channel name" : "Group name (optional)", text: $name)
+                }
+
+                Section(mode == "dm" ? "Pick one person" : "Pick people") {
+                    ForEach(store.users.filter { $0.id != store.myId }) { user in
+                        Button {
+                            if picked.contains(user.id) {
+                                picked.remove(user.id)
+                            } else {
+                                if mode == "dm" { picked.removeAll() }
+                                picked.insert(user.id)
+                            }
+                        } label: {
+                            HStack {
+                                Text(user.name).foregroundColor(.primary)
+                                Spacer()
+                                if picked.contains(user.id) {
+                                    Image(systemName: "checkmark").foregroundColor(.accentColor)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("New conversation")
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarItems(
+                leading: Button("Cancel") { dismiss() },
+                trailing: Button("Create") { onCreate(mode, name, Array(picked)) }.disabled(!canCreate)
+            )
+        }
+        .navigationViewStyle(.stack)
+    }
+}

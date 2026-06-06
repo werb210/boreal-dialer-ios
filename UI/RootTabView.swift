@@ -1,9 +1,9 @@
 import SwiftUI
 
-// boreal-dialer-ios v3 — top horizontal tab strip (Calls / Messages / SMS / Notifications).
+// boreal-dialer-ios v4 — top tab strip: Calls / Messages / SMS / Team / Notifications.
 struct RootTabView: View {
     enum Tab: String, CaseIterable {
-        case calls = "Calls", messages = "Messages", sms = "SMS", notifications = "Notifications"
+        case calls = "Calls", messages = "Messages", sms = "SMS", team = "Team", notifications = "Notifications"
     }
 
     @State private var tab: Tab = .calls
@@ -17,7 +17,7 @@ struct RootTabView: View {
                     } label: {
                         VStack(spacing: 4) {
                             Text(t.rawValue)
-                                .font(.subheadline)
+                                .font(.footnote)
                                 .fontWeight(tab == t ? .semibold : .regular)
                             Rectangle()
                                 .fill(tab == t ? Color.accentColor : Color.clear)
@@ -37,6 +37,7 @@ struct RootTabView: View {
                 case .calls: DialerView()
                 case .messages: MessagesView()
                 case .sms: SMSView()
+                case .team: TeamView()
                 case .notifications: NotificationsView()
                 }
             }

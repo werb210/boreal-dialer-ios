@@ -66,7 +66,7 @@ describe("telephonyAuthFlow", () => {
   });
 
   it("fails hard for malformed API responses", async () => {
-    hoisted.post.mockResolvedValueOnce({ data: { success: false } });
+    hoisted.post.mockResolvedValueOnce({ data: { success: false } } as any);
 
     await expect(
       runTelephonyAuthFlow("+15550000000", "123456", async () => ({ deviceId: "device-1" }))

@@ -15,6 +15,7 @@ import { isTokenExpired } from "../../auth/token";
 
 let device: Device | null = null;
 let deviceReady = false;
+export function isDeviceReady(): boolean { return deviceReady; } // dialer v2
 let initializing: Promise<Device> | null = null;
 let refreshPromise: Promise<void> | null = null;
 let audioPermissionPrimePromise: Promise<void> | null = null;
@@ -76,13 +77,13 @@ export async function setOutputSafe(currentDevice: Device, deviceId = "default")
       if (!first) {
         return;
       }
-      await currentDevice.audio.setOutputDevice(first);
+      await currentDevice.audio.speakerDevices.set(first);
       return;
     }
 
-    await currentDevice.audio.setOutputDevice(deviceId);
+    await currentDevice.audio.speakerDevices.set(deviceId);
   } catch (error) {
-    console.warn("[dialer] setOutputDevice failed, using OS default", error);
+    console.warn("[dialer] speaker selection failed, using OS default", error);
   }
 }
 

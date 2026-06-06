@@ -21,7 +21,9 @@
     "types": [
       "node",
       "vite/client"
-    ]
+    ],
+    "noEmit": true,
+    "allowImportingTsExtensions": true
   },
   "include": [
     "src"

@@ -92,7 +92,7 @@ function createApp(env = process.env, deps = {}) {
   app.post('/api/voice/token', requireVoiceTokenRole, requireVoiceEnabled, async (req, res) => {
     const twilioModule = await import('twilio'); const twilio = twilioModule.default || twilioModule;
     const identity = toIdentity(req.user.role, req.user.id);
-    const token = new twilio.jwt.AccessToken(env.TWILIO_ACCOUNT_SID, env.TWILIO_API_KEY, env.TWILIO_API_SECRET, { identity });
+    const token = new twilio.jwt.AccessToken(env.TWILIO_ACCOUNT_SID, env.TWILIO_API_KEY, env.TWILIO_API_SECRET, { identity, ttl: 14400 }); // BF_DIALER_TOKEN_TTL_v1 4h to reduce AccessTokenExpired(20104) mid-session
     const grant = new twilio.jwt.AccessToken.VoiceGrant({
       outgoingApplicationSid: env.TWILIO_VOICE_APP_SID || env.TWILIO_TWIML_APP_SID,
       incomingAllow: true,

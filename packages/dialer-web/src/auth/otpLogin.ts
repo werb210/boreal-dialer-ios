@@ -1,0 +1,4 @@
+import { API_BASE, API_ENDPOINTS } from "../constants/endpoints";
+import { login } from "./useDialerAuth";
+export async function startOtp(phone:string):Promise<void>{ const r=await fetch(new URL(API_ENDPOINTS.OTP_START,API_BASE).toString(),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({phone})}); if(!r.ok) throw new Error(`Could not send code (${r.status})`); }
+export async function verifyOtp(phone:string, code:string):Promise<void>{ const r=await fetch(new URL(API_ENDPOINTS.OTP_VERIFY,API_BASE).toString(),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({phone,code})}); if(!r.ok) throw new Error(`Invalid code (${r.status})`); const token=((await r.json()) as {data?:{token?:string}}).data?.token; if(!token) throw new Error("No token returned"); await login(token); }

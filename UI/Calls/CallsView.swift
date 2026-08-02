@@ -12,18 +12,20 @@ import SwiftUI
 import AVFoundation
 
 struct CallsView: View {
-    enum Section: String, CaseIterable {
+    // BOREAL_DIALER_UIKIT_AND_SECTION_v13 - not `Section`: that shadows
+    // SwiftUI.Section throughout this type.
+    enum CallSection: String, CaseIterable {
         case keypad = "Keypad"
         case recents = "Recents"
         case voicemail = "Voicemail"
     }
 
-    @State private var section: Section = .keypad
+    @State private var section: CallSection = .keypad
 
     var body: some View {
         VStack(spacing: 0) {
             Picker("Section", selection: $section) {
-                ForEach(Section.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                ForEach(CallSection.allCases, id: \.self) { Text($0.rawValue).tag($0) }
             }
             .pickerStyle(.segmented)
             .padding(.horizontal)

@@ -159,8 +159,9 @@ final class CalendarViewModel: ObservableObject {
             let data = try await APIClient.shared.makeAuthorizedRequest(request)
             tasks = try JSONDecoder().decode(TasksEnvelope.self, from: data).data.tasks
         } catch {
+            // BOREAL_DIALER_CATCH_SHADOWING_v19 - self, not the catch binding.
             tasks = []
-            error = "Could not load tasks."
+            self.error = "Could not load tasks."
         }
     }
 

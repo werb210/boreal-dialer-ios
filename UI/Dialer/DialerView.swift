@@ -89,10 +89,10 @@ struct DialerView: View {
 struct ActiveCallControls: View {
     @ObservedObject var voiceEngine = VoiceEngine.shared
     @ObservedObject var recordingManager = RecordingManager.shared
-    @State private var onHold = false
+    // BOREAL_DIALER_CONFERENCE_CONTROLS_v14
+    @ObservedObject var conference = ConferenceSession.shared
     @State private var addParticipantNumber = ""
     @State private var showAddParticipant = false
-    @State private var participants: [String] = []
 
     var body: some View {
         VStack(spacing: 16) {
@@ -107,27 +107,22 @@ struct ActiveCallControls: View {
                     voiceEngine.toggleMute()
                 }
 
-                // Hold
-                DialerButton(icon: "pause.circle", label: "Hold", isActive: onHold) {
-                    onHold.toggle()
-                    voiceEngine.toggleHold(onHold: onHold)
+                // Hold the remote participant through the conference API.
+                DialerButton(icon: "pause.circle", label: "Hold", isActive: conference.remoteOnHold) {
+                    Task { await conference.setRemoteHold(!conference.remoteOnHold) }
                 }
+                .disabled(!conference.isActive)
 
                 // Record
                 DialerButton(
-                    icon: "record.circle",
-                    label: "Record",
-                    isActive: recordingManager.isRecording,
+                    icon: "pause.rectangle",
+                    label: "Pause rec",
+                    isActive: false,
                     activeColor: .red
                 ) {
-                    Task {
-                        if recordingManager.isRecording {
-                            try? await recordingManager.stopRecording(callSid: voiceEngine.activeCallSid ?? "")
-                        } else {
-                            try? await recordingManager.startRecording(callSid: voiceEngine.activeCallSid ?? "")
-                        }
-                    }
+                    Task { await conference.recording(op: "pause") }
                 }
+                .disabled(!conference.isActive || recordingManager.consentState != "granted")
 
                 // Recording consent
                 DialerButton(
@@ -151,38 +146,54 @@ struct ActiveCallControls: View {
                     showAddParticipant = true
                 }
 
-                // Park
-                DialerButton(icon: "car.fill", label: "Park", isActive: false) {
-                    Task { try? await parkCall() }
-                }
-
                 // Keypad
                 DialerButton(icon: "rectangle.grid.3x2", label: "Keypad", isActive: false) {
                     voiceEngine.showKeypad.toggle()
                 }
             }
 
-            // Participants list
-            if !participants.isEmpty {
+            // Participants are live from the conference; adding a number joins it.
+            if !conference.participants.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(participants, id: \.self) { participant in
+                    ForEach(conference.participants) { participant in
                         HStack {
                             Image(systemName: "person.circle")
-                            Text(participant)
+                            Text(participant.label)
                             Spacer()
-                            Image(systemName: "mic")
-                            Image(systemName: "speaker.wave.1")
+                            Button {
+                                Task {
+                                    await conference.setMuted(
+                                        !(participant.muted ?? false),
+                                        participantId: participant.id
+                                    )
+                                }
+                            } label: {
+                                Image(systemName: (participant.muted ?? false) ? "mic.slash.fill" : "mic")
+                            }
+                            .buttonStyle(.borderless)
+
+                            Button {
+                                Task { await conference.kick(participantId: participant.id) }
+                            } label: {
+                                Image(systemName: "person.fill.xmark").foregroundColor(.red)
+                            }
+                            .buttonStyle(.borderless)
                         }
                         .padding(.horizontal)
                     }
-
-                    Button("Start Conference") {
-                        Task { try? await startConference() }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.orange)
-                    .padding(.horizontal)
                 }
+            }
+
+            if let message = conference.lastError {
+                Text(message)
+                    .font(.caption)
+                    .foregroundColor(.red)
+                    .padding(.horizontal)
+            } else if !conference.isActive {
+                Text("Call controls need the call to be placed through the server.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal)
             }
 
             // Add participant input
@@ -193,17 +204,22 @@ struct ActiveCallControls: View {
                         .keyboardType(.phonePad)
 
                     Button("Add") {
-                        Task { try? await addParticipant(addParticipantNumber) }
+                        let number = addParticipantNumber
+                        Task { await conference.addParticipant(phone: number) }
                         addParticipantNumber = ""
                         showAddParticipant = false
                     }
                     .buttonStyle(.borderedProminent)
+                    .disabled(!conference.isActive)
 
                     Button("Transfer") {
-                        Task { try? await transferCall(to: addParticipantNumber) }
+                        let number = addParticipantNumber
+                        Task { await conference.transfer(toPhone: number, mode: "warm") }
+                        addParticipantNumber = ""
                         showAddParticipant = false
                     }
                     .buttonStyle(.bordered)
+                    .disabled(!conference.isActive)
                 }
                 .padding(.horizontal)
             }
@@ -233,71 +249,6 @@ struct ActiveCallControls: View {
         "Let me check that right now"
     ]
 
-    private func parkCall() async throws {
-        guard let callSid = VoiceEngine.shared.activeCallSid,
-              let url = URL(string: "\(APIConfig.baseURL)/telephony/park") else { return }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let token = TokenStorage.shared.getToken() {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        request.httpBody = try? JSONEncoder().encode(["callSid": callSid])
-        _ = try await URLSession.shared.data(for: request)
-    }
-
-    private func addParticipant(_ number: String) async throws {
-        guard let callSid = VoiceEngine.shared.activeCallSid,
-              let url = URL(string: "\(APIConfig.baseURL)/telephony/conference/add") else { return }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let token = TokenStorage.shared.getToken() {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        request.httpBody = try? JSONEncoder().encode(["callSid": callSid, "to": number])
-        _ = try await URLSession.shared.data(for: request)
-        participants.append(number)
-    }
-
-    private func transferCall(to number: String) async throws {
-        guard let callSid = VoiceEngine.shared.activeCallSid,
-              let url = URL(string: "\(APIConfig.baseURL)/telephony/transfer") else { return }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let token = TokenStorage.shared.getToken() {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        request.httpBody = try? JSONEncoder().encode(["callSid": callSid, "to": number])
-        _ = try await URLSession.shared.data(for: request)
-    }
-
-    private func startConference() async throws {
-        guard let callSid = VoiceEngine.shared.activeCallSid,
-              let url = URL(string: "\(APIConfig.baseURL)/telephony/conference/start") else { return }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let token = TokenStorage.shared.getToken() {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        request.httpBody = try? JSONEncoder().encode(
-            ConferenceStartPayload(callSid: callSid, participants: participants)
-        )
-        _ = try await URLSession.shared.data(for: request)
-    }
-}
-
-// BOREAL_DIALER_UI_COMPILES_v6 - the conference start body mixes a String and a
-// [String], which a dictionary literal cannot express.
-private struct ConferenceStartPayload: Encodable {
-    let callSid: String
-    let participants: [String]
 }
 
 // Reusable dialer button component

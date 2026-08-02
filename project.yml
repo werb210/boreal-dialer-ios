@@ -1,0 +1,48 @@
+# BOREAL_DIALER_XCODEGEN_v1
+# The repo had no .xcodeproj at all, so nothing could open it in Xcode and no
+# runner could build it. XcodeGen builds the project from this file, which means
+# the project is reviewable in git instead of an unmergeable pbxproj blob.
+name: BorealDialer
+options:
+  bundleIdPrefix: financial.boreal
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+
+packages:
+  TwilioVoice:
+    url: https://github.com/twilio/twilio-voice-ios
+    from: 6.6.0
+  Sentry:
+    url: https://github.com/getsentry/sentry-cocoa
+    from: 8.0.0
+
+targets:
+  BorealDialer:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+        excludes:
+          - BorealDialerLinux
+      - path: UI
+    info:
+      path: Config/Info.plist
+    entitlements:
+      path: Config/BorealDialer.entitlements
+    dependencies:
+      - package: TwilioVoice
+        product: TwilioVoice
+      - package: Sentry
+        product: Sentry
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer
+        PRODUCT_NAME: Boreal Dialer
+        SWIFT_VERSION: 5.9
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: NO
+    scheme:
+      testTargets: []
+      gatherCoverageData: false

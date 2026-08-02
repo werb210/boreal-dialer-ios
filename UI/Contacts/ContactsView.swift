@@ -45,7 +45,9 @@ struct CRMContact: Identifiable, Decodable {
     }
 }
 
-private struct ContactsEnvelope: Decodable {
+// BOREAL_DIALER_SMS_BROADCAST_v20 - shared with the broadcast picker, which
+// reads the same /crm/contacts response.
+struct ContactsListEnvelope: Decodable {
     let data: [CRMContact]
 }
 
@@ -70,7 +72,7 @@ final class ContactsViewModel: ObservableObject {
             }
             let request = try APIClient.shared.makeRequest(path: path)
             let data = try await APIClient.shared.makeAuthorizedRequest(request)
-            contacts = try JSONDecoder().decode(ContactsEnvelope.self, from: data).data
+            contacts = try JSONDecoder().decode(ContactsListEnvelope.self, from: data).data
         } catch {
             self.error = "Could not load contacts."
         }

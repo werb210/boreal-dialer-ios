@@ -88,6 +88,8 @@ final class SMSViewModel: ObservableObject {
 
 struct SMSView: View {
     @StateObject private var viewModel = SMSViewModel()
+    // BOREAL_DIALER_SMS_BROADCAST_v20
+    @State private var showBroadcast = false
 
     var body: some View {
         NavigationStack {
@@ -114,6 +116,18 @@ struct SMSView: View {
             }
             .navigationTitle("SMS")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showBroadcast = true
+                    } label: {
+                        Image(systemName: "square.and.pencil")
+                    }
+                }
+            }
+            .sheet(isPresented: $showBroadcast) {
+                SMSBroadcastView()
+            }
         }
         .task { await viewModel.load() }
     }

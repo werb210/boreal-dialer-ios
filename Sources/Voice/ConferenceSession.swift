@@ -67,6 +67,29 @@ final class ConferenceSession: ObservableObject {
         }
     }
 
+    // BOREAL_DIALER_QUICK_CALL_v16 - mode B of POST /voice/calls: ring another
+    // staff member's client instead of a PSTN number.
+    @discardableResult
+    func startInternal(staffIdentity: String) async -> Bool {
+        clear()
+        do {
+            let body = try JSONSerialization.data(withJSONObject: ["staffIdentity": staffIdentity])
+            let request = try APIClient.shared.makeRequest(
+                path: "/voice/calls", method: "POST", body: body
+            )
+            let data = try await APIClient.shared.makeAuthorizedRequest(request)
+            let decoded = try JSONDecoder().decode(StartResponse.self, from: data)
+            conferenceId = decoded.conferenceId
+            selfParticipantId = decoded.callerParticipantId
+            remoteParticipantId = decoded.calleeParticipantId
+            await refresh()
+            return true
+        } catch {
+            lastError = "Couldn't reach that teammate."
+            return false
+        }
+    }
+
     func clear() {
         conferenceId = nil
         selfParticipantId = nil

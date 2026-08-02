@@ -277,17 +277,17 @@ extension VoiceService: CXProviderDelegate {
 
 extension VoiceService: CallDelegate {
 
-    func callDidStartRinging(_ call: Call) {
+    func callDidStartRinging(call: Call) {
 #if DEBUG
         print("Call ringing")
 #endif
     }
 
-    func callDidConnect(_ call: Call) {
+    func callDidConnect(call: Call) {
         CallManager.shared.callDidConnect()
     }
 
-    func callDidDisconnect(_ call: Call, error: Error?) {
+    func callDidDisconnect(call: Call, error: Error?) {
         CallStateManager.shared.reset()
         cleanup()
 
@@ -301,7 +301,7 @@ extension VoiceService: CallDelegate {
         activeNumber = nil
     }
 
-    func callDidFailToConnect(_ call: Call, error: Error) {
+    func callDidFailToConnect(call: Call, error: Error) {
         CallStateManager.shared.reset()
         cleanup()
         CallManager.shared.callDidFail()
@@ -312,7 +312,17 @@ extension VoiceService: CallDelegate {
 
 extension VoiceService: NotificationDelegate {
 
-    func callInviteReceived(_ callInvite: CallInvite) {
+    // BOREAL_DIALER_MODULE_COMPILES_v4 - required by NotificationDelegate and
+    // previously missing.
+    func cancelledCallInviteReceived(cancelledCallInvite: CancelledCallInvite, error: any Error) {
+        guard callInvite?.callSid == cancelledCallInvite.callSid else { return }
+        callInvite = nil
+        CallStateManager.shared.transition(to: .ended)
+        CallStateManager.shared.reset()
+    }
+
+
+    func callInviteReceived(callInvite: CallInvite) {
         if CallStateManager.shared.current() != .idle {
             callInvite.reject()
             return

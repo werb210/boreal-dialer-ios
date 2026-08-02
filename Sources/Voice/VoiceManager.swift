@@ -319,13 +319,13 @@ final class VoiceManager: NSObject, ObservableObject {
 
 extension VoiceManager: CallDelegate {
 
-    func callDidStartRinging(_ call: Call) {
+    func callDidStartRinging(call: Call) {
 #if DEBUG
         print("Ringing")
 #endif
     }
 
-    func callDidConnect(_ call: Call) {
+    func callDidConnect(call: Call) {
 #if DEBUG
         print("Connected")
 #endif
@@ -334,7 +334,7 @@ extension VoiceManager: CallDelegate {
         notifyServerStatus(status: "connected")
     }
 
-    func callDidDisconnect(_ call: Call, error: Error?) {
+    func callDidDisconnect(call: Call, error: Error?) {
 #if DEBUG
         print("Disconnected")
 #endif
@@ -349,7 +349,7 @@ extension VoiceManager: CallDelegate {
         notifyServerStatus(status: "completed")
     }
 
-    func callDidFailToConnect(_ call: Call, error: Error) {
+    func callDidFailToConnect(call: Call, error: Error) {
         CallStateManager.shared.reset()
         cleanup()
         transitionToIdleState()
@@ -383,7 +383,7 @@ extension VoiceManager: CallDelegate {
 
 extension VoiceManager: NotificationDelegate {
 
-    func callInviteReceived(_ callInvite: CallInvite) {
+    func callInviteReceived(callInvite: CallInvite) {
         if CallStateManager.shared.current() != .idle {
             callInvite.reject()
             return
@@ -424,7 +424,7 @@ extension VoiceManager: NotificationDelegate {
         }
     }
 
-    func cancelledCallInviteReceived(_ cancelledCallInvite: CancelledCallInvite, error: (any Error)?) {
+    func cancelledCallInviteReceived(cancelledCallInvite: CancelledCallInvite, error: any Error) {
         if pendingInvite?.callSid == cancelledCallInvite.callSid {
             pendingInvite = nil
             cleanup()

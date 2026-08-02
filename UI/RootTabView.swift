@@ -40,7 +40,8 @@ struct RootTabView: View {
 
             Group {
                 switch tab {
-                case .calls: DialerView()
+                // BOREAL_DIALER_CALLS_TAB_v11 - Keypad / Recents / Voicemail.
+                case .calls: CallsView()
                 case .contacts: ContactsView()
                 case .messages: MessagesView()
                 case .sms: SMSView()

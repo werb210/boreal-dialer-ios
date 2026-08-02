@@ -30,7 +30,17 @@ jobs:
         run: |
           CI=1 npm --prefix packages/dialer-web run test
 
+  swift-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # BOREAL_DIALER_DUPLICATE_FILENAMES_v2 - fails in seconds on ubuntu rather
+      # than partway through a macOS build.
+      - name: Check for duplicate Swift filenames
+        run: ./scripts/check-duplicate-filenames.sh
+
   ios-build:
+    needs: swift-lint
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4

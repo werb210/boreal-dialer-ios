@@ -156,7 +156,9 @@ final class VoiceEngine: NSObject, ObservableObject {
     }
 
     func reconcile() async {
-        let serverCalls = try? await API.getActiveCalls()
+        // BOREAL_DIALER_DEAD_VOICE_ROUTES_v15 - /voice/calls/active does not
+        // exist, so there is nothing to reconcile against.
+        let serverCalls: [RemoteCallStatus]? = nil
 
         if serverCalls?.isEmpty == true {
             state = .idle
@@ -197,8 +199,19 @@ final class VoiceEngine: NSObject, ObservableObject {
         isOnHold = false
         showKeypad = false
 
+        // BOREAL_DIALER_DEAD_VOICE_ROUTES_v15 - the number and SID come from the
+        // Twilio manager; without a number there is nothing to resolve a
+        // contact against and the server would reject the event.
+        let number = TwilioVoiceManager.shared.activeNumber
+        let sid = activeCallSid
+        let seconds = callDuration
         Task {
-            try? await API.logCall(duration: callDuration, status: "\(status)")
+            try? await API.logCall(
+                duration: seconds,
+                status: "\(status)",
+                number: number,
+                callSid: sid
+            )
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {

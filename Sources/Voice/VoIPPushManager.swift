@@ -2,7 +2,7 @@ import Foundation
 import PushKit
 import CallKit
 
-final class VoIPPushManager: NSObject, PKPushRegistryDelegate {
+final class VoIPPushManager: NSObject, @preconcurrency PKPushRegistryDelegate {
 
     static let shared = VoIPPushManager()
 
@@ -21,7 +21,10 @@ final class VoIPPushManager: NSObject, PKPushRegistryDelegate {
     func pushRegistry(_ registry: PKPushRegistry,
                       didUpdate pushCredentials: PKPushCredentials,
                       for type: PKPushType) {
-        let token = pushCredentials.token.map { String(format: "%02x", $0) }.joined()
+        // BOREAL_DIALER_DELEGATE_ISOLATION_v18 - the raw bytes, not a hex string.
+        // The hex form existed for the old API.registerVoIPToken(String) call;
+        // TwilioVoiceSDK.register takes Data.
+        let token = pushCredentials.token
 
         Task {
             // BOREAL_DIALER_DEAD_VOICE_ROUTES_v15 - VoIP push registration goes

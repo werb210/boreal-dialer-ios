@@ -169,7 +169,7 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
     }
 }
 
-extension TwilioVoiceManager: CallDelegate {
+extension TwilioVoiceManager: @preconcurrency CallDelegate {
 
     func callDidStartRinging(call: Call) {
         if activeUUID == nil {
@@ -217,7 +217,7 @@ extension TwilioVoiceManager: CallDelegate {
     }
 }
 
-extension TwilioVoiceManager: NotificationDelegate {
+extension TwilioVoiceManager: @preconcurrency NotificationDelegate {
 
     func callInviteReceived(callInvite: CallInvite) {
         guard CallStateManager.shared.current() == .idle else {

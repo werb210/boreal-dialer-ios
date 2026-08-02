@@ -317,7 +317,7 @@ final class VoiceManager: NSObject, ObservableObject {
     }
 }
 
-extension VoiceManager: CallDelegate {
+extension VoiceManager: @preconcurrency CallDelegate {
 
     func callDidStartRinging(call: Call) {
 #if DEBUG
@@ -381,7 +381,7 @@ extension VoiceManager: CallDelegate {
     }
 }
 
-extension VoiceManager: NotificationDelegate {
+extension VoiceManager: @preconcurrency NotificationDelegate {
 
     func callInviteReceived(callInvite: CallInvite) {
         if CallStateManager.shared.current() != .idle {

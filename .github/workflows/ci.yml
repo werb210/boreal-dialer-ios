@@ -43,6 +43,10 @@ jobs:
       - name: Check UIKit imports
         run: ./scripts/check-uikit-imports.sh
 
+      # BOREAL_DIALER_CATCH_SHADOWING_v19
+      - name: Check catch shadowing
+        run: ./scripts/check-catch-shadowing.sh
+
   ios-build:
     needs: swift-lint
     runs-on: macos-latest

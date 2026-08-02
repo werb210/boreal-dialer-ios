@@ -24,7 +24,10 @@ final class VoIPPushManager: NSObject, PKPushRegistryDelegate {
         let token = pushCredentials.token.map { String(format: "%02x", $0) }.joined()
 
         Task {
-            await API.registerVoIPToken(token)
+            // BOREAL_DIALER_DEAD_VOICE_ROUTES_v15 - VoIP push registration goes
+            // to Twilio via TwilioVoiceSDK.register, which VoiceManager already
+            // drives from updateDeviceToken. There was never a BF-Server route.
+            await MainActor.run { VoiceManager.shared.updateDeviceToken(token) }
         }
         Telemetry.event("token_refresh")
     }

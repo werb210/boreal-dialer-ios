@@ -155,10 +155,9 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
     func endCall(uuid: UUID) {
         guard CallManager.shared.activeCallUUID == uuid else { return }
 
+        // BOREAL_DIALER_DEAD_VOICE_ROUTES_v15 - hanging up is a client-side SDK
+        // operation; Twilio's status callback is what tells the server.
         activeCall?.disconnect()
-        Task {
-            try? await API.endCall(uuid: uuid.uuidString)
-        }
         activeNumber = nil
     }
 
@@ -207,19 +206,12 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
         try? AVAudioSession.sharedInstance().setActive(false)
     }
 
+    // BOREAL_DIALER_DEAD_VOICE_ROUTES_v15 - this polled /voice/calls/active
+    // every ten seconds. That route does not exist, so it was a 404 loop for the
+    // life of the app. Left as a no-op rather than deleted so the call sites and
+    // handleRemoteCallUpdates stay in place for whenever the route lands.
     private func startActiveCallPolling() {
         pollingTask?.cancel()
-        pollingTask = Task {
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 10_000_000_000)
-                do {
-                    let activeCalls = try await NetworkManager.shared.fetchActiveCalls()
-                    handleRemoteCallUpdates(activeCalls)
-                } catch {
-                    continue
-                }
-            }
-        }
     }
 
     private func handleRemoteCallUpdates(_ calls: [RemoteCallStatus]) {

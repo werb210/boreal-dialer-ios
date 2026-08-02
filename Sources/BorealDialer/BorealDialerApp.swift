@@ -64,7 +64,6 @@ struct BorealDialerApp: App {
                 if phase == .active {
                     Task {
                         await OfflineQueue.shared.flush()
-                        try? await API.reconcileActiveCalls()
                     }
                 }
 

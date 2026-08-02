@@ -49,17 +49,15 @@ final class RecordingManager: ObservableObject {
         }
     }
 
-    func startRecording(callSid: String) async throws {
-        try await API.startRecording(callSid: callSid)
-        isRecording = true
-        activeCallSid = callSid
-        Telemetry.event("recording_started", metadata: ["callSid": callSid, "consent": consentState])
-    }
-
-    func stopRecording(callSid: String) async throws {
-        try await API.stopRecording(callSid: callSid)
-        isRecording = false
-        Telemetry.event("recording_stopped", metadata: ["callSid": callSid])
+    // BOREAL_DIALER_DEAD_VOICE_ROUTES_v15 - recording is a conference operation.
+    // ConferenceSession.recording(op:) drives it; this only tracks the flag so
+    // the UI can reflect state.
+    func setRecording(_ recording: Bool) {
+        isRecording = recording
+        Telemetry.event(
+            recording ? "recording_started" : "recording_stopped",
+            metadata: ["consent": consentState]
+        )
     }
 
 }

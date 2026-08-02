@@ -57,7 +57,6 @@ final class LineManager: ObservableObject {
         CallManager.shared.setActiveLine(line)
         TwilioVoiceManager.shared.disconnect()
         VoiceEngine.shared.forceTerminate()
-        ConversationsService.shared.reset()
 
         // Re-register for Twilio voice with the new silo's token
         Task {

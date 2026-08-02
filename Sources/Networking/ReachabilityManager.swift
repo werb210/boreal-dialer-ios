@@ -14,7 +14,8 @@ final class ReachabilityManager: ObservableObject {
             DispatchQueue.main.async {
                 self?.isOnline = path.status == .satisfied
                 if path.status == .satisfied {
-                    ConversationsService.shared.retryQueuedMessages()
+                    // BOREAL_DIALER_SERVER_THREADS_v3 - the server-backed queue.
+                    Task { await OfflineQueue.shared.flush() }
                 }
             }
         }

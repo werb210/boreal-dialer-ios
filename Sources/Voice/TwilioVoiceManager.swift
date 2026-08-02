@@ -76,17 +76,21 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
             return
         }
 
-        activeCall?.accept()
+        // BOREAL_DIALER_SDK_AND_ISOLATION_v5 - no pending invite means there is
+        // nothing to answer; Call has no accept(). Put the state machine back.
+        CallStateManager.shared.reset()
     }
 
     func reject() {
+        // BOREAL_DIALER_SDK_AND_ISOLATION_v5 - reject applies to an invite. An
+        // already-connected call is hung up, not rejected.
         if let invite = pendingCallInvite {
             invite.reject()
             pendingCallInvite = nil
             return
         }
 
-        activeCall?.reject()
+        activeCall?.disconnect()
     }
 
     func disconnect() {
@@ -180,7 +184,9 @@ extension TwilioVoiceManager: CallDelegate {
 #if canImport(Sentry)
         SentrySDK.capture(message: "Call started")
 #endif
-        VoiceEngine.shared.handleCallConnected(uuid: call.uuid)
+        if let uuid = call.uuid {
+            VoiceEngine.shared.handleCallConnected(uuid: uuid)
+        }
     }
 
     func callDidDisconnect(call: Call, error: Error?) {

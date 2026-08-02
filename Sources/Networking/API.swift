@@ -55,7 +55,8 @@ enum API {
     }
 
     static func sendSMS(_ payload: SendSMSPayload) async throws {
-        let requestURL = try APIClient.shared.url(path: "/sms/send")
+        // BOREAL_DIALER_CONTACTS_TAB_v7 - /sms/send is the marketing blast route.
+        let requestURL = try APIClient.shared.url(path: "/communications/sms")
 
         var request = URLRequest(url: requestURL)
         request.httpMethod = "POST"

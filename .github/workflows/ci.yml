@@ -34,6 +34,11 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: iOS native build
-        if: runner.os == 'macOS'
-        run: npm run ios:build
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate
+      - name: Build iOS app
+        run: >-
+          xcodebuild -project BorealDialer.xcodeproj -scheme BorealDialer
+          -sdk iphonesimulator -configuration Debug CODE_SIGNING_ALLOWED=NO build

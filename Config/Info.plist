@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDisplayName</key><string>Boreal Dialer</string>
+    <key>CFBundleShortVersionString</key><string>1.0</string>
+    <key>CFBundleVersion</key><string>1</string>
+    <key>UILaunchScreen</key><dict/>
+    <key>NSAppTransportSecurity</key><dict><key>NSAllowsArbitraryLoads</key><false/></dict>
+    <key>UIBackgroundModes</key><array><string>voip</string><string>audio</string><string>remote-notification</string></array>
+    <key>NSMicrophoneUsageDescription</key><string>Boreal Dialer needs the microphone to place and receive calls.</string>
+    <key>NSContactsUsageDescription</key><string>Boreal Dialer matches incoming numbers to your CRM contacts.</string>
+    <key>SentryDSN</key><string></string>
+</dict>
+</plist>

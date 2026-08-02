@@ -22,9 +22,15 @@ struct BorealDialerApp: App {
 
         ReconnectionController.shared.start()
 #if canImport(Sentry)
-        SentrySDK.start { options in
-            options.dsn = "<dsn>"
-            options.tracesSampleRate = 1.0
+        // BOREAL_DIALER_XCODEGEN_v1 - was a literal "<dsn>" placeholder, which
+        // would have shipped a broken Sentry init. Driven by Info.plist so a
+        // build without the key simply skips Sentry.
+        if let dsn = Bundle.main.object(forInfoDictionaryKey: "SentryDSN") as? String,
+           !dsn.isEmpty {
+            SentrySDK.start { options in
+                options.dsn = dsn
+                options.tracesSampleRate = 1.0
+            }
         }
 #endif
         Telemetry.event("app_boot")

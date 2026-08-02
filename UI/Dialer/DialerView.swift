@@ -286,9 +286,18 @@ struct ActiveCallControls: View {
         if let token = TokenStorage.shared.getToken() {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
-        request.httpBody = try? JSONEncoder().encode(["callSid": callSid, "participants": participants])
+        request.httpBody = try? JSONEncoder().encode(
+            ConferenceStartPayload(callSid: callSid, participants: participants)
+        )
         _ = try await URLSession.shared.data(for: request)
     }
+}
+
+// BOREAL_DIALER_UI_COMPILES_v6 - the conference start body mixes a String and a
+// [String], which a dictionary literal cannot express.
+private struct ConferenceStartPayload: Encodable {
+    let callSid: String
+    let participants: [String]
 }
 
 // Reusable dialer button component

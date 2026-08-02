@@ -1,8 +1,9 @@
 import SwiftUI
 import TwilioVoice
 
+// BOREAL_DIALER_UI_COMPILES_v6 - takes the invite, not a connected Call.
 struct IncomingCallView: View {
-    let call: Call
+    let invite: CallInvite
     @State private var contactName: String = "Unknown Caller"
     @State private var company: String = ""
 
@@ -31,7 +32,7 @@ struct IncomingCallView: View {
             // Accept / Decline
             HStack(spacing: 60) {
                 Button {
-                    call.reject()
+                    VoiceManager.shared.rejectCall(invite: invite)
                 } label: {
                     Image(systemName: "phone.down.fill")
                         .font(.system(size: 32))
@@ -42,7 +43,7 @@ struct IncomingCallView: View {
                 }
 
                 Button {
-                    call.accept()
+                    VoiceManager.shared.acceptCall(invite: invite)
                 } label: {
                     Image(systemName: "phone.fill")
                         .font(.system(size: 32))
@@ -59,7 +60,7 @@ struct IncomingCallView: View {
     }
 
     private func lookupCaller() {
-        let from = call.from ?? ""
+        let from = invite.from ?? ""
         guard !from.isEmpty,
               let encodedPhone = from.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let url = URL(string: "\(APIConfig.baseURL)/crm/contacts?phone=\(encodedPhone)") else { return }

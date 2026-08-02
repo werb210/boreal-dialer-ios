@@ -235,7 +235,7 @@ final class VoiceEngine: NSObject, ObservableObject {
     }
 }
 
-extension VoiceEngine: CXProviderDelegate {
+extension VoiceEngine: @preconcurrency CXProviderDelegate {
 
     func providerDidReset(_ provider: CXProvider) {
         TwilioVoiceManager.shared.disconnect()

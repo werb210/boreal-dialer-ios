@@ -260,7 +260,7 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
     }
 }
 
-extension VoiceService: CXProviderDelegate {
+extension VoiceService: @preconcurrency CXProviderDelegate {
 
     func providerDidReset(_ provider: CXProvider) {
         activeCall?.disconnect()
@@ -270,7 +270,7 @@ extension VoiceService: CXProviderDelegate {
     }
 }
 
-extension VoiceService: CallDelegate {
+extension VoiceService: @preconcurrency CallDelegate {
 
     func callDidStartRinging(call: Call) {
 #if DEBUG
@@ -305,7 +305,7 @@ extension VoiceService: CallDelegate {
     }
 }
 
-extension VoiceService: NotificationDelegate {
+extension VoiceService: @preconcurrency NotificationDelegate {
 
     // BOREAL_DIALER_MODULE_COMPILES_v4 - required by NotificationDelegate and
     // previously missing.

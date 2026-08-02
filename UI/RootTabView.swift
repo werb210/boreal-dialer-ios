@@ -4,8 +4,9 @@ import SwiftUI
 struct RootTabView: View {
     enum Tab: String, CaseIterable {
         // BOREAL_DIALER_CONTACTS_TAB_v7
+        // BOREAL_DIALER_CALENDAR_TAB_v8 - the six tabs from the concept mockup.
         case calls = "Calls", contacts = "Contacts", messages = "Messages",
-             sms = "SMS", team = "Team", notifications = "Notifications"
+             sms = "SMS", team = "Team", calendar = "Calendar"
     }
 
     @State private var tab: Tab = .calls
@@ -44,7 +45,7 @@ struct RootTabView: View {
                 case .messages: MessagesView()
                 case .sms: SMSView()
                 case .team: TeamView()
-                case .notifications: NotificationsView()
+                case .calendar: CalendarView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

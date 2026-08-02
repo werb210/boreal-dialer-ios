@@ -20,8 +20,9 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
     private override init() {
         super.init()
 
-        guard IdentityManager.shared.identity != nil else {
-            fatalError("Identity not configured before Voice init")
+        // BOREAL_DIALER_SURVIVE_FIRST_RUN_v21
+        if IdentityManager.shared.identity == nil {
+            print("[voice] TwilioVoiceManager constructed before identity was configured")
         }
     }
 

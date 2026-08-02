@@ -87,6 +87,11 @@ final class VoiceEngine: NSObject, ObservableObject {
         let uuid = UUID()
         state = .dialing(uuid)
 
+        // BOREAL_DIALER_CONFERENCE_CONTROLS_v14
+        // Build the server conference that backs mid-call controls. The SDK
+        // call below remains the fallback when server setup fails.
+        Task { await ConferenceSession.shared.start(to: number) }
+
         let handle = CXHandle(type: .phoneNumber, value: number)
         let start = CXStartCallAction(call: uuid, handle: handle)
         let transaction = CXTransaction(action: start)

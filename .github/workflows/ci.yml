@@ -48,7 +48,33 @@ jobs:
         run: brew install xcodegen
       - name: Generate Xcode project
         run: xcodegen generate
+      # BOREAL_DIALER_BUILD_ERROR_SURFACING_v12
       - name: Build iOS app
-        run: >-
-          xcodebuild -project BorealDialer.xcodeproj -scheme BorealDialer
-          -sdk iphonesimulator -configuration Debug CODE_SIGNING_ALLOWED=NO build
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project BorealDialer.xcodeproj \
+            -scheme BorealDialer \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            clean build 2>&1 | tee /tmp/xcodebuild.log
+
+      - name: Surface build errors
+        if: failure()
+        run: |
+          echo "## Build errors" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          grep -E "error:|fatal error:" /tmp/xcodebuild.log | head -60 \
+            | tee -a "$GITHUB_STEP_SUMMARY" \
+            | while IFS= read -r line; do echo "::error::$line"; done
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: /tmp/xcodebuild.log

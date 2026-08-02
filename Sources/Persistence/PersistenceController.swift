@@ -16,7 +16,10 @@ final class PersistenceController {
 
         container.loadPersistentStores { _, error in
             if let error {
-                fatalError("CoreData store failed: \(error)")
+                // BOREAL_DIALER_SURVIVE_FIRST_RUN_v21 - call history and cached
+                // messages are a convenience; everything else reads from the
+                // server. Log and carry on rather than refusing to launch.
+                print("[persistence] CoreData store failed: \(error)")
             }
         }
 

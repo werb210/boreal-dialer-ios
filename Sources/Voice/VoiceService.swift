@@ -25,8 +25,11 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
     private var callInvite: CallInvite?
 
     init(tokenProvider: TokenProvider = BFTokenProvider()) {
-        guard IdentityManager.shared.identity != nil else {
-            fatalError("Identity not configured before Voice init")
+        // BOREAL_DIALER_SURVIVE_FIRST_RUN_v21 - identity arrives with the login
+        // token. Before that this object simply cannot place calls, which the
+        // call paths already guard.
+        if IdentityManager.shared.identity == nil {
+            print("[voice] VoiceService constructed before identity was configured")
         }
 
         self.tokenProvider = tokenProvider

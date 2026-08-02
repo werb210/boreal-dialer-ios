@@ -167,13 +167,13 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
 
 extension TwilioVoiceManager: CallDelegate {
 
-    func callDidStartRinging(_ call: Call) {
+    func callDidStartRinging(call: Call) {
         if activeUUID == nil {
             activeUUID = call.uuid
         }
     }
 
-    func callDidConnect(_ call: Call) {
+    func callDidConnect(call: Call) {
         activeUUID = call.uuid
         CallStateManager.shared.transition(to: .connected)
         Telemetry.event("call_connected")
@@ -183,7 +183,7 @@ extension TwilioVoiceManager: CallDelegate {
         VoiceEngine.shared.handleCallConnected(uuid: call.uuid)
     }
 
-    func callDidDisconnect(_ call: Call, error: Error?) {
+    func callDidDisconnect(call: Call, error: Error?) {
         appendCallLog()
 
         if error == nil {
@@ -201,7 +201,7 @@ extension TwilioVoiceManager: CallDelegate {
         resetCallTracking()
     }
 
-    func callDidFailToConnect(_ call: Call, error: Error) {
+    func callDidFailToConnect(call: Call, error: Error) {
         Telemetry.event("call_failed", metadata: ["error": error.localizedDescription])
 #if canImport(Sentry)
         SentrySDK.capture(error: error)
@@ -213,7 +213,7 @@ extension TwilioVoiceManager: CallDelegate {
 
 extension TwilioVoiceManager: NotificationDelegate {
 
-    func callInviteReceived(_ callInvite: CallInvite) {
+    func callInviteReceived(callInvite: CallInvite) {
         guard CallStateManager.shared.current() == .idle else {
             callInvite.reject()
             return
@@ -229,5 +229,16 @@ extension TwilioVoiceManager: NotificationDelegate {
             guard CallStateManager.shared.current() == .ringing else { return }
             VoiceEngine.shared.reportIncoming(uuid: uuid, handle: handle)
         }
+    }
+
+    // BOREAL_DIALER_MODULE_COMPILES_v4 - required by NotificationDelegate and
+    // previously missing. Fires when the caller rings off before we answer.
+    func cancelledCallInviteReceived(cancelledCallInvite: CancelledCallInvite, error: any Error) {
+        guard pendingCallInvite?.callSid == cancelledCallInvite.callSid else { return }
+        pendingCallInvite = nil
+        Telemetry.event("call_invite_cancelled")
+        VoiceEngine.shared.handleDisconnect()
+        CallStateManager.shared.transition(to: .ended)
+        CallStateManager.shared.reset()
     }
 }

@@ -7,10 +7,13 @@ struct QueuedAction: Codable {
     let createdAt: Date
 }
 
+// BOREAL_DIALER_CONTACTS_TAB_v7 - matches POST /api/communications/sms, which
+// takes the recipient and optionally the CRM contact so the message lands on
+// that contact's timeline. `lineId` is gone: the silo travels in X-Silo.
 struct SendSMSPayload: Codable {
+    let to: String
     let body: String
-    let number: String
-    let lineId: String
+    let contactId: String?
 }
 
 struct EndCallPayload: Codable {

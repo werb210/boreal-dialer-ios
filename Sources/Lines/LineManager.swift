@@ -38,6 +38,8 @@ final class LineManager: ObservableObject {
 
         self.activeLine = initialLine
         APIConfig.activeBaseURL = APIConfig.url(for: initialLine.silo)
+        // BOREAL_DIALER_SDK_AND_ISOLATION_v5 - APIClient reads this for X-Silo.
+        APIConfig.activeSilo = initialLine.silo
         CallManager.shared.setActiveLine(initialLine)
     }
 
@@ -47,6 +49,7 @@ final class LineManager: ObservableObject {
 
         // Update the global API base URL for this silo
         APIConfig.activeBaseURL = APIConfig.url(for: line.silo)
+        APIConfig.activeSilo = line.silo
 
         // Persist the active silo selection
         UserDefaults.standard.set(line.silo.rawValue, forKey: "activeSilo")

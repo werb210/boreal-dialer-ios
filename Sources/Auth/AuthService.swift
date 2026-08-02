@@ -26,7 +26,8 @@ final class AuthService: ObservableObject {
         }
 
         if shouldInitializeVoice(from: token) {
-            PushManager.shared.register()
+            // BOREAL_DIALER_SDK_AND_ISOLATION_v5 - PushManager is main-actor.
+            await MainActor.run { PushManager.shared.register() }
             Task {
                 await VoiceManager.shared.initialize()
             }
@@ -50,23 +51,25 @@ final class AuthService: ObservableObject {
         TokenStorage.shared.save(token: token)
 
         // After saving the auth token, register the push token with BF-Server.
-        if let pushToken = PushManager.shared.deviceTokenString {
-            Task {
-                do {
-                    let body = try JSONSerialization.data(withJSONObject: [
-                        "token": pushToken,
-                        "platform": "ios"
-                    ])
-                    let request = try APIClient.shared.authorizedRequest(
-                        endpoint: "/auth/device-token",
-                        method: "POST",
-                        body: body
-                    )
-                    _ = try await APIClient.shared.execute(request)
-                    print("[PUSH] Device token registered with BF-Server")
-                } catch {
-                    print("[PUSH] Failed to register device token:", error)
-                }
+        // BOREAL_DIALER_SDK_AND_ISOLATION_v5 - handleAuthResponse is a
+        // nonisolated synchronous function, so read the main-actor token inside
+        // the task rather than before it.
+        Task { @MainActor in
+            guard let pushToken = PushManager.shared.deviceTokenString else { return }
+            do {
+                let body = try JSONSerialization.data(withJSONObject: [
+                    "token": pushToken,
+                    "platform": "ios"
+                ])
+                let request = try APIClient.shared.authorizedRequest(
+                    endpoint: "/auth/device-token",
+                    method: "POST",
+                    body: body
+                )
+                _ = try await APIClient.shared.execute(request)
+                print("[PUSH] Device token registered with BF-Server")
+            } catch {
+                print("[PUSH] Failed to register device token:", error)
             }
         }
 

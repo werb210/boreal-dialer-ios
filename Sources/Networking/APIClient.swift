@@ -33,8 +33,11 @@ final class APIClient {
         request.httpMethod = method
         request.httpBody = body
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // BOREAL_DIALER_SDK_AND_ISOLATION_v5 - read the silo from APIConfig,
+        // which LineManager keeps current. Reaching into LineManager here
+        // crossed onto the main actor from a nonisolated request builder.
         request.setValue(
-            APIConfig.siloHeader(for: LineManager.shared.activeLine.silo),
+            APIConfig.siloHeader(for: APIConfig.activeSilo),
             forHTTPHeaderField: "X-Silo"
         )
 

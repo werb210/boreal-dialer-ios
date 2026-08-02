@@ -165,14 +165,15 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
     func acceptCall(uuid: UUID) {
         guard CallManager.shared.activeCallUUID == uuid else { return }
 
+        // BOREAL_DIALER_SDK_AND_ISOLATION_v5 - the delegate is passed to
+        // accept(with:); Call exposes no delegate property to assign afterwards.
         if let invite = callInvite {
             activeCall = invite.accept(with: self)
-            activeCall?.delegate = self
             callInvite = nil
             return
         }
 
-        activeCall?.accept()
+        CallStateManager.shared.reset()
     }
 
     func rejectCall(uuid: UUID) {
@@ -185,7 +186,9 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
             return
         }
 
-        activeCall?.reject()
+        // BOREAL_DIALER_SDK_AND_ISOLATION_v5
+        activeCall?.disconnect()
+        activeNumber = nil
     }
 
     func reset() {

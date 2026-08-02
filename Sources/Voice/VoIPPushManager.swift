@@ -55,6 +55,10 @@ final class VoIPPushManager: NSObject, PKPushRegistryDelegate {
         }
 
         Telemetry.event("push_received", metadata: ["uuid": uuid.uuidString])
-        VoiceEngine.shared.reportIncoming(uuid: uuid, handle: handle)
+        // BOREAL_DIALER_SDK_AND_ISOLATION_v5 - PushKit delivers this off the
+        // main actor; VoiceEngine is main-actor isolated.
+        Task { @MainActor in
+            VoiceEngine.shared.reportIncoming(uuid: uuid, handle: handle)
+        }
     }
 }

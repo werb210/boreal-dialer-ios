@@ -187,7 +187,7 @@ final class VoiceManager: NSObject, ObservableObject {
         registrationState = .registering
 
         let registerWithToken = {
-            TwilioVoiceSDK.register(withAccessToken: token, deviceToken: deviceToken) { [weak self] error in
+            TwilioVoiceSDK.register(accessToken: token, deviceToken: deviceToken) { [weak self] error in
                 guard let self else { return }
                 if let error {
 #if DEBUG
@@ -208,7 +208,7 @@ final class VoiceManager: NSObject, ObservableObject {
             return
         }
 
-        TwilioVoiceSDK.unregister(withAccessToken: tokenToUnregister, deviceToken: deviceToken) { _ in
+        TwilioVoiceSDK.unregister(accessToken: tokenToUnregister, deviceToken: deviceToken) { _ in
             registerWithToken()
         }
     }

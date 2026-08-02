@@ -142,6 +142,9 @@ struct ContactsView: View {
 private struct ContactRow: View {
     let contact: CRMContact
     let onMessage: () -> Void
+    // BOREAL_DIALER_UIKIT_AND_SECTION_v13 - replaced the UIKit application
+    // singleton with SwiftUI’s native URL-opening environment action.
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         HStack(spacing: 12) {
@@ -178,7 +181,7 @@ private struct ContactRow: View {
 
             if let email = contact.emailAddress, let url = URL(string: "mailto:\(email)") {
                 Button {
-                    UIApplication.shared.open(url)
+                    openURL(url)
                 } label: {
                     Image(systemName: "envelope.fill")
                 }

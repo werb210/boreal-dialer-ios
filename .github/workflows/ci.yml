@@ -39,6 +39,10 @@ jobs:
       - name: Check for duplicate Swift filenames
         run: ./scripts/check-duplicate-filenames.sh
 
+      # BOREAL_DIALER_UIKIT_AND_SECTION_v13
+      - name: Check UIKit imports
+        run: ./scripts/check-uikit-imports.sh
+
   ios-build:
     needs: swift-lint
     runs-on: macos-latest

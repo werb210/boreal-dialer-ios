@@ -82,7 +82,14 @@ final class TeamStore: ObservableObject {
     // than only by looking at it. The system account is identified by its
     // @system.local address; there is no flag on /team/users to key off, and
     // adding one server-side would change the staff portal's roster too.
-    static func rosterMembers(users: [TeamUser], excluding myId: String?) -> [TeamUser] {
+    // BOREAL_DIALER_ROSTER_NONISOLATED_v53 - TeamStore is @MainActor, so this
+    // static method inherited main-actor isolation and every call from the
+    // nonisolated XCTestCase methods was an error under Xcode 26:
+    // "call to main actor-isolated static method in a synchronous nonisolated
+    // context". It reads only its arguments and touches no actor state, so it
+    // has no business being isolated. rosterSections still calls it from the
+    // main actor, which nonisolated permits.
+    nonisolated static func rosterMembers(users: [TeamUser], excluding myId: String?) -> [TeamUser] {
         users.filter { user in
             if let myId, user.id == myId { return false }
             if let email = user.email?.lowercased(), email.hasSuffix("@system.local") { return false }

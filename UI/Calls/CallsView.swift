@@ -75,15 +75,18 @@ struct RecentCall: Identifiable, Decodable {
         return isInbound && (s == "no-answer" || s == "missed" || s == "busy" || s == "failed")
     }
 
-    var title: String { contactName ?? phoneNumber ?? "Unknown" }
+    var title: String { contactName ?? PhoneFormat.display(phoneNumber).ifEmpty("Unknown") }
 
     var subtitle: String {
-        var parts: [String] = [isInbound ? "Incoming" : "Outgoing"]
+        // BOREAL_DIALER_CALLS_PRESENTATION_v23 - "Outgoing · 4m 12s · 9:02 AM".
+        var parts: [String] = [missed ? "Missed" : (isInbound ? "Incoming" : "Outgoing")]
+        if let seconds = durationSeconds, seconds > 0 {
+            parts.append(seconds >= 60
+                         ? "\(seconds / 60)m \(String(format: "%02d", seconds % 60))s"
+                         : "\(seconds)s")
+        }
         if let date = CalendarFormatters.parse(createdAt) {
             parts.append(CalendarFormatters.time.string(from: date))
-        }
-        if let seconds = durationSeconds, seconds > 0 {
-            parts.append(String(format: "%d:%02d", seconds / 60, seconds % 60))
         }
         return parts.joined(separator: " · ")
     }
@@ -96,6 +99,18 @@ final class RecentCallsViewModel: ObservableObject {
     @Published var calls: [RecentCall] = []
     @Published var loading = false
     @Published var error: String?
+
+    // Preserves server order (created_at DESC) inside each day.
+    var grouped: [(String, [RecentCall])] {
+        var order: [String] = []
+        var buckets: [String: [RecentCall]] = [:]
+        for call in calls {
+            let key = DayBucket.label(for: call.createdAt)
+            if buckets[key] == nil { order.append(key) }
+            buckets[key, default: []].append(call)
+        }
+        return order.map { ($0, buckets[$0] ?? []) }
+    }
 
     func load() async {
         loading = true
@@ -123,32 +138,47 @@ struct RecentCallsView: View {
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List(viewModel.calls) { call in
-                    HStack(spacing: 12) {
-                        Image(systemName: call.isInbound
-                              ? (call.missed ? "phone.arrow.down.left" : "phone.arrow.down.left")
-                              : "phone.arrow.up.right")
-                            .foregroundColor(call.missed ? .red : .secondary)
+                // BOREAL_DIALER_CALLS_PRESENTATION_v23 - grouped by day, with
+                // avatars, matching the concept mockup.
+                List {
+                    ForEach(viewModel.grouped, id: \.0) { day, calls in
+                        Section {
+                            ForEach(calls) { call in
+                                HStack(spacing: 12) {
+                                    AvatarCircle(name: call.title)
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(call.title)
-                                .font(.body)
-                                .foregroundColor(call.missed ? .red : .primary)
-                            Text(call.subtitle).font(.caption).foregroundColor(.secondary)
-                        }
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(call.title)
+                                            .font(.body)
+                                            .foregroundColor(call.missed ? .red : .primary)
+                                        HStack(spacing: 4) {
+                                            Image(systemName: call.isInbound
+                                                  ? "arrow.down.left" : "arrow.up.right")
+                                                .font(.caption2)
+                                                .foregroundColor(call.missed ? .red : .secondary)
+                                            Text(call.subtitle)
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
 
-                        Spacer()
+                                    Spacer()
 
-                        if let number = call.phoneNumber, !number.isEmpty {
-                            Button {
-                                CallManager.shared.startCall(to: number)
-                            } label: {
-                                Image(systemName: "phone.fill")
+                                    if let number = call.phoneNumber, !number.isEmpty {
+                                        Button {
+                                            CallManager.shared.startCall(to: number)
+                                        } label: {
+                                            Image(systemName: "phone.fill")
+                                        }
+                                        .buttonStyle(.borderless)
+                                    }
+                                }
+                                .padding(.vertical, 2)
                             }
-                            .buttonStyle(.borderless)
+                        } header: {
+                            Text(day).font(.caption.weight(.semibold))
                         }
                     }
-                    .padding(.vertical, 2)
                 }
                 .listStyle(.plain)
                 .refreshable { await viewModel.load() }
@@ -179,11 +209,13 @@ struct Voicemail: Identifiable, Decodable {
         case contactPhone = "contact_phone"
     }
 
-    var title: String { contactName ?? contactPhone ?? "Unknown caller" }
+    var title: String {
+        contactName ?? PhoneFormat.display(contactPhone).ifEmpty("Unknown caller")
+    }
 
     var subtitle: String {
         guard let date = CalendarFormatters.parse(createdAt) else { return "" }
-        return "\(CalendarFormatters.day.string(from: date)) · \(CalendarFormatters.time.string(from: date))"
+        return CalendarFormatters.time.string(from: date)
     }
 }
 
@@ -197,6 +229,17 @@ final class VoicemailViewModel: ObservableObject {
     @Published var error: String?
 
     private var player: AVAudioPlayer?
+
+    var grouped: [(String, [Voicemail])] {
+        var order: [String] = []
+        var buckets: [String: [Voicemail]] = [:]
+        for item in voicemails {
+            let key = DayBucket.label(for: item.createdAt)
+            if buckets[key] == nil { order.append(key) }
+            buckets[key, default: []].append(item)
+        }
+        return order.map { ($0, buckets[$0] ?? []) }
+    }
 
     func load() async {
         loading = true
@@ -263,34 +306,43 @@ struct VoicemailView: View {
                     if let error = viewModel.error {
                         Text(error).font(.footnote).foregroundColor(.red)
                     }
-                    ForEach(viewModel.voicemails) { voicemail in
-                        HStack(spacing: 12) {
-                            Button {
-                                Task { await viewModel.play(voicemail) }
-                            } label: {
-                                Image(systemName: viewModel.playingId == voicemail.id
-                                      ? "stop.circle.fill" : "play.circle.fill")
-                                    .font(.title2)
-                            }
-                            .buttonStyle(.plain)
+                    ForEach(viewModel.grouped, id: \.0) { day, items in
+                        Section {
+                            ForEach(items) { voicemail in
+                                HStack(spacing: 12) {
+                                    Button {
+                                        Task { await viewModel.play(voicemail) }
+                                    } label: {
+                                        Image(systemName: viewModel.playingId == voicemail.id
+                                              ? "stop.circle.fill" : "play.circle.fill")
+                                            .font(.title2)
+                                    }
+                                    .buttonStyle(.plain)
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(voicemail.title).font(.body)
-                                Text(voicemail.subtitle).font(.caption).foregroundColor(.secondary)
-                            }
+                                    AvatarCircle(name: voicemail.title, size: 34)
 
-                            Spacer()
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(voicemail.title).font(.body)
+                                        Text(voicemail.subtitle)
+                                            .font(.caption).foregroundColor(.secondary)
+                                    }
 
-                            if let phone = voicemail.contactPhone, !phone.isEmpty {
-                                Button {
-                                    CallManager.shared.startCall(to: phone)
-                                } label: {
-                                    Image(systemName: "phone.fill")
+                                    Spacer()
+
+                                    if let phone = voicemail.contactPhone, !phone.isEmpty {
+                                        Button {
+                                            CallManager.shared.startCall(to: phone)
+                                        } label: {
+                                            Image(systemName: "phone.fill")
+                                        }
+                                        .buttonStyle(.borderless)
+                                    }
                                 }
-                                .buttonStyle(.borderless)
+                                .padding(.vertical, 2)
                             }
+                        } header: {
+                            Text(day).font(.caption.weight(.semibold))
                         }
-                        .padding(.vertical, 2)
                     }
                 }
                 .listStyle(.plain)

@@ -23,6 +23,25 @@ struct DialerView: View {
                 .keyboardType(.phonePad)
                 .textFieldStyle(.roundedBorder)
 
+            // BOREAL_DIALER_CALLS_PRESENTATION_v23 - country chip and a
+            // formatted read-out above the grid.
+            HStack(spacing: 8) {
+                Text("+1")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(Color.secondary.opacity(0.12)))
+
+                Text(number.isEmpty ? "+1…" : PhoneFormat.display(number))
+                    .font(.system(size: 30, weight: .regular))
+                    .foregroundColor(number.isEmpty ? .secondary : .primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
+
             // BOREAL_DIALER_KEYPAD_ICON_PLIST_v22 - the actual keypad.
             KeypadGrid(
                 onDigit: { digit in

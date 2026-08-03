@@ -187,6 +187,8 @@ struct ContactsView: View {
     @State private var smsRecipient: CRMContact?
 
     var body: some View {
+        // BOREAL_DIALER_CONTACT_DETAIL_v30 - rows push a record now.
+        NavigationStack {
         VStack(spacing: 0) {
             // BOREAL_DIALER_CONTACTS_PRESENTATION_v24
             HStack(alignment: .firstTextBaseline) {
@@ -237,7 +239,13 @@ struct ContactsView: View {
                             ForEach(rows) { row in
                                 switch row {
                                 case .person(let contact):
-                                    ContactRow(contact: contact) { smsRecipient = contact }
+                                    NavigationLink {
+                                        ContactDetailView(contact: contact) {
+                                            smsRecipient = contact
+                                        }
+                                    } label: {
+                                        ContactRow(contact: contact) { smsRecipient = contact }
+                                    }
                                 case .company(let company):
                                     CompanyRow(company: company)
                                 }
@@ -256,6 +264,7 @@ struct ContactsView: View {
         .task { await viewModel.load() }
         .sheet(item: $smsRecipient) { contact in
             SMSComposeSheet(contact: contact)
+        }
         }
     }
 }

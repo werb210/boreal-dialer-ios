@@ -287,7 +287,8 @@ struct ContactsView: View {
                                 switch row {
                                 case .person(let contact):
                                     NavigationLink {
-                                        ContactDetailView(contact: contact) {
+                                        // BOREAL_DIALER_BI_ACTIVITY_v52
+                                        ContactDetailView(contact: contact, silo: viewModel.silo) {
                                             smsRecipient = contact
                                         }
                                     } label: {

@@ -21,6 +21,9 @@ struct TimelineEntry: Identifiable, Decodable {
     var icon: String {
         switch (kind ?? "").lowercased() {
         case "call": return "phone.fill"
+        // BOREAL_DIALER_BI_ACTIVITY_v52 - bi-server also emits sms and demo.
+        case "sms": return "message.fill"
+        case "demo": return "person.2.fill"
         case "email": return "envelope.fill"
         case "note": return "note.text"
         case "task": return "checkmark.circle"
@@ -51,14 +54,23 @@ final class ContactDetailViewModel: ObservableObject {
     @Published var loading = false
     @Published var error: String?
 
-    func load(contactId: String) async {
+    // BOREAL_DIALER_BI_ACTIVITY_v52 - a BI contact's activity lives in
+    // bi_contact_activity on bi-pg01, so BF-Server's timeline endpoint returns
+    // nothing for it. Calls and SMS placed from this app still log to
+    // BF-Server, so a BI contact's phone activity will NOT appear here yet -
+    // the staff portal merges both sources and this does not.
+    func load(contactId: String, silo: Silo) async {
         loading = true
         do {
-            let request = try APIClient.shared.makeRequest(
-                path: "/crm/contacts/\(contactId)/timeline"
-            )
-            let data = try await APIClient.shared.makeAuthorizedRequest(request)
-            entries = try JSONDecoder().decode(TimelineEnvelope.self, from: data).data
+            if silo == .bi {
+                entries = try await BIDirectory.activity(contactId: contactId)
+            } else {
+                let request = try APIClient.shared.makeRequest(
+                    path: "/crm/contacts/\(contactId)/timeline"
+                )
+                let data = try await APIClient.shared.makeAuthorizedRequest(request)
+                entries = try JSONDecoder().decode(TimelineEnvelope.self, from: data).data
+            }
             self.error = nil
         } catch {
             self.error = "Could not load activity."
@@ -69,6 +81,9 @@ final class ContactDetailViewModel: ObservableObject {
 
 struct ContactDetailView: View {
     let contact: CRMContact
+    // BOREAL_DIALER_BI_ACTIVITY_v52 - defaulted so the BF call sites are
+    // unchanged; the Contacts list passes its own selection through.
+    var silo: Silo = .bf
     var onMessage: () -> Void
 
     @StateObject private var viewModel = ContactDetailViewModel()
@@ -169,7 +184,7 @@ struct ContactDetailView: View {
         .background(Theme.bg)
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await viewModel.load(contactId: contact.id) }
+        .task { await viewModel.load(contactId: contact.id, silo: silo) }
     }
 }
 

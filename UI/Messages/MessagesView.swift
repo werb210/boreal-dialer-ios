@@ -238,26 +238,14 @@ struct MessageThreadView: View {
                 Text(error).font(.footnote).foregroundColor(.red).padding(.horizontal)
             }
 
-            Divider()
-
-            HStack(alignment: .bottom, spacing: 8) {
-                TextField("Reply", text: $draft, axis: .vertical)
-                    .lineLimit(2...5)
-                    .textFieldStyle(.plain)
-                    .padding(8)
-                    .background(Color.secondary.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-
-                Button {
-                    send()
-                } label: {
-                    Image(systemName: "arrow.up.circle.fill").font(.title2)
-                }
-                .disabled(sending || draft.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+            ComposerBar(
+                placeholder: "Reply…",
+                text: $draft,
+                disabled: sending || draft.trimmingCharacters(in: .whitespaces).isEmpty,
+                onSend: send
+            )
         }
+        .background(Theme.bg)
         .navigationTitle(thread.title)
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadMessages() }
@@ -316,15 +304,14 @@ private struct ThreadBubble: View {
             HStack {
                 if message.isOutbound { Spacer(minLength: 40) }
 
+                // BOREAL_DIALER_THREAD_STYLE_v32
                 VStack(alignment: message.isOutbound ? .trailing : .leading, spacing: 4) {
-                    Text(message.message ?? "")
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(message.isOutbound ? Color.accentColor : Color.secondary.opacity(0.18))
-                        .foregroundColor(message.isOutbound ? .white : .primary)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-
-                    Text(message.timeLabel).font(.caption2).foregroundColor(.secondary)
+                    ChatBubble(outbound: message.isOutbound) {
+                        Text(message.message ?? "")
+                    }
+                    Text(message.timeLabel)
+                        .font(.system(size: 12))
+                        .foregroundColor(Theme.faint)
                 }
 
                 if !message.isOutbound { Spacer(minLength: 40) }

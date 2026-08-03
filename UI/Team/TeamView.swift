@@ -70,11 +70,31 @@ final class TeamStore: ObservableObject {
         (presence[userId] ?? "offline").lowercased()
     }
 
+    // BOREAL_DIALER_TEAM_ROSTER_SELF_v50
+    // The roster listed EVERY user, including the signed-in staff member and
+    // the client-submission@system.local placeholder that owns client-submitted
+    // applications. myId was already computed but only used to hide the call
+    // button, so you appeared in your own team list with no way to call
+    // yourself - and, being the only person usually marked available, you made
+    // the header read "Available · 1" about yourself.
+    //
+    // Pure and static so the filtering is exercised by the test target rather
+    // than only by looking at it. The system account is identified by its
+    // @system.local address; there is no flag on /team/users to key off, and
+    // adding one server-side would change the staff portal's roster too.
+    static func rosterMembers(users: [TeamUser], excluding myId: String?) -> [TeamUser] {
+        users.filter { user in
+            if let myId, user.id == myId { return false }
+            if let email = user.email?.lowercased(), email.hasSuffix("@system.local") { return false }
+            return true
+        }
+    }
+
     var rosterSections: [(String, [TeamUser])] {
         let order = ["available", "away", "offline"]
         let titles = ["available": "Available", "away": "Away", "offline": "Offline"]
         var buckets: [String: [TeamUser]] = [:]
-        for user in users {
+        for user in Self.rosterMembers(users: users, excluding: myId) {
             let key = order.contains(status(for: user.id)) ? status(for: user.id) : "offline"
             buckets[key, default: []].append(user)
         }

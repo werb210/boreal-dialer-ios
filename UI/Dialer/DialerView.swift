@@ -29,7 +29,13 @@ struct DialerView: View {
                     .padding(.vertical, 4)
                     .background(Capsule().fill(Color.secondary.opacity(0.12)))
 
-                Text(number.isEmpty ? "+1…" : PhoneFormat.display(number))
+                // BOREAL_DIALER_TEAM_ROSTER_SELF_v50 - the placeholder used to
+                // read "+1…" while the chip immediately to its left already
+                // reads "+1", so an empty keypad showed the country code twice.
+                // PhoneFormat.display returns the national format with no
+                // country code, so the chip is the thing carrying that
+                // information and the placeholder should not repeat it.
+                Text(number.isEmpty ? "Enter number" : PhoneFormat.display(number))
                     .font(.system(size: 30, weight: .regular))
                     .foregroundColor(number.isEmpty ? .secondary : .primary)
                     .lineLimit(1)

@@ -30,4 +30,10 @@ if grep -rq '"/sms/send' Sources UI --include='*.swift'; then
   exit 1
 fi
 
+# BOREAL_DIALER_RESOLVE_CALLER_CONTRACT_v45
+if grep -rq '"/voice/resolve-caller?' Sources UI --include='*.swift'; then
+  echo "::error::/voice/resolve-caller is a POST that reads the phone from the body, not a query string"
+  exit 1
+fi
+
 echo "No known-dead paths."

@@ -4,26 +4,11 @@
 // caller name, no state, and the keypad still underneath it.
 //
 // This is the full-screen call, covering the keypad while a call is up. The
-// name comes from GET /api/voice/resolve-caller, which is what the portal uses
+// name comes from POST /api/voice/resolve-caller, which is what the portal uses
 // to turn a number into a contact - so an inbound call from a known client
 // shows their name rather than their number.
+// BOREAL_DIALER_RESOLVE_CALLER_CONTRACT_v45
 import SwiftUI
-
-private struct ResolvedCaller: Decodable {
-    let contactId: String?
-    let name: String?
-    let company: String?
-
-    enum CodingKeys: String, CodingKey {
-        case contactId = "contact_id"
-        case name
-        case company
-    }
-}
-
-private struct ResolveEnvelope: Decodable {
-    let contact: ResolvedCaller?
-}
 
 @MainActor
 final class InCallViewModel: ObservableObject {
@@ -36,13 +21,10 @@ final class InCallViewModel: ObservableObject {
     func resolve(number: String?) async {
         guard let number, !number.isEmpty, resolvedFor != number else { return }
         resolvedFor = number
-        guard let encoded = number.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return }
         do {
-            let request = try APIClient.shared.makeRequest(path: "/voice/resolve-caller?phone=\(encoded)")
-            let data = try await APIClient.shared.makeAuthorizedRequest(request)
-            let decoded = try JSONDecoder().decode(ResolveEnvelope.self, from: data)
-            callerName = decoded.contact?.name
-            callerCompany = decoded.contact?.company
+            let resolved = try await CallerResolver.resolve(phone: number)
+            callerName = resolved.displayName
+            callerCompany = resolved.company
         } catch {
             callerName = nil
             callerCompany = nil

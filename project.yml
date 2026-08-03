@@ -69,14 +69,13 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer
         PRODUCT_NAME: Boreal Dialer
+        # BOREAL_DIALER_RESOLVE_CALLER_CONTRACT_v45
+        PRODUCT_MODULE_NAME: BorealDialer
         SWIFT_VERSION: 5.9
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-    scheme:
-      testTargets: []
-      gatherCoverageData: false
 
   # BOREAL_DIALER_TESTS_v40 - the repo had no test target at all.
   BorealDialerTests:

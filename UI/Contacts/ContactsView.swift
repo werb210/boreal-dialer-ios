@@ -51,14 +51,92 @@ struct ContactsListEnvelope: Decodable {
     let data: [CRMContact]
 }
 
+// BOREAL_DIALER_CONTACTS_PRESENTATION_v24
+// Companies are listed next to people, as in the concept mockup. They come from
+// GET /api/companies (mounted at /companies, not under /crm), which returns the
+// company row plus a contact_count.
+struct CRMCompany: Identifiable, Decodable {
+    let id: String
+    let name: String?
+    let contactCount: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name
+        case contactCount = "contact_count"
+    }
+
+    var displayName: String { name ?? "Unnamed company" }
+
+    var subtitle: String {
+        let count = contactCount ?? 0
+        return count == 1 ? "Company · 1 contact" : "Company · \(count) contacts"
+    }
+}
+
+private struct CompaniesEnvelope: Decodable {
+    let data: [CRMCompany]
+}
+
+// One row type so people and companies interleave alphabetically.
+enum DirectoryRow: Identifiable {
+    case person(CRMContact)
+    case company(CRMCompany)
+
+    var id: String {
+        switch self {
+        case .person(let c): return "p-\(c.id)"
+        case .company(let c): return "c-\(c.id)"
+        }
+    }
+
+    var sortName: String {
+        switch self {
+        case .person(let c): return c.displayName
+        case .company(let c): return c.displayName
+        }
+    }
+
+    var sectionLetter: String {
+        let first = sortName.trimmingCharacters(in: .whitespaces).first
+        guard let first, first.isLetter else { return "#" }
+        return String(first).uppercased()
+    }
+}
+
 @MainActor
 final class ContactsViewModel: ObservableObject {
     @Published var contacts: [CRMContact] = []
+    // BOREAL_DIALER_CONTACTS_PRESENTATION_v24
+    @Published var companies: [CRMCompany] = []
     @Published var query = ""
     @Published var loading = false
     @Published var error: String?
 
     private var searchTask: Task<Void, Never>?
+
+    var totalCount: Int { contacts.count + companies.count }
+
+    // Alphabetical sections, people and companies merged.
+    var sections: [(String, [DirectoryRow])] {
+        let trimmed = query.trimmingCharacters(in: .whitespaces).lowercased()
+        var rows: [DirectoryRow] = contacts.map { .person($0) }
+        rows += companies
+            .filter { trimmed.isEmpty || $0.displayName.lowercased().contains(trimmed) }
+            .map { .company($0) }
+
+        let sorted = rows.sorted {
+            $0.sortName.localizedCaseInsensitiveCompare($1.sortName) == .orderedAscending
+        }
+
+        var order: [String] = []
+        var buckets: [String: [DirectoryRow]] = [:]
+        for row in sorted {
+            let key = row.sectionLetter
+            if buckets[key] == nil { order.append(key) }
+            buckets[key, default: []].append(row)
+        }
+        return order.map { ($0, buckets[$0] ?? []) }
+    }
 
     func load() async {
         loading = true
@@ -73,10 +151,24 @@ final class ContactsViewModel: ObservableObject {
             let request = try APIClient.shared.makeRequest(path: path)
             let data = try await APIClient.shared.makeAuthorizedRequest(request)
             contacts = try JSONDecoder().decode(ContactsListEnvelope.self, from: data).data
+            self.error = nil
         } catch {
             self.error = "Could not load contacts."
         }
+        // BOREAL_DIALER_CONTACTS_PRESENTATION_v24 - companies are a separate
+        // endpoint; a failure there should not empty the people list.
+        await loadCompanies()
         loading = false
+    }
+
+    private func loadCompanies() async {
+        do {
+            let request = try APIClient.shared.makeRequest(path: "/companies")
+            let data = try await APIClient.shared.makeAuthorizedRequest(request)
+            companies = try JSONDecoder().decode(CompaniesEnvelope.self, from: data).data
+        } catch {
+            companies = []
+        }
     }
 
     // Server-side search, debounced so typing does not fire a request per key.
@@ -96,9 +188,21 @@ struct ContactsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // BOREAL_DIALER_CONTACTS_PRESENTATION_v24
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Contacts").font(.headline)
+                    Text("Synced from CRM · \(viewModel.totalCount)")
+                        .font(.caption).foregroundColor(.secondary)
+                }
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.top, 10)
+
             HStack {
                 Image(systemName: "magnifyingglass").foregroundColor(.secondary)
-                TextField("Search contacts", text: $viewModel.query)
+                TextField("Search contacts & companies", text: $viewModel.query)
                     .textFieldStyle(.plain)
                     .autocorrectionDisabled()
                     .onChange(of: viewModel.query) { _ in viewModel.queryChanged() }
@@ -127,8 +231,21 @@ struct ContactsView: View {
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List(viewModel.contacts) { contact in
-                    ContactRow(contact: contact) { smsRecipient = contact }
+                List {
+                    ForEach(viewModel.sections, id: \.0) { letter, rows in
+                        Section {
+                            ForEach(rows) { row in
+                                switch row {
+                                case .person(let contact):
+                                    ContactRow(contact: contact) { smsRecipient = contact }
+                                case .company(let company):
+                                    CompanyRow(company: company)
+                                }
+                            }
+                        } header: {
+                            Text(letter).font(.caption.weight(.semibold))
+                        }
+                    }
                 }
                 .listStyle(.plain)
                 .refreshable { await viewModel.load() }
@@ -150,6 +267,8 @@ private struct ContactRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
+            AvatarCircle(name: contact.displayName, size: 38)
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(contact.displayName).font(.body.weight(.semibold))
                 if let company = contact.companyName, !company.isEmpty {
@@ -259,5 +378,26 @@ private struct SMSComposeSheet: View {
                 self.error = "Couldn't send that message. Please try again."
             }
         }
+    }
+}
+
+
+// BOREAL_DIALER_CONTACTS_PRESENTATION_v24
+private struct CompanyRow: View {
+    let company: CRMCompany
+
+    var body: some View {
+        HStack(spacing: 12) {
+            AvatarCircle(name: company.displayName, size: 38)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(company.displayName).font(.body.weight(.semibold))
+                Text(company.subtitle).font(.subheadline).foregroundColor(.secondary)
+            }
+            Spacer()
+            Image(systemName: "building.2")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding(.vertical, 4)
     }
 }

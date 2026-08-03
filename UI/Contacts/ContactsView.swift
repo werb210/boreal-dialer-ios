@@ -147,14 +147,21 @@ final class ContactsViewModel: ObservableObject {
         error = nil
         do {
             let trimmed = query.trimmingCharacters(in: .whitespaces)
-            var path = "/crm/contacts?pageSize=200"
-            if !trimmed.isEmpty,
-               let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
-                path += "&q=\(encoded)"
+            // BOREAL_DIALER_BI_CONTACTS_v51 - BI contacts are not in BF-Server's
+            // database at all, so this silo goes to bi-server. SLF has no
+            // contact records anywhere yet and correctly shows "No contacts".
+            if silo == .bi {
+                contacts = try await BIDirectory.contacts(search: trimmed)
+            } else {
+                var path = "/crm/contacts?pageSize=200"
+                if !trimmed.isEmpty,
+                   let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
+                    path += "&q=\(encoded)"
+                }
+                let request = try APIClient.shared.makeRequest(path: path, silo: silo)
+                let data = try await APIClient.shared.makeAuthorizedRequest(request)
+                contacts = try JSONDecoder().decode(ContactsListEnvelope.self, from: data).data
             }
-            let request = try APIClient.shared.makeRequest(path: path, silo: silo)
-            let data = try await APIClient.shared.makeAuthorizedRequest(request)
-            contacts = try JSONDecoder().decode(ContactsListEnvelope.self, from: data).data
             self.error = nil
         } catch {
             self.error = "Could not load contacts."
@@ -167,9 +174,16 @@ final class ContactsViewModel: ObservableObject {
 
     private func loadCompanies() async {
         do {
-            let request = try APIClient.shared.makeRequest(path: "/companies", silo: silo)
-            let data = try await APIClient.shared.makeAuthorizedRequest(request)
-            companies = try JSONDecoder().decode(CompaniesEnvelope.self, from: data).data
+            // BOREAL_DIALER_BI_CONTACTS_v51 - bi_companies, same story as contacts.
+            if silo == .bi {
+                companies = try await BIDirectory.companies(
+                    search: query.trimmingCharacters(in: .whitespaces)
+                )
+            } else {
+                let request = try APIClient.shared.makeRequest(path: "/companies", silo: silo)
+                let data = try await APIClient.shared.makeAuthorizedRequest(request)
+                companies = try JSONDecoder().decode(CompaniesEnvelope.self, from: data).data
+            }
         } catch {
             companies = []
         }

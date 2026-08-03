@@ -20,7 +20,18 @@ struct RootTabView: View {
                             tab = t
                         } label: {
                             VStack(spacing: 4) {
-                                Text(t.rawValue)
+                                // BOREAL_DIALER_THEME_v27
+                        Text(t.rawValue)
+                            .font(.system(size: 13.5, weight: .semibold))
+                            .padding(.horizontal, 15)
+                            .padding(.vertical, 9)
+                            .background(
+                                Capsule().fill(tab == t ? Theme.green : Color.clear)
+                            )
+                            .overlay(
+                                Capsule().stroke(tab == t ? Color.clear : Theme.line2, lineWidth: 1)
+                            )
+                            .foregroundColor(tab == t ? Theme.onGreen : Theme.muted)
                                     .font(.footnote)
                                     .fontWeight(tab == t ? .semibold : .regular)
                                 Rectangle()
@@ -36,7 +47,7 @@ struct RootTabView: View {
                     }
                 }
             }
-            Divider()
+            Divider().overlay(Theme.line)
 
             Group {
                 switch tab {

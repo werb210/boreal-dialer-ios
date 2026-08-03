@@ -181,6 +181,8 @@ struct RecentCallsView: View {
                     }
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .background(Theme.bg)
                 .refreshable { await viewModel.load() }
             }
         }
@@ -346,6 +348,8 @@ struct VoicemailView: View {
                     }
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .background(Theme.bg)
                 .refreshable { await viewModel.load() }
             }
         }

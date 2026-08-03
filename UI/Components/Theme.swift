@@ -3,6 +3,7 @@
 // theme with a green accent; the app was default light SwiftUI, which is the
 // single biggest reason the two looked unrelated.
 import SwiftUI
+import UIKit  // BOREAL_DIALER_THREAD_STYLE_v32 - UIBezierPath for per-corner radii
 
 enum Theme {
     // Surfaces
@@ -35,6 +36,98 @@ enum Theme {
     // Avatar gradient
     static let ind1 = Color(hex: 0x4257E8)
     static let ind2 = Color(hex: 0x6B45D0)
+}
+
+// BOREAL_DIALER_THREAD_STYLE_v32
+extension Theme {
+    // The mockup's outbound bubble is a deeper green than the accent, so text
+    // stays legible on it at 14.5pt.
+    static let greenDeep = Color(hex: 0x236F49)
+}
+
+// The mockup's .bub: 74% max width, 18pt radius with a 5pt tail corner on the
+// sender's side. SwiftUI has no per-corner radius on RoundedRectangle, so the
+// tail is drawn as a small square patched into that corner.
+struct ChatBubble<Content: View>: View {
+    let outbound: Bool
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        content
+            .font(.system(size: 14.5))
+            .lineSpacing(2)
+            .padding(.horizontal, 13)
+            .padding(.vertical, 9)
+            .foregroundColor(Theme.text)
+            .background(
+                ZStack(alignment: outbound ? .bottomTrailing : .bottomLeading) {
+                    RoundedRectangle(cornerRadius: 18)
+                    Rectangle()
+                        .frame(width: 13, height: 13)
+                        .cornerRadius(5, corners: outbound ? .bottomRight : .bottomLeft)
+                }
+                .foregroundColor(outbound ? Theme.greenDeep : Theme.surface3)
+            )
+    }
+}
+
+// The composer bar: pill field, 36pt green send button.
+struct ComposerBar: View {
+    let placeholder: String
+    @Binding var text: String
+    let disabled: Bool
+    let onSend: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            TextField(placeholder, text: $text, axis: .vertical)
+                .lineLimit(1...5)
+                .textFieldStyle(.plain)
+                .font(.system(size: 14))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(
+                    RoundedRectangle(cornerRadius: 20).fill(Theme.surface2)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20).stroke(Theme.line2, lineWidth: 1)
+                )
+
+            Button(action: onSend) {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Theme.onGreen)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(disabled ? Theme.surface3 : Theme.green))
+            }
+            .buttonStyle(.plain)
+            .disabled(disabled)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Theme.bg)
+        .overlay(alignment: .top) { Rectangle().fill(Theme.line).frame(height: 1) }
+    }
+}
+
+// Per-corner radius, which SwiftUI does not provide directly.
+extension View {
+    func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
+        clipShape(RoundedCorner(radius: radius, corners: corners))
+    }
+}
+
+struct RoundedCorner: Shape {
+    var radius: CGFloat
+    var corners: UIRectCorner
+
+    func path(in rect: CGRect) -> Path {
+        Path(UIBezierPath(
+            roundedRect: rect,
+            byRoundingCorners: corners,
+            cornerRadii: CGSize(width: radius, height: radius)
+        ).cgPath)
+    }
 }
 
 extension Color {

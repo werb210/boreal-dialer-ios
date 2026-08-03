@@ -145,21 +145,10 @@ final class VoiceEngine: NSObject, ObservableObject {
     private func nameIncomingCall(uuid: UUID, handle: String) {
         Task { [weak self] in
             guard let self else { return }
-            guard let encoded = handle.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return }
-            struct Resolved: Decodable {
-                let name: String?
-                let company: String?
-            }
-            struct Envelope: Decodable { let contact: Resolved? }
+            // BOREAL_DIALER_RESOLVE_CALLER_CONTRACT_v45
             do {
-                let request = try APIClient.shared.makeRequest(path: "/voice/resolve-caller?phone=\(encoded)")
-                let data = try await APIClient.shared.makeAuthorizedRequest(request)
-                let contact = try JSONDecoder().decode(Envelope.self, from: data).contact
-                guard let name = contact?.name, !name.isEmpty else { return }
-
-                let display = (contact?.company?.isEmpty == false)
-                    ? "\(name) · \(contact?.company ?? "")"
-                    : name
+                let resolved = try await CallerResolver.resolve(phone: handle)
+                guard let display = resolved.display else { return }
 
                 let update = CXCallUpdate()
                 update.localizedCallerName = display

@@ -237,10 +237,10 @@ struct CalendarView: View {
                             .frame(width: 32, height: 32)
                             .background(
                                 Circle().fill(selected
-                                    ? Color.accentColor.opacity(0.2)
+                                    ? Theme.green.opacity(0.25)
                                     : Color.clear)
                             )
-                            .foregroundColor(selected ? .accentColor : .primary)
+                            .foregroundColor(selected ? Theme.green : Theme.text)
                     }
                 }
                 .buttonStyle(.plain)

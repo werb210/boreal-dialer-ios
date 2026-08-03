@@ -20,6 +20,18 @@ struct SMSThread: Identifiable, Decodable {
     let lastBody: String?
     let unreadCount: Int?
 
+    // BOREAL_DIALER_DECODE_AND_ACCENT_v36 - accepts 2 or "2".
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        threadKey = try c.decodeIfPresent(String.self, forKey: .threadKey)
+        contactId = try c.decodeIfPresent(String.self, forKey: .contactId)
+        displayName = try c.decodeIfPresent(String.self, forKey: .displayName)
+        phone = try c.decodeIfPresent(String.self, forKey: .phone)
+        lastAt = try c.decodeIfPresent(String.self, forKey: .lastAt)
+        lastBody = try c.decodeIfPresent(String.self, forKey: .lastBody)
+        unreadCount = FlexibleInt.decode(c, forKey: .unreadCount)
+    }
+
     enum CodingKeys: String, CodingKey {
         case threadKey = "thread_key"
         case contactId = "contact_id"

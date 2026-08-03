@@ -19,10 +19,6 @@ struct DialerView: View {
                     .background(Color.red)
             }
 
-            TextField("Enter phone number", text: $number)
-                .keyboardType(.phonePad)
-                .textFieldStyle(.roundedBorder)
-
             // BOREAL_DIALER_CALLS_PRESENTATION_v23 - country chip and a
             // formatted read-out above the grid.
             HStack(spacing: 8) {
@@ -54,9 +50,20 @@ struct DialerView: View {
                 onClear: { number = "" }
             )
 
-            Button("Call") {
+            // BOREAL_DIALER_IN_CALL_SCREEN_v37
+            Button {
                 VoiceEngine.shared.startCall(to: number)
+            } label: {
+                Image(systemName: "phone.fill")
+                    .font(.system(size: 26))
+                    .foregroundColor(Theme.onGreen)
+                    .frame(width: 72, height: 72)
+                    .background(Circle().fill(
+                        (!reachability.isOnline || number.isEmpty || !isIdle)
+                            ? Theme.surface3 : Theme.green
+                    ))
             }
+            .buttonStyle(.plain)
             .disabled(!reachability.isOnline || number.isEmpty || !isIdle)
 
             if !reachability.isOnline {
@@ -64,41 +71,13 @@ struct DialerView: View {
                     .foregroundColor(.orange)
             }
 
-            callStatusView()
-
         }
         .padding()
-    }
-
-    @ViewBuilder
-    private func callStatusView() -> some View {
-        switch voiceEngine.state {
-        case .idle:
-            EmptyView()
-        case .dialing:
-            Text("Dialing...")
-        case .ringing:
-            Text("Ringing...")
-        case .active:
-            VStack(spacing: 16) {
-                Text("On call with \(TwilioVoiceManager.shared.activeNumber ?? "")")
-                Text(formatDuration(voiceEngine.callDuration))
-                    .font(.system(size: 28, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white)
-
-                ActiveCallControls()
-
-                Button("End Call") {
-                    TwilioVoiceManager.shared.disconnect()
-                    VoiceEngine.shared.handleDisconnect()
-                }
-                .foregroundColor(.red)
+        // BOREAL_DIALER_IN_CALL_SCREEN_v37 - a live call takes the screen.
+        .overlay {
+            if !isIdle {
+                InCallView()
             }
-        case .ended:
-            Text("Call Ended")
-        case .failed:
-            Text("Call Failed")
-                .foregroundColor(.red)
         }
     }
 

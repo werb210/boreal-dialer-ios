@@ -10,6 +10,8 @@ import {
   setUiError
 } from "../state/callStore";
 import { runTelephonyAuthFlow } from "./telephonyAuthFlow";
+import { api } from "../../network/api";
+import { API_ENDPOINTS } from "../../constants/endpoints";
 import { clearAuth, registerAuthResetter } from "../../auth/useDialerAuth";
 import { isTokenExpired } from "../../auth/token";
 
@@ -219,6 +221,20 @@ function resetVoiceState(): void {
 
 registerAuthResetter(resetVoiceState);
 
+// BOREAL_DIALER_WEB_JOIN_CONFERENCE_v47
+// This never called POST /api/voice/calls at all. It went straight to
+// device.connect({ params: { To } }), which lands on the legacy Dial-Number
+// branch of /api/webhooks/twilio/voice/twiml - so a call from here had no
+// conference behind it and every mid-call control (mute, hold, transfer, add
+// participant, recording) had nothing to operate on.
+//
+// The server's contract, stated at the top of src/routes/voiceCalls.ts: it
+// creates the conference, dials the target into it, and returns
+// conferenceFriendly for this leg to join with. BF-portal's dialer has always
+// done this; this package never did.
+//
+// To is sent alongside conferenceFriendly because the conference branch reads
+// params.To to write the outbound call_logs row.
 async function startCall(to: string) {
   assertAuthenticatedSession();
 
@@ -227,7 +243,26 @@ async function startCall(to: string) {
     throw new Error("DEVICE_NOT_READY");
   }
 
-  const call = await currentDevice.connect({ params: { To: to } });
+  let conferenceFriendly = "";
+  try {
+    const response = await api.post(API_ENDPOINTS.VOICE_CALLS, { to });
+    const body = response?.data?.data ?? response?.data;
+    if (body?.ok && typeof body?.conferenceFriendly === "string") {
+      conferenceFriendly = body.conferenceFriendly;
+    }
+  } catch (error) {
+    // The call is still worth placing without controls, but this must be
+    // visible rather than silent - a silent version of exactly this is what
+    // hid the problem for months.
+    console.error("[voice] conference setup failed; placing an uncontrolled call", error);
+  }
+
+  const params: Record<string, string> = { To: to };
+  if (conferenceFriendly) {
+    params.conferenceFriendly = conferenceFriendly;
+  }
+
+  const call = await currentDevice.connect({ params });
   setActiveCall(call);
   setCallStatus("connecting");
   return call;

@@ -106,3 +106,57 @@ struct ChannelChip: View {
             )
     }
 }
+
+// BOREAL_DIALER_ROW_SEGMENT_STYLE_v31
+// The mockup's .seg control: a surface2 container with 3pt inset, and the
+// selected item raised on surface3. UIKit's segmented picker cannot be made to
+// look like this, so it is rebuilt rather than tinted.
+struct SegmentedBar<T: Hashable>: View {
+    let options: [T]
+    let title: (T) -> String
+    @Binding var selection: T
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(options, id: \.self) { option in
+                let on = option == selection
+                Button {
+                    selection = option
+                } label: {
+                    Text(title(option))
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(on ? Theme.surface3 : Color.clear)
+                                .shadow(color: on ? .black.opacity(0.4) : .clear, radius: 1, y: 1)
+                        )
+                        .foregroundColor(on ? Theme.text : Theme.muted)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(3)
+        .background(RoundedRectangle(cornerRadius: 11).fill(Theme.surface2))
+    }
+}
+
+// The mockup's .row: 13pt gap, 15.5/600 name, 13pt muted subtitle, 12pt faint
+// trailing time. Applied as a modifier so every list reads the same.
+struct RowText: ViewModifier {
+    func body(content: Content) -> some View {
+        content.font(.system(size: 15.5, weight: .semibold))
+    }
+}
+
+struct RowSubtext: ViewModifier {
+    func body(content: Content) -> some View {
+        content.font(.system(size: 13)).foregroundColor(Theme.muted)
+    }
+}
+
+extension View {
+    func rowTitle() -> some View { modifier(RowText()) }
+    func rowSubtitle() -> some View { modifier(RowSubtext()) }
+}

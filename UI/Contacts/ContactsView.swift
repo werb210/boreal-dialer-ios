@@ -251,7 +251,7 @@ struct ContactsView: View {
                                 }
                             }
                         } header: {
-                            Text(letter).font(.caption.weight(.semibold))
+                            SectionLabel(text: letter)
                         }
                     }
                 }
@@ -281,9 +281,9 @@ private struct ContactRow: View {
             AvatarCircle(name: contact.displayName, size: 38)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(contact.displayName).font(.body.weight(.semibold))
+                Text(contact.displayName).rowTitle()
                 if let company = contact.companyName, !company.isEmpty {
-                    Text(company).font(.subheadline).foregroundColor(.secondary)
+                    Text(company).rowSubtitle()
                 }
                 if let status = contact.leadStatus, !status.isEmpty {
                     Text(status)

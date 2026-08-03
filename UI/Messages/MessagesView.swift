@@ -180,29 +180,17 @@ private struct MessageThreadRow: View {
             AvatarCircle(name: thread.title, size: 38)
 
             VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text(thread.title).font(.body.weight(.semibold))
-                    Text(thread.channelLabel)
-                        .font(.caption2)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.secondary.opacity(0.15))
-                        .clipShape(Capsule())
+                HStack(spacing: 7) {
+                    Text(thread.title).rowTitle()
+                    ChannelChip(label: thread.channelLabel)
                 }
                 if let preview = thread.message, !preview.isEmpty {
-                    Text(preview)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .lineLimit(2)
+                    Text(preview).rowSubtitle().lineLimit(1)
                 }
             }
             Spacer()
             if let unread = thread.unread, unread > 0 {
-                Text("\(unread)")
-                    .font(.caption2.weight(.bold))
-                    .foregroundColor(.white)
-                    .padding(6)
-                    .background(Circle().fill(Color.accentColor))
+                CountBadge(count: unread)
             }
         }
         .padding(.vertical, 4)

@@ -140,23 +140,18 @@ private struct SMSThreadRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
+            // BOREAL_DIALER_ROW_SEGMENT_STYLE_v31
+            AvatarCircle(name: thread.title, size: 40)
+
             VStack(alignment: .leading, spacing: 3) {
-                Text(thread.title)
-                    .font(.body.weight(thread.unread > 0 ? .semibold : .regular))
+                Text(thread.title).rowTitle()
                 if let preview = thread.lastBody, !preview.isEmpty {
-                    Text(preview)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .lineLimit(2)
+                    Text(preview).rowSubtitle().lineLimit(1)
                 }
             }
             Spacer()
             if thread.unread > 0 {
-                Text("\(thread.unread)")
-                    .font(.caption2.weight(.bold))
-                    .foregroundColor(.white)
-                    .padding(6)
-                    .background(Circle().fill(Color.accentColor))
+                CountBadge(count: thread.unread)
             }
         }
         .padding(.vertical, 4)

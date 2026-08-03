@@ -24,12 +24,15 @@ struct CallsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("Section", selection: $section) {
-                ForEach(CallSection.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+            // BOREAL_DIALER_ROW_SEGMENT_STYLE_v31
+            SegmentedBar(
+                options: CallSection.allCases,
+                title: { $0.rawValue },
+                selection: $section
+            )
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
 
             Divider()
 
@@ -149,16 +152,14 @@ struct RecentCallsView: View {
 
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(call.title)
-                                            .font(.body)
-                                            .foregroundColor(call.missed ? .red : .primary)
+                                            .rowTitle()
+                                            .foregroundColor(call.missed ? Theme.red : Theme.text)
                                         HStack(spacing: 4) {
                                             Image(systemName: call.isInbound
                                                   ? "arrow.down.left" : "arrow.up.right")
-                                                .font(.caption2)
-                                                .foregroundColor(call.missed ? .red : .secondary)
-                                            Text(call.subtitle)
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
+                                                .font(.system(size: 11))
+                                                .foregroundColor(call.missed ? Theme.red : Theme.muted)
+                                            Text(call.subtitle).rowSubtitle()
                                         }
                                     }
 
@@ -176,7 +177,7 @@ struct RecentCallsView: View {
                                 .padding(.vertical, 2)
                             }
                         } header: {
-                            Text(day).font(.caption.weight(.semibold))
+                            SectionLabel(text: day)
                         }
                     }
                 }
@@ -372,7 +373,7 @@ struct VoicemailView: View {
                                 .padding(.vertical, 2)
                             }
                         } header: {
-                            Text(day).font(.caption.weight(.semibold))
+                            SectionLabel(text: day)
                         }
                     }
                 }

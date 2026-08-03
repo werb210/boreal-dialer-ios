@@ -7,6 +7,10 @@ final class ConferenceSession: ObservableObject {
     static let shared = ConferenceSession()
 
     @Published private(set) var conferenceId: String?
+    // BOREAL_DIALER_JOIN_CONFERENCE_v46 - the server returns this and it is the
+    // ONLY way the SDK leg can join the conference it just built. It was never
+    // decoded, so it was never available to pass to TwilioVoiceSDK.connect.
+    @Published private(set) var conferenceFriendly: String?
     @Published private(set) var selfParticipantId: String?
     @Published private(set) var remoteParticipantId: String?
     @Published private(set) var participants: [ConferenceParticipant] = []
@@ -38,6 +42,7 @@ final class ConferenceSession: ObservableObject {
     private struct StartResponse: Decodable {
         let ok: Bool
         let conferenceId: String
+        let conferenceFriendly: String
         let callerParticipantId: String?
         let calleeParticipantId: String?
     }
@@ -57,6 +62,7 @@ final class ConferenceSession: ObservableObject {
             let data = try await APIClient.shared.makeAuthorizedRequest(request)
             let decoded = try JSONDecoder().decode(StartResponse.self, from: data)
             conferenceId = decoded.conferenceId
+            conferenceFriendly = decoded.conferenceFriendly
             selfParticipantId = decoded.callerParticipantId
             remoteParticipantId = decoded.calleeParticipantId
             await refresh()
@@ -80,6 +86,7 @@ final class ConferenceSession: ObservableObject {
             let data = try await APIClient.shared.makeAuthorizedRequest(request)
             let decoded = try JSONDecoder().decode(StartResponse.self, from: data)
             conferenceId = decoded.conferenceId
+            conferenceFriendly = decoded.conferenceFriendly
             selfParticipantId = decoded.callerParticipantId
             remoteParticipantId = decoded.calleeParticipantId
             await refresh()
@@ -92,6 +99,7 @@ final class ConferenceSession: ObservableObject {
 
     func clear() {
         conferenceId = nil
+        conferenceFriendly = nil
         selfParticipantId = nil
         remoteParticipantId = nil
         participants = []

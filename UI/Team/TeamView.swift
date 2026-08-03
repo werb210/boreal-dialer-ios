@@ -218,38 +218,114 @@ final class TeamStore: ObservableObject {
 struct TeamView: View {
     @StateObject private var store = TeamStore.shared
     @State private var showNew = false
+    // BOREAL_DIALER_TEAM_ROSTER_v28
+    @State private var search = ""
+
+    private var roster: [(String, [TeamUser])] {
+        let query = search.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !query.isEmpty else { return store.rosterSections }
+        return store.rosterSections.compactMap { title, members in
+            let filtered = members.filter { $0.name.lowercased().contains(query) }
+            return filtered.isEmpty ? nil : (title, filtered)
+        }
+    }
 
     var body: some View {
         NavigationView {
-            List(store.channels) { channel in
-                NavigationLink {
-                    TeamChannelView(channelId: channel.id, title: store.label(channel))
-                } label: {
+            List {
+                Section {
                     HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(store.label(channel)).fontWeight(.semibold)
-                            if let lastMessage = channel.last_message {
-                                Text(lastMessage.body)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .lineLimit(1)
+                        Image(systemName: "magnifyingglass").foregroundColor(Theme.muted)
+                        TextField("Search staff", text: $search)
+                            .textFieldStyle(.plain)
+                            .autocorrectionDisabled()
+                    }
+                    .padding(9)
+                    .background(Theme.surface2)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                    .listRowBackground(Color.clear)
+                }
+
+                // Presence roster. Tapping a teammate places an internal VOIP
+                // call through the same conference endpoint as a PSTN call, so
+                // the mid-call controls work on it.
+                ForEach(roster, id: \.0) { title, members in
+                    Section {
+                        ForEach(members) { user in
+                            HStack(spacing: 13) {
+                                AvatarCircle(
+                                    name: user.name,
+                                    size: 40,
+                                    presence: store.status(for: user.id)
+                                )
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(user.name)
+                                        .font(.system(size: 15.5, weight: .semibold))
+                                    if let email = user.email, !email.isEmpty {
+                                        Text(email)
+                                            .font(.system(size: 13))
+                                            .foregroundColor(Theme.muted)
+                                            .lineLimit(1)
+                                    }
+                                }
+                                Spacer()
+                                Text(store.status(for: user.id).capitalized)
+                                    .font(.system(size: 12))
+                                    .foregroundColor(Theme.faint)
+                                if user.id != store.myId {
+                                    Button {
+                                        Task {
+                                            await ConferenceSession.shared
+                                                .startInternal(staffIdentity: user.id)
+                                        }
+                                    } label: {
+                                        Image(systemName: "phone.fill")
+                                            .foregroundColor(Theme.green)
+                                    }
+                                    .buttonStyle(.borderless)
+                                }
                             }
+                            .listRowBackground(Color.clear)
                         }
-                        Spacer()
-                        if channel.unread_count > 0 {
-                            Text("\(channel.unread_count)")
-                                .font(.caption2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.red)
-                                .clipShape(Capsule())
+                    } header: {
+                        SectionLabel(text: title)
+                    }
+                }
+
+                if !store.channels.isEmpty {
+                    Section {
+                        ForEach(store.channels) { channel in
+                            NavigationLink {
+                                TeamChannelView(channelId: channel.id, title: store.label(channel))
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(store.label(channel))
+                                            .font(.system(size: 15.5, weight: .semibold))
+                                        if let lastMessage = channel.last_message {
+                                            Text(lastMessage.body)
+                                                .font(.system(size: 13))
+                                                .foregroundColor(Theme.muted)
+                                                .lineLimit(1)
+                                        }
+                                    }
+                                    Spacer()
+                                    if channel.unread_count > 0 {
+                                        CountBadge(count: channel.unread_count)
+                                    }
+                                }
+                            }
+                            .listRowBackground(Color.clear)
                         }
+                    } header: {
+                        SectionLabel(text: "Channels")
                     }
                 }
             }
             .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(Theme.bg)
             .navigationTitle("Team")
             .navigationBarItems(trailing: Button { showNew = true } label: { Image(systemName: "square.and.pencil") })
             .sheet(isPresented: $showNew) {
@@ -269,6 +345,14 @@ struct TeamView: View {
             await store.loadUsers()
             await store.loadChannels()
             store.connect()
+            // BOREAL_DIALER_TEAM_ROSTER_v28 - the server marks a staff member
+            // offline five minutes after their last heartbeat, so a roster
+            // fetched once at launch goes wrong quickly.
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 60_000_000_000)
+                guard !Task.isCancelled else { break }
+                await store.loadPresence()
+            }
         }
         .onDisappear { store.disconnect() }
     }

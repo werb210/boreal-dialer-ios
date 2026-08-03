@@ -69,6 +69,28 @@ final class MessagesViewModel: ObservableObject {
     @Published var threads: [CommunicationThread] = []
     @Published var loading = false
     @Published var error: String?
+    // BOREAL_DIALER_TABS_PRESENTATION_v26
+    @Published var filter: Filter = .all
+
+    enum Filter: String, CaseIterable {
+        case all = "All"
+        case unread = "Unread"
+        case chat = "Chat"
+        case human = "Human"
+    }
+
+    var unreadCount: Int {
+        threads.reduce(0) { $0 + ($1.unread ?? 0) }
+    }
+
+    var visible: [CommunicationThread] {
+        switch filter {
+        case .all: return threads
+        case .unread: return threads.filter { ($0.unread ?? 0) > 0 }
+        case .chat: return threads.filter { $0.channelLabel == "Chat" }
+        case .human: return threads.filter { $0.channelLabel == "Human" }
+        }
+    }
 
     func load() async {
         loading = true
@@ -99,7 +121,36 @@ struct MessagesView: View {
                         .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    List(viewModel.threads) { thread in
+                    // BOREAL_DIALER_TABS_PRESENTATION_v26 - filter chips.
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(MessagesViewModel.Filter.allCases, id: \.self) { option in
+                                let selected = viewModel.filter == option
+                                let title = option == .unread && viewModel.unreadCount > 0
+                                    ? "Unread · \(viewModel.unreadCount)"
+                                    : option.rawValue
+                                Button {
+                                    viewModel.filter = option
+                                } label: {
+                                    Text(title)
+                                        .font(.caption.weight(selected ? .semibold : .regular))
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(
+                                            Capsule().fill(selected
+                                                ? Color.accentColor.opacity(0.18)
+                                                : Color.secondary.opacity(0.12))
+                                        )
+                                        .foregroundColor(selected ? .accentColor : .primary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal)
+                        .padding(.vertical, 6)
+                    }
+
+                    List(viewModel.visible) { thread in
                         NavigationLink {
                             MessageThreadView(thread: thread) {
                                 Task { await viewModel.load() }
@@ -124,6 +175,8 @@ private struct MessageThreadRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
+            AvatarCircle(name: thread.title, size: 38)
+
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(thread.title).font(.body.weight(.semibold))

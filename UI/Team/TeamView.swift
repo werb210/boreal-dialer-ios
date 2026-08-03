@@ -30,6 +30,8 @@ final class TeamStore: ObservableObject {
 
     @Published var channels: [TeamChannel] = []
     @Published var users: [TeamUser] = []
+    // BOREAL_DIALER_TABS_PRESENTATION_v26
+    @Published var presence: [String: String] = [:]
     @Published var messages: [TeamMessage] = []
     @Published var activeId: String?
 
@@ -46,6 +48,40 @@ final class TeamStore: ObservableObject {
         guard let data = Data(base64Encoded: b64),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         return (obj["sub"] as? String) ?? (obj["id"] as? String)
+    }
+
+    // BOREAL_DIALER_TABS_PRESENTATION_v26
+    func loadPresence() async {
+        struct Row: Decodable { let user_id: String; let status: String }
+        struct Resp: Decodable { let presence: [Row] }
+        do {
+            let req = try APIClient.shared.makeRequest(path: "/team/presence")
+            let data = try await APIClient.shared.makeAuthorizedRequest(req)
+            let rows = try JSONDecoder().decode(Resp.self, from: data).presence
+            presence = Dictionary(rows.map { ($0.user_id, $0.status) }, uniquingKeysWith: { _, b in b })
+        } catch {
+            // Presence is decoration; the roster still lists everyone.
+            presence = [:]
+        }
+    }
+
+    // Staff with no presence row have never connected, which reads as offline.
+    func status(for userId: String) -> String {
+        (presence[userId] ?? "offline").lowercased()
+    }
+
+    var rosterSections: [(String, [TeamUser])] {
+        let order = ["available", "away", "offline"]
+        let titles = ["available": "Available", "away": "Away", "offline": "Offline"]
+        var buckets: [String: [TeamUser]] = [:]
+        for user in users {
+            let key = order.contains(status(for: user.id)) ? status(for: user.id) : "offline"
+            buckets[key, default: []].append(user)
+        }
+        return order.compactMap { key in
+            guard let group = buckets[key], !group.isEmpty else { return nil }
+            return ("\(titles[key] ?? key) · \(group.count)", group)
+        }
     }
 
     func name(for id: String?) -> String {
@@ -77,6 +113,7 @@ final class TeamStore: ObservableObject {
             let data = try await APIClient.shared.makeAuthorizedRequest(req)
             struct Resp: Decodable { let users: [TeamUser] }
             users = try JSONDecoder().decode(Resp.self, from: data).users
+            await loadPresence()
         } catch { /* ignore */ }
     }
 

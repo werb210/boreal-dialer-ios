@@ -118,6 +118,8 @@ final class CalendarViewModel: ObservableObject {
     @Published var events: [CalendarEvent] = []
     @Published var tasks: [StaffTask] = []
     @Published var taskView: TaskView = .dueToday
+    // BOREAL_DIALER_TABS_PRESENTATION_v26 - the day the strip has selected.
+    @Published var selectedDate: Date = Calendar.current.startOfDay(for: Date())
     @Published var loading = false
     @Published var eventsUnavailable = false
     @Published var error: String?
@@ -134,7 +136,7 @@ final class CalendarViewModel: ObservableObject {
     private func loadEvents() async {
         // Today only - the agenda strip in the mockup is a single day.
         let calendar = Calendar.current
-        let startOfDay = calendar.startOfDay(for: Date())
+        let startOfDay = calendar.startOfDay(for: selectedDate)
         guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else { return }
         let iso = ISO8601DateFormatter()
 
@@ -185,10 +187,12 @@ struct CalendarView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text(CalendarFormatters.day.string(from: Date()))
+                Text(CalendarFormatters.day.string(from: viewModel.selectedDate))
                     .font(.headline)
                     .padding(.horizontal)
                     .padding(.top, 12)
+
+                weekStrip
 
                 agendaSection
                 tasksSection
@@ -202,6 +206,47 @@ struct CalendarView: View {
         }
         .refreshable { await viewModel.load() }
         .task { await viewModel.load() }
+    }
+
+    // BOREAL_DIALER_TABS_PRESENTATION_v26 - the M-S strip from the mockup,
+    // anchored on the current week.
+    private var weekStrip: some View {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let weekday = calendar.component(.weekday, from: today)
+        // Monday-first, matching the mockup.
+        let offsetToMonday = (weekday + 5) % 7
+        let monday = calendar.date(byAdding: .day, value: -offsetToMonday, to: today) ?? today
+        let days = (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: monday) }
+
+        let letters = DateFormatter()
+        letters.dateFormat = "EEEEE"
+
+        return HStack(spacing: 6) {
+            ForEach(days, id: \.self) { day in
+                let selected = calendar.isDate(day, inSameDayAs: viewModel.selectedDate)
+                Button {
+                    viewModel.selectedDate = day
+                    Task { await viewModel.load() }
+                } label: {
+                    VStack(spacing: 3) {
+                        Text(letters.string(from: day))
+                            .font(.caption2).foregroundColor(.secondary)
+                        Text("\(calendar.component(.day, from: day))")
+                            .font(.callout.weight(selected ? .bold : .regular))
+                            .frame(width: 32, height: 32)
+                            .background(
+                                Circle().fill(selected
+                                    ? Color.accentColor.opacity(0.2)
+                                    : Color.clear)
+                            )
+                            .foregroundColor(selected ? .accentColor : .primary)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal)
     }
 
     private var agendaSection: some View {
@@ -302,10 +347,19 @@ struct CalendarView: View {
                             }
                         }
                         Spacer()
-                        if (task.priority ?? "") == "HIGH" {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundColor(.orange)
-                                .font(.caption)
+                        // BOREAL_DIALER_TABS_PRESENTATION_v26 - HIGH / MED chips.
+                        if let priority = task.priority?.uppercased(),
+                           priority == "HIGH" || priority == "MED" || priority == "MEDIUM" {
+                            Text(priority == "HIGH" ? "HIGH" : "MED")
+                                .font(.caption2.weight(.bold))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(
+                                    Capsule().fill(priority == "HIGH"
+                                        ? Color.red.opacity(0.15)
+                                        : Color.orange.opacity(0.15))
+                                )
+                                .foregroundColor(priority == "HIGH" ? .red : .orange)
                         }
                     }
                     .padding(.horizontal)

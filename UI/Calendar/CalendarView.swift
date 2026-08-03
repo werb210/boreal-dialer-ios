@@ -297,13 +297,13 @@ struct CalendarView: View {
                 .foregroundColor(.secondary)
                 .padding(.horizontal)
 
-            Picker("View", selection: $viewModel.taskView) {
-                ForEach(CalendarViewModel.TaskView.allCases, id: \.self) {
-                    Text($0.label).tag($0)
-                }
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal)
+            // BOREAL_DIALER_ROW_SEGMENT_STYLE_v31
+            SegmentedBar(
+                options: CalendarViewModel.TaskView.allCases,
+                title: { $0.label },
+                selection: $viewModel.taskView
+            )
+            .padding(.horizontal, 16)
             .onChange(of: viewModel.taskView) { _ in
                 Task { await viewModel.loadTasks() }
             }

@@ -200,6 +200,9 @@ struct Voicemail: Identifiable, Decodable {
     let contactId: String?
     let contactName: String?
     let contactPhone: String?
+    // BOREAL_DIALER_VOICEMAIL_DETAIL_v29
+    let durationSeconds: Int?
+    let transcript: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -209,6 +212,14 @@ struct Voicemail: Identifiable, Decodable {
         case contactId = "contact_id"
         case contactName = "contact_name"
         case contactPhone = "contact_phone"
+        case durationSeconds = "duration_seconds"
+        case transcript
+    }
+
+    // "0:34", as in the concept mockup.
+    var durationLabel: String? {
+        guard let seconds = durationSeconds, seconds > 0 else { return nil }
+        return String(format: "%d:%02d", seconds / 60, seconds % 60)
     }
 
     var title: String {
@@ -324,12 +335,30 @@ struct VoicemailView: View {
                                     AvatarCircle(name: voicemail.title, size: 34)
 
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(voicemail.title).font(.body)
+                                        Text(voicemail.title)
+                                            .font(.system(size: 15.5, weight: .semibold))
                                         Text(voicemail.subtitle)
-                                            .font(.caption).foregroundColor(.secondary)
+                                            .font(.system(size: 13))
+                                            .foregroundColor(Theme.muted)
+                                        // Nothing writes transcript today -
+                                        // Twilio transcription is off - so this
+                                        // only appears if it is switched on.
+                                        if let transcript = voicemail.transcript,
+                                           !transcript.trimmingCharacters(in: .whitespaces).isEmpty {
+                                            Text("Transcript: \u{201C}\(transcript)\u{201D}")
+                                                .font(.system(size: 13))
+                                                .foregroundColor(Theme.faint)
+                                                .lineLimit(2)
+                                        }
                                     }
 
                                     Spacer()
+
+                                    if let duration = voicemail.durationLabel {
+                                        Text(duration)
+                                            .font(.system(size: 12).monospacedDigit())
+                                            .foregroundColor(Theme.faint)
+                                    }
 
                                     if let phone = voicemail.contactPhone, !phone.isEmpty {
                                         Button {

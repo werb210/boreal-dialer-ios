@@ -14,8 +14,11 @@ final class APIClient {
 
     private init() {}
 
-    func url(path: String) throws -> URL {
-        guard let resolvedURL = URL(string: APIConfig.baseURL + normalized(path: path)) else {
+    // BOREAL_DIALER_BI_CONTACTS_v51 - `baseURL` overrides the default host for
+    // the handful of reads that live on bi-server rather than BF-Server.
+    // Everything else keeps passing nil and lands on APIConfig.baseURL.
+    func url(path: String, baseURL: String? = nil) throws -> URL {
+        guard let resolvedURL = URL(string: (baseURL ?? APIConfig.baseURL) + normalized(path: path)) else {
             throw URLError(.badURL)
         }
 
@@ -27,9 +30,11 @@ final class APIClient {
         method: String = "GET",
         body: Data? = nil,
         headers: [String: String] = [:],
-        silo: Silo? = nil
+        silo: Silo? = nil,
+        // BOREAL_DIALER_BI_CONTACTS_v51
+        baseURL: String? = nil
     ) throws -> URLRequest {
-        let url = try url(path: path)
+        let url = try url(path: path, baseURL: baseURL)
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.httpBody = body

@@ -2,6 +2,9 @@ import SwiftUI
 
 // boreal-dialer-ios v4 — top tab strip: Calls / Messages / SMS / Team / Notifications.
 struct RootTabView: View {
+    // BOREAL_DIALER_ACCOUNT_SHEET_v42
+    @State private var showAccount = false
+
     enum Tab: String, CaseIterable {
         // BOREAL_DIALER_CONTACTS_TAB_v7
         // BOREAL_DIALER_CALENDAR_TAB_v8 - the six tabs from the concept mockup.
@@ -13,6 +16,22 @@ struct RootTabView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // BOREAL_DIALER_ACCOUNT_SHEET_v42 - sign out lives here; there was
+            // previously no way to leave the app.
+            HStack {
+                Spacer()
+                Button {
+                    showAccount = true
+                } label: {
+                    Image(systemName: "person.crop.circle")
+                        .font(.system(size: 20))
+                        .foregroundColor(Theme.muted)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 0) {
                     ForEach(Tab.allCases, id: \.self) { t in
@@ -59,5 +78,6 @@ struct RootTabView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .sheet(isPresented: $showAccount) { AccountSheet() }
     }
 }

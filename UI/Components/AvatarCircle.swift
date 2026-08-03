@@ -22,6 +22,9 @@ struct AvatarCircle: View {
 
     // Two gradients, chosen by name hash, so the same person is consistent
     // everywhere without an avatar service.
+    // BOREAL_DIALER_TESTS_v40 - the same computation the view renders.
+    var initialsForTesting: String { initials }
+
     private var gradient: LinearGradient {
         let hash = name.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xffffff }
         let pair: [Color] = abs(hash) % 2 == 0

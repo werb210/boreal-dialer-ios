@@ -74,6 +74,23 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             clean build 2>&1 | tee /tmp/xcodebuild.log
 
+      # BOREAL_DIALER_TESTS_v40 - pick whatever simulator this image has rather
+      # than pinning a model name that vanishes on the next image rotation.
+      - name: Run unit tests
+        run: |
+          set -o pipefail
+          DEVICE_ID=$(xcrun simctl list devices available --json \
+            | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; \
+              print(next(x['udid'] for k in d for x in d[k] if x.get('isAvailable') and 'iPhone' in x['name']))")
+          echo "Testing on $DEVICE_ID"
+          xcodebuild \
+            -project BorealDialer.xcodeproj \
+            -scheme BorealDialer \
+            -destination "id=$DEVICE_ID" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            test 2>&1 | tee /tmp/xcodebuild-test.log
+
       - name: Surface build errors
         if: failure()
         run: |

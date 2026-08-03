@@ -17,6 +17,16 @@ packages:
     url: https://github.com/getsentry/sentry-cocoa
     from: 8.0.0
 
+schemes:
+  BorealDialer:
+    build:
+      targets:
+        BorealDialer: all
+        BorealDialerTests: [test]
+    test:
+      targets:
+        - BorealDialerTests
+
 targets:
   BorealDialer:
     type: application
@@ -67,3 +77,16 @@ targets:
     scheme:
       testTargets: []
       gatherCoverageData: false
+
+  # BOREAL_DIALER_TESTS_v40 - the repo had no test target at all.
+  BorealDialerTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/BorealDialerTests
+    dependencies:
+      - target: BorealDialer
+    settings:
+      base:
+        SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: YES

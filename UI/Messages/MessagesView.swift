@@ -25,6 +25,28 @@ struct CommunicationThread: Identifiable, Decodable {
     let message: String?
     let updatedAt: String?
 
+    // BOREAL_DIALER_DECODE_AND_ACCENT_v36 - same bigint-as-string trap.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        sessionId = try c.decodeIfPresent(String.self, forKey: .sessionId)
+        type = try c.decodeIfPresent(String.self, forKey: .type)
+        silo = try c.decodeIfPresent(String.self, forKey: .silo)
+        contactId = try c.decodeIfPresent(String.self, forKey: .contactId)
+        contactName = try c.decodeIfPresent(String.self, forKey: .contactName)
+        contactPhone = try c.decodeIfPresent(String.self, forKey: .contactPhone)
+        contactEmail = try c.decodeIfPresent(String.self, forKey: .contactEmail)
+        message = try c.decodeIfPresent(String.self, forKey: .message)
+        updatedAt = try c.decodeIfPresent(String.self, forKey: .updatedAt)
+        unread = FlexibleInt.decode(c, forKey: .unread)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, type, silo, unread, message
+        case sessionId, contactId, contactName, contactPhone, contactEmail
+        case updatedAt
+    }
+
     var isSMS: Bool { (type ?? "").lowercased() == "sms" }
 
     var channelLabel: String {
@@ -138,10 +160,10 @@ struct MessagesView: View {
                                         .padding(.vertical, 6)
                                         .background(
                                             Capsule().fill(selected
-                                                ? Color.accentColor.opacity(0.18)
+                                                ? Theme.green.opacity(0.2)
                                                 : Color.secondary.opacity(0.12))
                                         )
-                                        .foregroundColor(selected ? .accentColor : .primary)
+                                        .foregroundColor(selected ? Theme.green : Theme.text)
                                 }
                                 .buttonStyle(.plain)
                             }

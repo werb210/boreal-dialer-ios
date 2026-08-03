@@ -34,9 +34,6 @@ struct RootTabView: View {
                             .foregroundColor(tab == t ? Theme.onGreen : Theme.muted)
                                     .font(.footnote)
                                     .fontWeight(tab == t ? .semibold : .regular)
-                                Rectangle()
-                                    .fill(tab == t ? Color.accentColor : Color.clear)
-                                    .frame(height: 2)
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.top, 8)

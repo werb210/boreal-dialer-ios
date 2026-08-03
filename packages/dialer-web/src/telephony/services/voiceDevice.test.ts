@@ -24,11 +24,19 @@ type MockDevice = {
 };
 
 const hoisted = vi.hoisted(() => ({
-  runTelephonyAuthFlow: vi.fn(async () => ({ token: "token-123" }))
+  runTelephonyAuthFlow: vi.fn(async () => ({ token: "token-123" })),
+  // BOREAL_DIALER_WEB_JOIN_CONFERENCE_v47
+  apiPost: vi.fn(async () => ({
+    data: { ok: true, conferenceId: "cf1", conferenceFriendly: "boreal-cf1" }
+  }))
 }));
 
 vi.mock("./telephonyAuthFlow", () => ({
   runTelephonyAuthFlow: hoisted.runTelephonyAuthFlow
+}));
+
+vi.mock("../../network/api", () => ({
+  api: { post: hoisted.apiPost, get: vi.fn(), put: vi.fn(), delete: vi.fn() }
 }));
 
 vi.mock("../../services/callLogger", () => ({
@@ -119,8 +127,21 @@ describe("voiceDevice", () => {
 
 
 
-  it("passes TwiML To param shape when connecting", async () => {
+  // BOREAL_DIALER_WEB_JOIN_CONFERENCE_v47 - this test used to assert To on its
+  // own, which is exactly the shape that skipped the conference entirely. It
+  // now asserts the conference is built first and joined by friendly name.
+  it("builds the conference and joins it when connecting", async () => {
     const device = (await startDialerSession()) as unknown as MockDevice;
+    await startDialerSession("+15551234567");
+    expect(hoisted.apiPost).toHaveBeenCalledWith("/api/voice/calls", { to: "+15551234567" });
+    expect(device.connect).toHaveBeenCalledWith({
+      params: { To: "+15551234567", conferenceFriendly: "boreal-cf1" }
+    });
+  });
+
+  it("still places the call when conference setup fails", async () => {
+    const device = (await startDialerSession()) as unknown as MockDevice;
+    hoisted.apiPost.mockRejectedValueOnce(new Error("conference_down"));
     await startDialerSession("+15551234567");
     expect(device.connect).toHaveBeenCalledWith({ params: { To: "+15551234567" } });
   });

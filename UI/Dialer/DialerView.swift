@@ -28,7 +28,7 @@ struct DialerView: View {
             HStack(spacing: 8) {
                 Text("+1")
                     .font(.system(size: 20, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.muted)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
                     .background(Capsule().fill(Color.secondary.opacity(0.12)))
@@ -330,16 +330,20 @@ struct KeypadGrid: View {
                         Button {
                             onDigit(key)
                         } label: {
-                            VStack(spacing: 1) {
-                                Text(key).font(.system(size: 30, weight: .regular))
+                            // BOREAL_DIALER_THEME_v27
+                            VStack(spacing: -2) {
+                                Text(key)
+                                    .font(.system(size: 28, weight: .medium))
+                                    .foregroundColor(Theme.text)
                                 if !letters.isEmpty {
                                     Text(letters)
-                                        .font(.system(size: 10, weight: .semibold))
-                                        .foregroundColor(.secondary)
+                                        .font(.system(size: 9, weight: .bold))
+                                        .kerning(2)
+                                        .foregroundColor(Theme.faint)
                                 }
                             }
-                            .frame(width: 72, height: 72)
-                            .background(Circle().fill(Color.secondary.opacity(0.12)))
+                            .frame(width: 66, height: 66)
+                            .overlay(Circle().stroke(Theme.line2, lineWidth: 1))
                         }
                         .buttonStyle(.plain)
                         .simultaneousGesture(

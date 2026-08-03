@@ -7,6 +7,8 @@ import SwiftUI
 struct AvatarCircle: View {
     let name: String
     var size: CGFloat = 40
+    // BOREAL_DIALER_THEME_v27 - "available" / "away" / "offline", or nil for no dot.
+    var presence: String? = nil
 
     private var initials: String {
         let words = name
@@ -18,21 +20,43 @@ struct AvatarCircle: View {
         return letters.joined().uppercased()
     }
 
-    private var tint: Color {
-        let palette: [Color] = [.blue, .purple, .teal, .orange, .pink, .indigo, .green]
+    // Two gradients, chosen by name hash, so the same person is consistent
+    // everywhere without an avatar service.
+    private var gradient: LinearGradient {
         let hash = name.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xffffff }
-        return palette[abs(hash) % palette.count]
+        let pair: [Color] = abs(hash) % 2 == 0
+            ? [Theme.ind1, Theme.ind2]
+            : [Color(hex: 0x3ECF8E), Color(hex: 0x1F8E5B)]
+        return LinearGradient(colors: pair, startPoint: .top, endPoint: .bottomTrailing)
+    }
+
+    private var presenceColor: Color? {
+        switch presence?.lowercased() {
+        case "available", "online": return Theme.online
+        case "away", "busy": return Theme.away
+        case "offline": return Theme.offline
+        default: return nil
+        }
     }
 
     var body: some View {
         Circle()
-            .fill(tint.opacity(0.18))
+            .fill(gradient)
             .frame(width: size, height: size)
             .overlay(
                 Text(initials)
-                    .font(.system(size: size * 0.36, weight: .semibold))
-                    .foregroundColor(tint)
+                    .font(.system(size: size * 0.38, weight: .bold))
+                    .foregroundColor(.white)
             )
+            .overlay(alignment: .bottomTrailing) {
+                if let presenceColor {
+                    Circle()
+                        .fill(presenceColor)
+                        .frame(width: 12, height: 12)
+                        .overlay(Circle().stroke(Theme.bg, lineWidth: 2.5))
+                        .offset(x: 1, y: 1)
+                }
+            }
     }
 }
 

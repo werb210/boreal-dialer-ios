@@ -41,6 +41,11 @@ struct BorealDialerApp: App {
             Group {
                 if auth.isAuthenticated {
                     RootTabView()
+                // BOREAL_DIALER_THEME_v27 - the concept is a dark theme; the
+                // app was rendering in default light SwiftUI.
+                .preferredColorScheme(.dark)
+                .tint(Theme.green)
+                .background(Theme.bg.ignoresSafeArea())
                 } else {
                     LoginView()
                 }

@@ -248,6 +248,8 @@ struct ContactsView: View {
                     }
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .background(Theme.bg)
                 .refreshable { await viewModel.load() }
             }
         }

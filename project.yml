@@ -68,8 +68,33 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer
-        PRODUCT_NAME: Boreal Dialer
-        # BOREAL_DIALER_RESOLVE_CALLER_CONTRACT_v45
+        # BOREAL_DIALER_PRODUCT_NAME_v49
+        # PRODUCT_NAME was 'Boreal Dialer', with a space, which diverged from
+        # the target name in two places that both only mattered once the test
+        # target was actually built:
+        #
+        #   1. XcodeGen derives the test bundle's TEST_HOST from the APP TARGET
+        #      NAME, so it pointed at BorealDialer.app/BorealDialer while the
+        #      app was really building to a bundle and executable whose names
+        #      contained the 'Boreal Dialer' space.
+        #      That is the "Could not find test host for BorealDialerTests"
+        #      failure, exit 70.
+        #   2. PRODUCT_MODULE_NAME defaults to
+        #      $(PRODUCT_NAME:c99extidentifier) = Boreal_Dialer, breaking
+        #      `@testable import BorealDialer` - which v45 papered over by
+        #      pinning PRODUCT_MODULE_NAME explicitly.
+        #
+        # PRODUCT_NAME only names the .app bundle and the executable inside it.
+        # Nothing a user sees depends on it: the home-screen label comes from
+        # CFBundleDisplayName ('Boreal Dialer', set in info.properties above)
+        # and the identity comes from PRODUCT_BUNDLE_IDENTIFIER. Dropping the
+        # override lets PRODUCT_NAME default to the target name, which makes
+        # TEST_HOST correct by construction rather than by a hand-written path
+        # containing a space.
+        #
+        # PRODUCT_MODULE_NAME is now redundant but kept explicit: it is the
+        # thing `@testable import` depends on, and it should not silently
+        # change if PRODUCT_NAME is ever reintroduced.
         PRODUCT_MODULE_NAME: BorealDialer
         SWIFT_VERSION: 5.9
         TARGETED_DEVICE_FAMILY: "1,2"

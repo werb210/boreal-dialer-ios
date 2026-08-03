@@ -185,6 +185,8 @@ final class ContactsViewModel: ObservableObject {
 struct ContactsView: View {
     @StateObject private var viewModel = ContactsViewModel()
     @State private var smsRecipient: CRMContact?
+    // BOREAL_DIALER_CREATE_CONTACT_v34
+    @State private var showNewContact = false
 
     var body: some View {
         // BOREAL_DIALER_CONTACT_DETAIL_v30 - rows push a record now.
@@ -195,9 +197,18 @@ struct ContactsView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Contacts").font(.headline)
                     Text("Synced from CRM · \(viewModel.totalCount)")
-                        .font(.caption).foregroundColor(.secondary)
+                        .font(.caption).foregroundColor(Theme.muted)
                 }
                 Spacer()
+                // BOREAL_DIALER_CREATE_CONTACT_v34
+                Button {
+                    showNewContact = true
+                } label: {
+                    Text("+ New")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(Theme.green)
+                }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal)
             .padding(.top, 10)
@@ -264,6 +275,11 @@ struct ContactsView: View {
         .task { await viewModel.load() }
         .sheet(item: $smsRecipient) { contact in
             SMSComposeSheet(contact: contact)
+        }
+        .sheet(isPresented: $showNewContact) {
+            NewContactView {
+                Task { await viewModel.load() }
+            }
         }
         }
     }

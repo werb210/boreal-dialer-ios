@@ -90,6 +90,8 @@ struct SMSView: View {
     @StateObject private var viewModel = SMSViewModel()
     // BOREAL_DIALER_SMS_BROADCAST_v20
     @State private var showBroadcast = false
+    // BOREAL_DIALER_SMS_NEW_MESSAGE_v33
+    @State private var showNewMessage = false
 
     var body: some View {
         NavigationStack {
@@ -120,8 +122,18 @@ struct SMSView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showBroadcast = true
+                    // BOREAL_DIALER_SMS_NEW_MESSAGE_v33
+                    Menu {
+                        Button {
+                            showNewMessage = true
+                        } label: {
+                            Label("New message", systemImage: "square.and.pencil")
+                        }
+                        Button {
+                            showBroadcast = true
+                        } label: {
+                            Label("Broadcast", systemImage: "person.2.fill")
+                        }
                     } label: {
                         Image(systemName: "square.and.pencil")
                     }
@@ -129,6 +141,12 @@ struct SMSView: View {
             }
             .sheet(isPresented: $showBroadcast) {
                 SMSBroadcastView()
+            }
+            .sheet(isPresented: $showNewMessage) {
+                // Refresh on send so the new thread appears at the top.
+                SMSNewMessageView {
+                    Task { await viewModel.load() }
+                }
             }
         }
         .task { await viewModel.load() }

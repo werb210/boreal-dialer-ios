@@ -47,6 +47,10 @@ jobs:
       - name: Check catch shadowing
         run: ./scripts/check-catch-shadowing.sh
 
+      # BOREAL_DIALER_APPICON_PLACEHOLDER_v25
+      - name: Check for empty assets
+        run: ./scripts/check-empty-assets.sh
+
   ios-build:
     needs: swift-lint
     runs-on: macos-latest

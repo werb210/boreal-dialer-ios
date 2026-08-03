@@ -1,11 +1,14 @@
 {
   "images" : [
     {
-      "filename" : "app_icon.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
     }
   ],
-  "info" : { "author" : "xcode", "version" : 1 }
+  "info" : {
+    "author" : "xcode",
+    "version" : 1,
+    "comment" : "BOREAL_DIALER_APPICON_PLACEHOLDER_v25 - add a real 1024x1024 opaque PNG here and set its filename to ship an icon"
+  }
 }

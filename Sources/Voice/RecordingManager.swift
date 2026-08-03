@@ -1,3 +1,5 @@
+// BOREAL_DIALER_LAST_DEAD_ROUTES_v43 - /crm/events does not exist on
+// BF-Server; calendar events are served from /calendar/events.
 import Foundation
 
 @MainActor
@@ -38,7 +40,7 @@ final class RecordingManager: ObservableObject {
                     ]
                 ])
                 let request = try APIClient.shared.authorizedRequest(
-                    endpoint: "/crm/events",
+                    endpoint: "/calendar/events",
                     method: "POST",
                     body: body
                 )

@@ -51,6 +51,10 @@ jobs:
       - name: Check for empty assets
         run: ./scripts/check-empty-assets.sh
 
+      # BOREAL_DIALER_LAST_DEAD_ROUTES_v43
+      - name: Check server paths
+        run: ./scripts/check-server-paths.sh
+
   ios-build:
     needs: swift-lint
     runs-on: macos-latest

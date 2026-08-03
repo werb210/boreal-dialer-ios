@@ -26,8 +26,28 @@ targets:
         excludes:
           - BorealDialerLinux
       - path: UI
+      # BOREAL_DIALER_KEYPAD_ICON_PLIST_v22 - the app had no icon because the
+      # catalogue was never in the target.
+      - path: Assets.xcassets
     info:
       path: Config/Info.plist
+      # XcodeGen GENERATES this file from the properties below. A hand-written
+      # Config/Info.plist is silently overwritten, which is how the microphone
+      # usage string went missing and TCC killed the process on first call.
+      properties:
+        CFBundleDisplayName: Boreal Dialer
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        UILaunchScreen: {}
+        UIBackgroundModes:
+          - voip
+          - audio
+          - remote-notification
+        NSMicrophoneUsageDescription: Boreal Dialer needs the microphone to place and receive calls.
+        NSContactsUsageDescription: Boreal Dialer matches incoming numbers to your CRM contacts.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: false
+        SentryDSN: ""
     entitlements:
       path: Config/BorealDialer.entitlements
     dependencies:
@@ -43,6 +63,7 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     scheme:
       testTargets: []
       gatherCoverageData: false

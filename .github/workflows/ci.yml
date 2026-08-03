@@ -78,22 +78,37 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             clean build 2>&1 | tee /tmp/xcodebuild.log
 
-      # BOREAL_DIALER_TESTS_v40 - pick whatever simulator this image has rather
-      # than pinning a model name that vanishes on the next image rotation.
+      # BOREAL_DIALER_TEST_DESTINATION_v44 - OS=latest with no device name, so
+      # nothing breaks when GitHub rotates models off the runner image. The
+      # previous version scripted a UDID lookup and exited 66 before xcodebuild
+      # started, which reported as a build failure with no errors in it.
       - name: Run unit tests
         run: |
           set -o pipefail
-          DEVICE_ID=$(xcrun simctl list devices available --json \
-            | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; \
-              print(next(x['udid'] for k in d for x in d[k] if x.get('isAvailable') and 'iPhone' in x['name']))")
-          echo "Testing on $DEVICE_ID"
           xcodebuild \
             -project BorealDialer.xcodeproj \
             -scheme BorealDialer \
-            -destination "id=$DEVICE_ID" \
+            -destination 'platform=iOS Simulator,OS=latest' \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             test 2>&1 | tee /tmp/xcodebuild-test.log
+
+      - name: Surface test failures
+        if: failure()
+        run: |
+          echo "## Test failures" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          grep -E "error:|failed|Failing tests" /tmp/xcodebuild-test.log | head -60 \
+            | tee -a "$GITHUB_STEP_SUMMARY" \
+            | while IFS= read -r line; do echo "::error::$line"; done
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload test log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-test-log
+          path: /tmp/xcodebuild-test.log
 
       - name: Surface build errors
         if: failure()

@@ -1,3 +1,8 @@
+// BOREAL_DIALER_CALLKIT_IDENTITY_v38
+// NOT the live CallKit provider. VoiceEngine configures and owns CXProvider and
+// is what VoIPPushManager reports through; this type predates it and is kept
+// only because other code still references it. Do not report calls from here -
+// two providers reporting the same UUID produces duplicate incoming screens.
 import Foundation
 import CallKit
 import AVFoundation

@@ -70,12 +70,17 @@ final class VoiceEngine: NSObject, ObservableObject {
     }
 
     private func configureCallKit() {
-        let config = CXProviderConfiguration(localizedName: "Boreal")
+        // BOREAL_DIALER_CALLKIT_IDENTITY_v38 - "Boreal Financial" is what iOS
+        // prints under the caller on the lock screen, so it should be the name
+        // a staff member would recognise at a glance.
+        let config = CXProviderConfiguration(localizedName: "Boreal Financial")
         config.supportsVideo = false
-        config.maximumCallsPerCallGroup = 1
+        // Two, so a second call can arrive while one is up rather than being
+        // rejected outright.
+        config.maximumCallsPerCallGroup = 2
         config.maximumCallGroups = 1
         config.includesCallsInRecents = true
-        config.supportedHandleTypes = [.phoneNumber]
+        config.supportedHandleTypes = [.phoneNumber, .generic]
 
         provider = CXProvider(configuration: config)
         provider.setDelegate(self, queue: nil)
@@ -94,6 +99,8 @@ final class VoiceEngine: NSObject, ObservableObject {
 
         let handle = CXHandle(type: .phoneNumber, value: number)
         let start = CXStartCallAction(call: uuid, handle: handle)
+        // BOREAL_DIALER_CALLKIT_IDENTITY_v38 - names the call in iOS Recents.
+        start.contactIdentifier = PhoneFormat.display(number)
         let transaction = CXTransaction(action: start)
 
         CXCallController().request(transaction) { [weak self] error in
@@ -112,11 +119,53 @@ final class VoiceEngine: NSObject, ObservableObject {
 
         let update = CXCallUpdate()
         update.remoteHandle = CXHandle(type: .phoneNumber, value: handle)
+        // BOREAL_DIALER_CALLKIT_IDENTITY_v38 - a readable number until the
+        // contact lookup comes back. iOS shows this verbatim.
+        update.localizedCallerName = PhoneFormat.display(handle)
+        update.hasVideo = false
+        update.supportsHolding = true
+        update.supportsGrouping = false
+        update.supportsUngrouping = false
+        update.supportsDTMF = true
 
         provider.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
             guard let self else { return }
             if error == nil {
                 self.state = .ringing(uuid)
+                // Named after the fact. Reporting must not wait on the network:
+                // iOS terminates the app if a VoIP push does not report a call
+                // almost immediately.
+                self.nameIncomingCall(uuid: uuid, handle: handle)
+            }
+        }
+    }
+
+    // BOREAL_DIALER_CALLKIT_IDENTITY_v38 - resolve the number to a CRM contact
+    // and push the name into the ringing CallKit screen.
+    private func nameIncomingCall(uuid: UUID, handle: String) {
+        Task { [weak self] in
+            guard let self else { return }
+            guard let encoded = handle.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return }
+            struct Resolved: Decodable {
+                let name: String?
+                let company: String?
+            }
+            struct Envelope: Decodable { let contact: Resolved? }
+            do {
+                let request = try APIClient.shared.makeRequest(path: "/voice/resolve-caller?phone=\(encoded)")
+                let data = try await APIClient.shared.makeAuthorizedRequest(request)
+                let contact = try JSONDecoder().decode(Envelope.self, from: data).contact
+                guard let name = contact?.name, !name.isEmpty else { return }
+
+                let display = (contact?.company?.isEmpty == false)
+                    ? "\(name) · \(contact?.company ?? "")"
+                    : name
+
+                let update = CXCallUpdate()
+                update.localizedCallerName = display
+                self.provider.reportCall(with: uuid, updated: update)
+            } catch {
+                // An unresolved number keeps the formatted number already shown.
             }
         }
     }

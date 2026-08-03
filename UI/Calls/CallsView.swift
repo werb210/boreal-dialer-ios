@@ -11,6 +11,23 @@
 import SwiftUI
 import AVFoundation
 
+// BOREAL_DIALER_CALLS_TAP_THROUGH_v35
+// Recents and Voicemail carry only the contact's id, name and number. That is
+// enough to open the record - ContactDetailView loads the timeline by id and
+// the header degrades to what it was given.
+private func stubContact(id: String, name: String?, phone: String?) -> CRMContact {
+    CRMContact(
+        id: id,
+        name: name,
+        firstName: nil,
+        lastName: nil,
+        email: nil,
+        phone: phone,
+        companyName: nil,
+        leadStatus: nil
+    )
+}
+
 struct CallsView: View {
     // BOREAL_DIALER_UIKIT_AND_SECTION_v13 - not `Section`: that shadows
     // SwiftUI.Section throughout this type.
@@ -133,6 +150,8 @@ struct RecentCallsView: View {
     @StateObject private var viewModel = RecentCallsViewModel()
 
     var body: some View {
+        // BOREAL_DIALER_CALLS_TAP_THROUGH_v35
+        NavigationStack {
         Group {
             if viewModel.loading && viewModel.calls.isEmpty {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -147,34 +166,7 @@ struct RecentCallsView: View {
                     ForEach(viewModel.grouped, id: \.0) { day, calls in
                         Section {
                             ForEach(calls) { call in
-                                HStack(spacing: 12) {
-                                    AvatarCircle(name: call.title)
-
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(call.title)
-                                            .rowTitle()
-                                            .foregroundColor(call.missed ? Theme.red : Theme.text)
-                                        HStack(spacing: 4) {
-                                            Image(systemName: call.isInbound
-                                                  ? "arrow.down.left" : "arrow.up.right")
-                                                .font(.system(size: 11))
-                                                .foregroundColor(call.missed ? Theme.red : Theme.muted)
-                                            Text(call.subtitle).rowSubtitle()
-                                        }
-                                    }
-
-                                    Spacer()
-
-                                    if let number = call.phoneNumber, !number.isEmpty {
-                                        Button {
-                                            CallManager.shared.startCall(to: number)
-                                        } label: {
-                                            Image(systemName: "phone.fill")
-                                        }
-                                        .buttonStyle(.borderless)
-                                    }
-                                }
-                                .padding(.vertical, 2)
+                                rowContent(for: call)
                             }
                         } header: {
                             SectionLabel(text: day)
@@ -187,7 +179,56 @@ struct RecentCallsView: View {
                 .refreshable { await viewModel.load() }
             }
         }
+        }
         .task { await viewModel.load() }
+    }
+
+    // A row is navigable only when the call matched a CRM contact.
+    @ViewBuilder
+    private func rowContent(for call: RecentCall) -> some View {
+        if let contactId = call.contactId, !contactId.isEmpty {
+            NavigationLink {
+                ContactDetailView(
+                    contact: stubContact(id: contactId, name: call.contactName, phone: call.phoneNumber),
+                    onMessage: {}
+                )
+            } label: {
+                recentRow(call)
+            }
+        } else {
+            recentRow(call)
+        }
+    }
+
+    private func recentRow(_ call: RecentCall) -> some View {
+        HStack(spacing: 12) {
+            AvatarCircle(name: call.title)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(call.title)
+                    .rowTitle()
+                    .foregroundColor(call.missed ? Theme.red : Theme.text)
+                HStack(spacing: 4) {
+                    Image(systemName: call.isInbound ? "arrow.down.left" : "arrow.up.right")
+                        .font(.system(size: 11))
+                        .foregroundColor(call.missed ? Theme.red : Theme.muted)
+                    Text(call.subtitle).rowSubtitle()
+                }
+            }
+
+            Spacer()
+
+            if let number = call.phoneNumber, !number.isEmpty {
+                Button {
+                    CallManager.shared.startCall(to: number)
+                } label: {
+                    Image(systemName: "phone.fill").foregroundColor(Theme.green)
+                }
+                .buttonStyle(.borderless)
+            }
+        }
+        .padding(.vertical, 2)
+        .listRowBackground(Color.clear)
     }
 }
 
@@ -308,6 +349,8 @@ struct VoicemailView: View {
     @StateObject private var viewModel = VoicemailViewModel()
 
     var body: some View {
+        // BOREAL_DIALER_CALLS_TAP_THROUGH_v35
+        NavigationStack {
         Group {
             if viewModel.loading && viewModel.voicemails.isEmpty {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -335,9 +378,30 @@ struct VoicemailView: View {
 
                                     AvatarCircle(name: voicemail.title, size: 34)
 
+                                    // BOREAL_DIALER_CALLS_TAP_THROUGH_v35 - the
+                                    // play button owns the row, so the name is
+                                    // the navigable part.
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(voicemail.title)
-                                            .font(.system(size: 15.5, weight: .semibold))
+                                        if let contactId = voicemail.contactId, !contactId.isEmpty {
+                                            NavigationLink {
+                                                ContactDetailView(
+                                                    contact: stubContact(
+                                                        id: contactId,
+                                                        name: voicemail.contactName,
+                                                        phone: voicemail.contactPhone
+                                                    ),
+                                                    onMessage: {}
+                                                )
+                                            } label: {
+                                                Text(voicemail.title)
+                                                    .font(.system(size: 15.5, weight: .semibold))
+                                                    .foregroundColor(Theme.text)
+                                            }
+                                            .buttonStyle(.plain)
+                                        } else {
+                                            Text(voicemail.title)
+                                                .font(.system(size: 15.5, weight: .semibold))
+                                        }
                                         Text(voicemail.subtitle)
                                             .font(.system(size: 13))
                                             .foregroundColor(Theme.muted)
@@ -382,6 +446,7 @@ struct VoicemailView: View {
                 .background(Theme.bg)
                 .refreshable { await viewModel.load() }
             }
+        }
         }
         .task { await viewModel.load() }
         .onDisappear { viewModel.stop() }

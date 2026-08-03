@@ -69,7 +69,14 @@ struct BorealDialerApp: App {
                 if phase == .active {
                     Task {
                         await OfflineQueue.shared.flush()
+                        // BOREAL_DIALER_PRESENCE_v41
+                        PresenceHeartbeat.shared.start()
                     }
+                }
+
+                if phase == .background {
+                    // BOREAL_DIALER_PRESENCE_v41 - a backgrounded phone is not available.
+                    Task { await PresenceHeartbeat.shared.goOffline() }
                 }
 
                 if phase == .background, CallStateManager.shared.current() == .idle {

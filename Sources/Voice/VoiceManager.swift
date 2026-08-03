@@ -294,7 +294,8 @@ final class VoiceManager: NSObject, ObservableObject {
     func sendPresence(status: String) {
         Task {
             do {
-                let requestURL = try APIClient.shared.url(path: "/voice/presence")
+                // BOREAL_DIALER_PRESENCE_v41 - was /voice/presence, a 404.
+                let requestURL = try APIClient.shared.url(path: "/telephony/presence")
 
                 var request = URLRequest(url: requestURL)
                 request.httpMethod = "POST"

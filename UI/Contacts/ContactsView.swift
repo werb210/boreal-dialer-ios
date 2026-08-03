@@ -114,6 +114,10 @@ final class ContactsViewModel: ObservableObject {
 
     private var searchTask: Task<Void, Never>?
 
+    // BOREAL_DIALER_CONTACTS_SILO_v39 - contacts only. Calling, SMS, messages,
+    // team and calendar stay on BF; this does not touch them.
+    @Published var silo: Silo = .bf
+
     var totalCount: Int { contacts.count + companies.count }
 
     // Alphabetical sections, people and companies merged.
@@ -148,7 +152,7 @@ final class ContactsViewModel: ObservableObject {
                let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
                 path += "&q=\(encoded)"
             }
-            let request = try APIClient.shared.makeRequest(path: path)
+            let request = try APIClient.shared.makeRequest(path: path, silo: silo)
             let data = try await APIClient.shared.makeAuthorizedRequest(request)
             contacts = try JSONDecoder().decode(ContactsListEnvelope.self, from: data).data
             self.error = nil
@@ -163,7 +167,7 @@ final class ContactsViewModel: ObservableObject {
 
     private func loadCompanies() async {
         do {
-            let request = try APIClient.shared.makeRequest(path: "/companies")
+            let request = try APIClient.shared.makeRequest(path: "/companies", silo: silo)
             let data = try await APIClient.shared.makeAuthorizedRequest(request)
             companies = try JSONDecoder().decode(CompaniesEnvelope.self, from: data).data
         } catch {
@@ -234,6 +238,24 @@ struct ContactsView: View {
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .padding(.horizontal)
             .padding(.vertical, 8)
+
+            // BOREAL_DIALER_CONTACTS_SILO_v39
+            SegmentedBar(
+                options: [Silo.bf, Silo.bi, Silo.slf],
+                title: { silo in
+                    switch silo {
+                    case .bf: return "Financial"
+                    case .bi: return "Insurance"
+                    case .slf: return "SLF"
+                    }
+                },
+                selection: $viewModel.silo
+            )
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+            .onChange(of: viewModel.silo) { _ in
+                Task { await viewModel.load() }
+            }
 
             Divider()
 

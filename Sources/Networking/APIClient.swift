@@ -26,7 +26,8 @@ final class APIClient {
         path: String,
         method: String = "GET",
         body: Data? = nil,
-        headers: [String: String] = [:]
+        headers: [String: String] = [:],
+        silo: Silo? = nil
     ) throws -> URLRequest {
         let url = try url(path: path)
         var request = URLRequest(url: url)
@@ -36,8 +37,10 @@ final class APIClient {
         // BOREAL_DIALER_SDK_AND_ISOLATION_v5 - read the silo from APIConfig,
         // which LineManager keeps current. Reaching into LineManager here
         // crossed onto the main actor from a nonisolated request builder.
+        // BOREAL_DIALER_CONTACTS_SILO_v39 - `silo` overrides it for the one
+        // surface that reads across silos.
         request.setValue(
-            APIConfig.siloHeader(for: APIConfig.activeSilo),
+            APIConfig.siloHeader(for: silo ?? APIConfig.activeSilo),
             forHTTPHeaderField: "X-Silo"
         )
 

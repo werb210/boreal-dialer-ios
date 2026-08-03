@@ -23,6 +23,18 @@ struct DialerView: View {
                 .keyboardType(.phonePad)
                 .textFieldStyle(.roundedBorder)
 
+            // BOREAL_DIALER_KEYPAD_ICON_PLIST_v22 - the actual keypad.
+            KeypadGrid(
+                onDigit: { digit in
+                    number.append(digit)
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                },
+                onBackspace: {
+                    if !number.isEmpty { number.removeLast() }
+                },
+                onClear: { number = "" }
+            )
+
             Button("Call") {
                 VoiceEngine.shared.startCall(to: number)
             }
@@ -272,5 +284,64 @@ struct DialerButton: View {
             .foregroundColor(isActive ? activeColor : .primary)
             .cornerRadius(12)
         }
+    }
+}
+
+
+// BOREAL_DIALER_KEYPAD_ICON_PLIST_v22
+// The 3x4 grid, letters and all, matching the concept mockup. Long-pressing 0
+// gives +, which matters because every server-side number is E.164.
+struct KeypadGrid: View {
+    var onDigit: (String) -> Void
+    var onBackspace: () -> Void
+    var onClear: () -> Void
+
+    private let keys: [[(String, String)]] = [
+        [("1", ""), ("2", "ABC"), ("3", "DEF")],
+        [("4", "GHI"), ("5", "JKL"), ("6", "MNO")],
+        [("7", "PQRS"), ("8", "TUV"), ("9", "WXYZ")],
+        [("*", ""), ("0", "+"), ("#", "")],
+    ]
+
+    var body: some View {
+        VStack(spacing: 14) {
+            ForEach(keys.indices, id: \.self) { row in
+                HStack(spacing: 26) {
+                    ForEach(keys[row], id: \.0) { key, letters in
+                        Button {
+                            onDigit(key)
+                        } label: {
+                            VStack(spacing: 1) {
+                                Text(key).font(.system(size: 30, weight: .regular))
+                                if !letters.isEmpty {
+                                    Text(letters)
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .frame(width: 72, height: 72)
+                            .background(Circle().fill(Color.secondary.opacity(0.12)))
+                        }
+                        .buttonStyle(.plain)
+                        .simultaneousGesture(
+                            LongPressGesture().onEnded { _ in
+                                if key == "0" { onDigit("+") }
+                            }
+                        )
+                    }
+                }
+            }
+
+            HStack {
+                Spacer()
+                Button(action: onBackspace) {
+                    Image(systemName: "delete.left").font(.title2)
+                }
+                .buttonStyle(.plain)
+                .simultaneousGesture(LongPressGesture().onEnded { _ in onClear() })
+                .padding(.trailing, 34)
+            }
+        }
+        .padding(.vertical, 8)
     }
 }

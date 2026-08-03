@@ -92,11 +92,6 @@ final class VoiceEngine: NSObject, ObservableObject {
         let uuid = UUID()
         state = .dialing(uuid)
 
-        // BOREAL_DIALER_CONFERENCE_CONTROLS_v14
-        // Build the server conference that backs mid-call controls. The SDK
-        // call below remains the fallback when server setup fails.
-        Task { await ConferenceSession.shared.start(to: number) }
-
         let handle = CXHandle(type: .phoneNumber, value: number)
         let start = CXStartCallAction(call: uuid, handle: handle)
         // BOREAL_DIALER_CALLKIT_IDENTITY_v38 - names the call in iOS Recents.
@@ -111,7 +106,49 @@ final class VoiceEngine: NSObject, ObservableObject {
         }
 
         Telemetry.event("call_start", metadata: ["number": number, "silo": silo.rawValue])
-        TwilioVoiceManager.shared.startCall(uuid: uuid, to: number)
+        // BOREAL_DIALER_JOIN_CONFERENCE_v46 - build the conference first so the
+        // SDK leg can join it. A plain call remains the fallback if setup fails.
+        Task { @MainActor in
+            let ok = await ConferenceSession.shared.start(to: number)
+            let friendly = ok ? ConferenceSession.shared.conferenceFriendly : nil
+            TwilioVoiceManager.shared.startCall(
+                uuid: uuid, to: number, conferenceFriendly: friendly
+            )
+        }
+    }
+
+    // BOREAL_DIALER_JOIN_CONFERENCE_v46 - create and join an internal call,
+    // while also reporting the initiating leg to CallKit.
+    func startInternalCall(staffIdentity: String, displayName: String) {
+        guard case .idle = state else { return }
+
+        let uuid = UUID()
+        state = .dialing(uuid)
+
+        let handle = CXHandle(type: .generic, value: displayName)
+        let start = CXStartCallAction(call: uuid, handle: handle)
+        start.contactIdentifier = displayName
+        let transaction = CXTransaction(action: start)
+
+        CXCallController().request(transaction) { [weak self] error in
+            guard let self else { return }
+            if error != nil { self.handleFailure() }
+        }
+
+        Telemetry.event(
+            "quick_call_start", metadata: ["staff": staffIdentity, "silo": silo.rawValue]
+        )
+
+        Task { @MainActor in
+            let ok = await ConferenceSession.shared.startInternal(staffIdentity: staffIdentity)
+            guard ok, let friendly = ConferenceSession.shared.conferenceFriendly else {
+                self.handleFailure()
+                return
+            }
+            TwilioVoiceManager.shared.startCall(
+                uuid: uuid, to: displayName, conferenceFriendly: friendly
+            )
+        }
     }
 
     func reportIncoming(uuid: UUID, handle: String) {

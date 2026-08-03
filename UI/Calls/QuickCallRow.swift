@@ -87,8 +87,13 @@ final class QuickCallViewModel: ObservableObject {
         }
     }
 
+    // BOREAL_DIALER_JOIN_CONFERENCE_v46 - use VoiceEngine so the caller joins
+    // the conference and CallKit shows the call.
     func call(_ member: QuickCallStaff) async {
-        await ConferenceSession.shared.startInternal(staffIdentity: member.userId)
+        VoiceEngine.shared.startInternalCall(
+            staffIdentity: member.userId,
+            displayName: member.displayName
+        )
     }
 }
 

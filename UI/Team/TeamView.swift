@@ -275,10 +275,11 @@ struct TeamView: View {
                                     .foregroundColor(Theme.faint)
                                 if user.id != store.myId {
                                     Button {
-                                        Task {
-                                            await ConferenceSession.shared
-                                                .startInternal(staffIdentity: user.id)
-                                        }
+                                        // BOREAL_DIALER_JOIN_CONFERENCE_v46
+                                        VoiceEngine.shared.startInternalCall(
+                                            staffIdentity: user.id,
+                                            displayName: user.name
+                                        )
                                     } label: {
                                         Image(systemName: "phone.fill")
                                             .foregroundColor(Theme.green)

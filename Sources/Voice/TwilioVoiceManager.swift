@@ -26,7 +26,9 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
         }
     }
 
-    func startCall(uuid: UUID, to number: String) {
+    // BOREAL_DIALER_JOIN_CONFERENCE_v46 - `conferenceFriendly` makes the SDK
+    // leg join the conference the server built instead of placing a second call.
+    func startCall(uuid: UUID, to number: String, conferenceFriendly: String? = nil) {
         guard CallStateManager.shared.current() == .idle else { return }
 
         CallStateManager.shared.transition(to: .connecting)
@@ -40,8 +42,12 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
         Task {
             do {
                 let token = try await API.getTwilioToken(line: VoiceEngine.shared.activeLine)
+                var connectParams: [String: String] = ["To": number]
+                if let conferenceFriendly, !conferenceFriendly.isEmpty {
+                    connectParams["conferenceFriendly"] = conferenceFriendly
+                }
                 let options = ConnectOptions(accessToken: token) { builder in
-                    builder.params = ["To": number]
+                    builder.params = connectParams
                 }
 
                 activeCall = TwilioVoiceSDK.connect(options: options, delegate: self)

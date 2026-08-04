@@ -43,12 +43,30 @@ final class BIActivityTests: XCTestCase {
     }
 
     // An unrecognised event type must still render rather than throw.
+    // BOREAL_DIALER_BI_EVENT_LABEL_v54 - this previously expected
+    // "Promoted_to_lender", which is not what .capitalized produces: Foundation
+    // treats "_" as a word boundary and returns "Promoted_To_Lender". The
+    // underscores are now stripped before capitalising.
     func testUnknownEventTypeStillDecodes() throws {
         let entries = try decode("""
         {"ok":true,"events":[{"id":"a5","event_type":"promoted_to_lender"}]}
         """)
-        XCTAssertEqual(entries[0].heading, "Promoted_to_lender")
+        XCTAssertEqual(entries[0].heading, "Promoted To Lender")
         XCTAssertEqual(entries[0].icon, "circle")
         XCTAssertEqual(entries[0].timeLabel, "")
+    }
+
+    func testMultiWordEventTypeKeepsItsOutcome() throws {
+        let entries = try decode("""
+        {"ok":true,"events":[{"id":"a6","event_type":"status_change","outcome":"qualified"}]}
+        """)
+        XCTAssertEqual(entries[0].heading, "Status Change · qualified")
+    }
+
+    func testSingleWordEventTypeIsUnaffected() throws {
+        let entries = try decode("""
+        {"ok":true,"events":[{"id":"a7","event_type":"call","outcome":"connected"}]}
+        """)
+        XCTAssertEqual(entries[0].heading, "Call · connected")
     }
 }

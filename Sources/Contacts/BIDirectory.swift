@@ -84,12 +84,18 @@ struct BIActivityRow: Decodable {
         let kind = eventType?.trimmingCharacters(in: .whitespacesAndNewlines)
         let result = outcome?.trimmingCharacters(in: .whitespacesAndNewlines)
 
+        // BOREAL_DIALER_BI_EVENT_LABEL_v54 - bi-server event types are
+        // snake_case ('status_change', 'promoted_to_lender'). Foundation treats
+        // an underscore as a word boundary, so plain .capitalized yielded
+        // "Promoted_To_Lender" in the activity feed. Replace the separators
+        // first so multi-word types read as English.
         var heading: String?
         if let kind, !kind.isEmpty {
+            let label = kind.replacingOccurrences(of: "_", with: " ").capitalized
             if let result, !result.isEmpty {
-                heading = "\(kind.capitalized) · \(result)"
+                heading = "\(label) · \(result)"
             } else {
-                heading = kind.capitalized
+                heading = label
             }
         }
 

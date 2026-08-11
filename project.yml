@@ -18,6 +18,10 @@ packages:
     from: 8.0.0
 
 schemes:
+  BorealDialerWatch:
+    build:
+      targets:
+        BorealDialerWatch: all
   BorealDialer:
     build:
       targets:
@@ -36,6 +40,8 @@ targets:
         excludes:
           - BorealDialerLinux
       - path: UI
+      # BOREAL_DIALER_WATCH_v55
+      - path: Sources/WatchShared
       # BOREAL_DIALER_KEYPAD_ICON_PLIST_v22 - the app had no icon because the
       # catalogue was never in the target.
       - path: Assets.xcassets
@@ -101,6 +107,33 @@ targets:
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+
+  # BOREAL_DIALER_WATCH_v55 - notification surface on the wrist.
+  BorealDialerWatch:
+    type: application
+    platform: watchOS
+    deploymentTarget: "9.0"
+    sources:
+      - path: Watch
+      # The shared vocabulary is compiled into both sides so the two cannot
+      # drift; WCSession itself carries untyped dictionaries.
+      - path: Sources/WatchShared
+    info:
+      path: Watch/Info.plist
+      properties:
+        CFBundleDisplayName: Boreal
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        WKApplication: true
+        WKCompanionAppBundleIdentifier: financial.boreal.dialer
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer.watchkitapp
+        PRODUCT_MODULE_NAME: BorealDialerWatch
+        SWIFT_VERSION: 5.9
+        TARGETED_DEVICE_FAMILY: "4"
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: NO
 
   # BOREAL_DIALER_TESTS_v40 - the repo had no test target at all.
   BorealDialerTests:

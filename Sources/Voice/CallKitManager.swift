@@ -47,6 +47,12 @@ final class CallKitManager: NSObject, CXProviderDelegate {
     }
 
     func reportIncomingCall(uuid: UUID, handle: String) {
+        // BOREAL_DIALER_WATCH_v55 - the wrist learns about the call at the same
+        // moment CallKit does, not after the phone has been fished out.
+        WatchBridge.shared.send(WatchEvent(kind: .incomingCall,
+                                           callId: uuid.uuidString,
+                                           displayName: "",
+                                           handle: handle))
         guard !reportedIncomingCallUUIDs.contains(uuid) else { return }
 
         let update = CXCallUpdate()
@@ -67,6 +73,11 @@ final class CallKitManager: NSObject, CXProviderDelegate {
     }
 
     func endCall(uuid: UUID) {
+        // BOREAL_DIALER_WATCH_v55 - clears a stale Answer button on the watch.
+        WatchBridge.shared.send(WatchEvent(kind: .missedCall,
+                                           callId: uuid.uuidString,
+                                           displayName: "",
+                                           handle: ""))
         provider.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
         reportedIncomingCallUUIDs.remove(uuid)
     }

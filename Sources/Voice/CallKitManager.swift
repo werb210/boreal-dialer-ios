@@ -53,6 +53,11 @@ final class CallKitManager: NSObject, CXProviderDelegate {
                                            callId: uuid.uuidString,
                                            displayName: "",
                                            handle: handle))
+        // BOREAL_DIALER_WATCH_NAME_v56 - name it after the fact, on both
+        // surfaces. Reporting must never wait on the network: iOS kills the app
+        // if a VoIP push does not report a call almost immediately, which is why
+        // the number goes up first and the name follows.
+        nameCall(uuid: uuid, handle: handle)
         guard !reportedIncomingCallUUIDs.contains(uuid) else { return }
 
         let update = CXCallUpdate()
@@ -69,6 +74,30 @@ final class CallKitManager: NSObject, CXProviderDelegate {
 
             self.reportedIncomingCallUUIDs.insert(uuid)
             CallManager.shared.incomingCall(uuid: uuid)
+        }
+    }
+
+    // BOREAL_DIALER_WATCH_NAME_v56
+    private func nameCall(uuid: UUID, handle: String) {
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let resolved = try await CallerResolver.resolve(phone: handle)
+                guard let display = resolved.display else { return }
+                await MainActor.run {
+                    let update = CXCallUpdate()
+                    update.localizedCallerName = display
+                    self.provider.reportCall(with: uuid, updated: update)
+                    // Same callId, so the watch replaces the number in place
+                    // rather than buzzing a second time for the same call.
+                    WatchBridge.shared.send(WatchEvent(kind: .incomingCall,
+                                                       callId: uuid.uuidString,
+                                                       displayName: display,
+                                                       handle: handle))
+                }
+            } catch {
+                // An unresolved number keeps whatever is already on screen.
+            }
         }
     }
 

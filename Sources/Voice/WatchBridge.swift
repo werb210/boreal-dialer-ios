@@ -67,9 +67,13 @@ extension WatchBridge: WCSessionDelegate {
     private func perform(_ message: WatchActionMessage) {
         // The watch never carries audio. Answering there hands the call to the
         // phone, which is the device with the microphone and the Twilio session.
+        // BOREAL_DIALER_WATCH_NAME_v56 - acceptCallFromCallKit(uuid:) is the
+        // method CXAnswerCallAction drives, so the wrist and the CallKit screen
+        // take exactly the same route into the call.
+        guard let uuid = UUID(uuidString: message.callId) else { return }
         switch message.action {
         case .answer:
-            VoiceManager.shared.acceptPendingCall()
+            VoiceManager.shared.acceptCallFromCallKit(uuid: uuid)
         case .decline:
             VoiceManager.shared.endActiveCall()
         }

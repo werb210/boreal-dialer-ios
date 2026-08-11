@@ -29,6 +29,27 @@ final class WatchMessageTests: XCTestCase {
         XCTAssertEqual(event.subtitle, "Andrew Polturak")
     }
 
+    // BOREAL_DIALER_WATCH_NAME_v56
+    func testTheNamedCopyIsTheSameCallNotASecondOne() {
+        let number = WatchEvent(kind: .incomingCall, callId: "call-1",
+                                displayName: "", handle: "+15551234567")
+        let named = WatchEvent(kind: .incomingCall, callId: "call-1",
+                               displayName: "Gifford Lewis", handle: "+15551234567")
+        XCTAssertEqual(number.callId, named.callId)
+        XCTAssertEqual(number.kind, named.kind)
+        // Not equal, so it is not dropped as a duplicate before it can update.
+        XCTAssertNotEqual(number, named)
+        XCTAssertEqual(number.subtitle, "+15551234567")
+        XCTAssertEqual(named.subtitle, "Gifford Lewis")
+    }
+
+    func testAResolvedNameAndCompanyReadAsOneLine() {
+        let event = WatchEvent(kind: .incomingCall, callId: "c",
+                               displayName: "Gifford Lewis \u{00B7} Acme Ltd",
+                               handle: "+15551234567")
+        XCTAssertEqual(event.subtitle, "Gifford Lewis \u{00B7} Acme Ltd")
+    }
+
     func testGarbageIsRejectedRatherThanCrashingTheWrist() {
         XCTAssertNil(WatchPayload.decode(WatchEvent.self, from: [:], key: WatchPayload.eventKey))
         XCTAssertNil(WatchPayload.decode(WatchEvent.self, from: ["wrong": Data()],

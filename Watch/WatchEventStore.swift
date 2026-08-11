@@ -43,6 +43,19 @@ final class WatchEventStore: NSObject, ObservableObject {
     }
 
     fileprivate func ingest(_ event: WatchEvent) {
+        // BOREAL_DIALER_WATCH_NAME_v56 - a call arrives twice on purpose: once
+        // as a number, then again once the CRM lookup returns a name. The second
+        // one updates the first in place. Buzzing a wrist twice for one call is
+        // the fastest way to get the watch app turned off.
+        if let existing = events.firstIndex(where: {
+            $0.callId == event.callId && $0.kind == event.kind
+        }) {
+            events[existing] = event
+            if event.kind == .incomingCall, pendingCall?.callId == event.callId {
+                pendingCall = event
+            }
+            return
+        }
         events.insert(event, at: 0)
         if events.count > maximumEvents { events.removeLast(events.count - maximumEvents) }
         if event.kind == .incomingCall { pendingCall = event }
@@ -82,7 +95,9 @@ extension WatchEventStore: WCSessionDelegate {
                                               key: WatchPayload.eventKey) else { return }
         Task { @MainActor in
             // sendMessage and transferUserInfo both fire for the same event, so
-            // the duplicate is dropped here rather than buzzing the wrist twice.
+            // an identical copy is dropped. A copy that differs only by the
+            // resolved name is NOT identical and must reach ingest, which
+            // updates it in place.
             guard !WatchEventStore.shared.events.contains(event) else { return }
             WatchEventStore.shared.ingest(event)
         }

@@ -78,6 +78,20 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             clean build 2>&1 | tee /tmp/xcodebuild.log
 
+      # BOREAL_DIALER_WATCH_v55 - the watch target is only real if it builds.
+      - name: Build watch app
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project BorealDialer.xcodeproj \
+            -scheme BorealDialerWatch \
+            -sdk watchsimulator \
+            -destination 'generic/platform=watchOS Simulator' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            clean build 2>&1 | tee /tmp/xcodebuild-watch.log
+
       # BOREAL_DIALER_TEST_DESTINATION_v48
       # v44 used 'platform=iOS Simulator,OS=latest'. OS=latest narrows a set of
       # destinations, it does not pick one, so xcodebuild had no device and

@@ -13,6 +13,7 @@ struct BorealDialerApp: App {
 
     init() {
         PushManager.shared.register()
+        WatchBridge.shared.activate() // BOREAL_DIALER_WATCH_v55
         _ = VoiceEngine.shared
         _ = NetworkMonitor.shared
         _ = ReachabilityManager.shared

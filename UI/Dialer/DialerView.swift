@@ -7,6 +7,8 @@ struct DialerView: View {
     @ObservedObject private var voiceEngine = VoiceEngine.shared
     @ObservedObject private var reachability = ReachabilityManager.shared
     @ObservedObject private var recordingManager = RecordingManager.shared
+    @ObservedObject private var deepLinks = DeepLinkCoordinator.shared
+    @State private var contactContext: String?
 
     var body: some View {
         VStack(spacing: 20) {
@@ -79,11 +81,26 @@ struct DialerView: View {
 
         }
         .padding()
+        .onAppear { applyPendingDeepLink() }
+        .onChange(of: deepLinks.pending) { _ in applyPendingDeepLink() }
         // BOREAL_DIALER_IN_CALL_SCREEN_v37 - a live call takes the screen.
         .overlay {
             if !isIdle {
                 InCallView()
             }
+        }
+    }
+
+    private func applyPendingDeepLink() {
+        guard let link = deepLinks.consumeWhenAuthenticated() else { return }
+        switch link {
+        case .phone(let phone, let start):
+            number = phone
+            if start, isIdle { VoiceEngine.shared.startCall(to: phone) }
+        case .contact(let id, _):
+            // No verified direct contact-by-id client contract exists. Preserve
+            // the safe context without inventing a request or auto-dialling.
+            contactContext = id
         }
     }
 

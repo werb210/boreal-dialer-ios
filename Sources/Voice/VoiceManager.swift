@@ -6,6 +6,7 @@ enum RegistrationState {
     case unregistered
     case registering
     case registered
+    case failed
 }
 
 @MainActor
@@ -46,7 +47,6 @@ final class VoiceManager: NSObject, ObservableObject {
         updateAccessToken(token)
         scheduleTokenRefresh()
         TwilioVoiceSDK.audioDevice = DefaultAudioDevice()
-        requestMicrophonePermissionIfNeeded()
         configureIdentityIfNeeded(from: token)
         PushManager.shared.registerDeviceTokenWithTwilio()
         sendPresence(status: "online")
@@ -91,8 +91,10 @@ final class VoiceManager: NSObject, ObservableObject {
     }
 
     func handleNetworkReconnect() {
-        registrationState = .unregistered
-        PushManager.shared.registerDeviceTokenWithTwilio()
+        // Connectivity recovery is not APNs invalidation. Keep a valid
+        // registration; retry only a prior retryable failure.
+        if registrationState == .failed { registrationState = .unregistered }
+        attemptRegistrationIfPossible()
     }
 
     func updateAccessToken(_ token: String) {
@@ -104,6 +106,7 @@ final class VoiceManager: NSObject, ObservableObject {
     }
 
     func updateDeviceToken(_ token: Data) {
+        if deviceToken == token, registrationState == .registered { return }
         deviceToken = token
         registrationState = .unregistered
         attemptRegistrationIfPossible()
@@ -193,7 +196,7 @@ final class VoiceManager: NSObject, ObservableObject {
 #if DEBUG
                     print("Twilio push registration failed:", error)
 #endif
-                    self.registrationState = .unregistered
+                    self.registrationState = .failed
                     return
                 }
 
@@ -202,8 +205,7 @@ final class VoiceManager: NSObject, ObservableObject {
             }
         }
 
-        let tokenToUnregister = registeredToken ?? latestToken ?? ""
-        if tokenToUnregister.isEmpty {
+        guard let tokenToUnregister = registeredToken else {
             registerWithToken()
             return
         }
@@ -211,6 +213,39 @@ final class VoiceManager: NSObject, ObservableObject {
         TwilioVoiceSDK.unregister(accessToken: tokenToUnregister, deviceToken: deviceToken) { _ in
             registerWithToken()
         }
+    }
+
+    func invalidateDeviceToken(_ invalidatedToken: Data?) {
+        guard let old = invalidatedToken else {
+            deviceToken = nil
+            registrationState = .unregistered
+            return
+        }
+        deviceToken = nil
+        let token = registeredToken ?? latestToken
+        registrationState = .unregistered
+        guard let token else { return }
+        TwilioVoiceSDK.unregister(accessToken: token, deviceToken: old) { _ in }
+    }
+
+    func logout() async {
+        tokenRefreshTask?.cancel()
+        tokenRefreshTask = nil
+        activeCall?.disconnect()
+        pendingInvite?.reject()
+        if let token = registeredToken ?? latestToken, let deviceToken {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                TwilioVoiceSDK.unregister(accessToken: token, deviceToken: deviceToken) { _ in
+                    continuation.resume()
+                }
+            }
+        }
+        accessToken = nil
+        latestToken = nil
+        registeredToken = nil
+        registrationState = .unregistered
+        cleanup()
+        IdentityManager.shared.clear()
     }
 
 
@@ -259,12 +294,15 @@ final class VoiceManager: NSObject, ObservableObject {
 
         if let existing = IdentityManager.shared.identity {
             guard existing == identity else {
-                fatalError("Dialer identity mismatch: \(existing) != \(identity)")
+                Task {
+                    await self.logout()
+                    await AuthService.shared.invalidateSessionAfterIdentityMismatch()
+                }
             }
             return
         }
 
-        IdentityManager.shared.configure(identity: identity)
+        _ = IdentityManager.shared.configure(identity: identity)
     }
 
     private func decodeIdentity(from token: String) -> String? {

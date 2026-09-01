@@ -1,6 +1,5 @@
 import Foundation
 import TwilioVoice
-import CallKit
 
 protocol VoiceServiceProtocol {
     func startCall(to number: String)
@@ -17,9 +16,6 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
     private var currentDirection: CallDirection = .outbound
     private var pollingTask: Task<Void, Never>?
 
-    private var callKitProvider: CXProvider!
-    private var callKitController = CXCallController()
-
     private(set) var activeCall: Call?
     private(set) var activeNumber: String?
     private var callInvite: CallInvite?
@@ -35,15 +31,6 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
         self.tokenProvider = tokenProvider
         super.init()
 
-        let config = CXProviderConfiguration(localizedName: "Boreal")
-        config.supportsVideo = false
-        config.maximumCallsPerCallGroup = 1
-        config.maximumCallGroups = 1
-        config.includesCallsInRecents = true
-        config.supportedHandleTypes = [.phoneNumber]
-
-        callKitProvider = CXProvider(configuration: config)
-        callKitProvider.setDelegate(self, queue: nil)
     }
 
     func handleIncoming(_ payload: DataContainer) {
@@ -260,16 +247,6 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
         entity.endedAt = call.endedAt
         entity.lineId = line.id
         try? context.save()
-    }
-}
-
-extension VoiceService: @preconcurrency CXProviderDelegate {
-
-    func providerDidReset(_ provider: CXProvider) {
-        activeCall?.disconnect()
-        activeCall = nil
-        activeNumber = nil
-        CallManager.shared.forceTerminate()
     }
 }
 

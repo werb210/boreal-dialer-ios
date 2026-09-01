@@ -1,70 +1,10 @@
+// Compatibility façade. PushManager owns the one PKPushRegistry used by the
+// application; this legacy name must never create another registry/listener.
 import Foundation
-import PushKit
-import CallKit
 
-final class VoIPPushManager: NSObject, @preconcurrency PKPushRegistryDelegate {
-
+@MainActor
+final class VoIPPushManager {
     static let shared = VoIPPushManager()
-
-    private var registry: PKPushRegistry?
-
-    private override init() {
-        super.init()
-    }
-
-    func register() {
-        registry = PKPushRegistry(queue: .main)
-        registry?.delegate = self
-        registry?.desiredPushTypes = [.voIP]
-    }
-
-    func pushRegistry(_ registry: PKPushRegistry,
-                      didUpdate pushCredentials: PKPushCredentials,
-                      for type: PKPushType) {
-        // BOREAL_DIALER_DELEGATE_ISOLATION_v18 - the raw bytes, not a hex string.
-        // The hex form existed for the old API.registerVoIPToken(String) call;
-        // TwilioVoiceSDK.register takes Data.
-        let token = pushCredentials.token
-
-        Task {
-            // BOREAL_DIALER_DEAD_VOICE_ROUTES_v15 - VoIP push registration goes
-            // to Twilio via TwilioVoiceSDK.register, which VoiceManager already
-            // drives from updateDeviceToken. There was never a BF-Server route.
-            await MainActor.run { VoiceManager.shared.updateDeviceToken(token) }
-        }
-        Telemetry.event("token_refresh")
-    }
-
-    func pushRegistry(_ registry: PKPushRegistry,
-                      didReceiveIncomingPushWith payload: PKPushPayload,
-                      for type: PKPushType) {
-        handleIncomingPush(payload, type: type)
-    }
-
-    func pushRegistry(_ registry: PKPushRegistry,
-                      didReceiveIncomingPushWith payload: PKPushPayload,
-                      for type: PKPushType,
-                      completion: @escaping () -> Void) {
-        handleIncomingPush(payload, type: type)
-        completion()
-    }
-
-    private func handleIncomingPush(_ payload: PKPushPayload, type: PKPushType) {
-        guard type == .voIP else { return }
-
-        guard
-            let uuidString = payload.dictionaryPayload["uuid"] as? String,
-            let handle = payload.dictionaryPayload["handle"] as? String,
-            let uuid = UUID(uuidString: uuidString)
-        else {
-            return
-        }
-
-        Telemetry.event("push_received", metadata: ["uuid": uuid.uuidString])
-        // BOREAL_DIALER_SDK_AND_ISOLATION_v5 - PushKit delivers this off the
-        // main actor; VoiceEngine is main-actor isolated.
-        Task { @MainActor in
-            VoiceEngine.shared.reportIncoming(uuid: uuid, handle: handle)
-        }
-    }
+    private init() {}
+    func register() { PushManager.shared.register() }
 }

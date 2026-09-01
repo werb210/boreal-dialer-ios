@@ -73,9 +73,12 @@ extension WatchBridge: WCSessionDelegate {
         guard let uuid = UUID(uuidString: message.callId) else { return }
         switch message.action {
         case .answer:
-            VoiceManager.shared.acceptCallFromCallKit(uuid: uuid)
+            guard case .ringing(let active) = VoiceEngine.shared.state, active == uuid else { return }
+            TwilioVoiceManager.shared.accept()
         case .decline:
-            VoiceManager.shared.endActiveCall()
+            guard case .ringing(let active) = VoiceEngine.shared.state, active == uuid else { return }
+            TwilioVoiceManager.shared.reject()
+            VoiceEngine.shared.endReportedCall(uuid: uuid, reason: .declinedElsewhere)
         }
     }
 }

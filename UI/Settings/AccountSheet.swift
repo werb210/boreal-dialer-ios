@@ -105,8 +105,7 @@ struct AccountSheet: View {
                     Task {
                         // Tell colleagues before dropping the token, or the
                         // roster shows this person available for five minutes.
-                        await PresenceHeartbeat.shared.goOffline()
-                        AuthService.shared.logout()
+                        await AuthService.shared.logout()
                         dismiss()
                     }
                 }

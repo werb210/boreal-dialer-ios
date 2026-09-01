@@ -56,7 +56,6 @@ final class AuthService: ObservableObject {
         // to VoIPPushManager, which calls VoiceManager.updateDeviceToken, which
         // calls TwilioVoiceSDK.register. That path already works.
 
-        print("[TOKEN SAVED]", token.prefix(12))
         return token
     }
 
@@ -95,8 +94,15 @@ final class AuthService: ObservableObject {
         try await APIClient.shared.makeAuthorizedRequest(request)
     }
 
-    func logout() {
+    func logout() async {
+        await VoiceManager.shared.logout()
+        await PresenceHeartbeat.shared.goOffline()
         TokenStorage.shared.clear()
-        isAuthenticated = false
+        await MainActor.run { isAuthenticated = false }
+    }
+
+    func invalidateSessionAfterIdentityMismatch() async {
+        TokenStorage.shared.clear()
+        await MainActor.run { isAuthenticated = false }
     }
 }

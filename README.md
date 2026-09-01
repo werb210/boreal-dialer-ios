@@ -1,90 +1,19 @@
 # Boreal iOS Dialer
 
-This is the initial scaffold for the Boreal native iOS dialer app.
+Native iPhone/iPad dialer with Twilio Voice, PushKit, CallKit, CRM caller resolution, BF/BI/SLF line selection, conference fallback, call history, and Watch companion messaging.
 
-## Overview
+## Status
 
-- Outbound calling UI
-- Twilio Voice integration (token pending)
-- SMS UI scaffold
-- Local mock support
-- Modular architecture
+**Code ready:** the canonical call lifecycle has one CallKit owner; VoIP and ordinary APNs paths/token types are separate; incoming calls use the Twilio invite UUID; PushKit registration is idempotent; logout unregisters Twilio; deep links are validated and retained across auth bootstrap; credentials are held in Keychain.
 
-## Required Capabilities
+**External validation required:** application call-lifecycle code is complete, but production PushKit/APNs physical-device validation is pending paid Apple Developer provisioning and the real Apple/Twilio credential chain. Nothing in this repository is a production credential. See [APPLE_RELEASE_SETUP.md](APPLE_RELEASE_SETUP.md) and [PHYSICAL_DEVICE_ACCEPTANCE.md](PHYSICAL_DEVICE_ACCEPTANCE.md).
 
-- Enable "Background Modes"
-- Enable "Voice over IP"
-- Enable "Push Notifications"
-- Enable "CallKit" capability
+## Architecture and contracts
+- [Canonical ownership](CALL_ARCHITECTURE.md)
+- [Native API audit](DIALER_API_CONTRACT.md)
+- [Cross-platform contract](CROSS_PLATFORM_DIALER_CONTRACT.md)
 
-## Twilio Voice Requirements
+The app bundle ID is `financial.boreal.dialer`; its registered fallback link forms are `borealdialer://call?phone=...` and `borealdialer://call?contactId=...`. Links prefill by default; only explicit validated `start=true` can request immediate action. A normal APNs server-registration contract does not yet exist and is documented rather than fabricated.
 
-- Twilio Programmable Voice must be enabled
-- Server must expose `POST /api/voice/token`
-- Twilio App SID required
-- TwiML App configured with Voice URL
-
-## VoIP Setup Requirements (Future Production)
-
-- Enable "Push Notifications"
-- Enable "Background Modes"
-- Enable "Voice over IP"
-- Add PushKit entitlement
-- Upload APNs VoIP certificate to Twilio Console
-
-Server must support:
-
-`POST /api/voice/register-voip`
-
-Body:
-
-```
-{
-  deviceToken: string,
-  userId: string
-}
-```
-
-## Production Certification (2026-04-01)
-
-Final dialer integration validation is complete.
-
-### Verdict
-
-✅ **SYSTEM IS FUNCTIONALLY COMPLETE AND PRODUCTION-READY**
-
-### Certified Areas
-
-- Server contract alignment (routes, methods, payloads)
-- Auth enforcement with automatic retry on `401`
-- Token lifecycle management without race conditions
-- Concurrency safety (`callQueue` + token lock)
-- Duplicate call prevention
-- Network retry/backoff resilience
-- No known fatal crash paths
-- Guarded Voice SDK execution
-- Non-blocking backend status reporting
-- Enum-based status handling (no string drift)
-- Environment-driven configuration for safe deploys
-- Integration test hook coverage
-
-### Lifecycle Validation
-
-1. **App startup**: token is fetched once and SDK initialization is safely guarded.
-2. **Call initiation**: concurrency-safe gating prevents duplicates, backend call creation succeeds, SDK connects.
-3. **Call lifecycle**: events remain locally tracked, status updates are pushed, and errors do not break UX.
-4. **Failure handling**: token expiry auto-recovers, unstable network is retried with backoff, and missing state does not crash.
-
-### Known Constraint (Expected)
-
-Automated integration/runtime tests require **macOS** because Apple frameworks such as `AVFoundation` and `UIKit` are not available in Linux CI.
-
-This is an environment limitation, not a dialer code defect.
-
-### Final Status
-
-- API Contract: **PASS**
-- Dialer Lifecycle: **PASS**
-- Concurrency: **SAFE**
-- Failure Handling: **RESILIENT**
-- Production Risk: **LOW**
+## Development
+Generate the Xcode project with XcodeGen, resolve dependencies, then run the `BorealDialer` scheme/tests on macOS. SwiftPM targets iOS 15+; the generated app currently targets iOS 16+.

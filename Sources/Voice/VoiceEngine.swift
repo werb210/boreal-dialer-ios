@@ -1,6 +1,7 @@
 import Foundation
 import CallKit
 import TwilioVoice
+import AVFoundation
 
 @MainActor
 final class VoiceEngine: NSObject, ObservableObject {
@@ -75,9 +76,9 @@ final class VoiceEngine: NSObject, ObservableObject {
         // a staff member would recognise at a glance.
         let config = CXProviderConfiguration(localizedName: "Boreal Financial")
         config.supportsVideo = false
-        // Two, so a second call can arrive while one is up rather than being
-        // rejected outright.
-        config.maximumCallsPerCallGroup = 2
+        // V1 deliberately supports one external call. A second Twilio invite is
+        // rejected deterministically by TwilioVoiceManager.
+        config.maximumCallsPerCallGroup = 1
         config.maximumCallGroups = 1
         config.includesCallsInRecents = true
         config.supportedHandleTypes = [.phoneNumber, .generic]
@@ -86,10 +87,9 @@ final class VoiceEngine: NSObject, ObservableObject {
         provider.setDelegate(self, queue: nil)
     }
 
-    func startCall(to number: String) {
+    func startCall(to number: String, uuid: UUID = UUID()) {
         guard case .idle = state else { return }
-
-        let uuid = UUID()
+        requestMicrophonePermissionIfNeeded()
         state = .dialing(uuid)
 
         let handle = CXHandle(type: .phoneNumber, value: number)
@@ -105,14 +105,15 @@ final class VoiceEngine: NSObject, ObservableObject {
             }
         }
 
-        Telemetry.event("call_start", metadata: ["number": number, "silo": silo.rawValue])
+        let capturedLine = activeLine
+        Telemetry.event("call_start", metadata: ["callId": uuid.uuidString, "silo": silo.rawValue])
         // BOREAL_DIALER_JOIN_CONFERENCE_v46 - build the conference first so the
         // SDK leg can join it. A plain call remains the fallback if setup fails.
         Task { @MainActor in
             let ok = await ConferenceSession.shared.start(to: number)
             let friendly = ok ? ConferenceSession.shared.conferenceFriendly : nil
             TwilioVoiceManager.shared.startCall(
-                uuid: uuid, to: number, conferenceFriendly: friendly
+                uuid: uuid, to: number, line: capturedLine, conferenceFriendly: friendly
             )
         }
     }
@@ -169,6 +170,10 @@ final class VoiceEngine: NSObject, ObservableObject {
             guard let self else { return }
             if error == nil {
                 self.state = .ringing(uuid)
+                WatchBridge.shared.send(WatchEvent(kind: .incomingCall,
+                                                   callId: uuid.uuidString,
+                                                   displayName: "",
+                                                   handle: handle))
                 // Named after the fact. Reporting must not wait on the network:
                 // iOS terminates the app if a VoIP push does not report a call
                 // almost immediately.
@@ -190,6 +195,10 @@ final class VoiceEngine: NSObject, ObservableObject {
                 let update = CXCallUpdate()
                 update.localizedCallerName = display
                 self.provider.reportCall(with: uuid, updated: update)
+                WatchBridge.shared.send(WatchEvent(kind: .incomingCall,
+                                                   callId: uuid.uuidString,
+                                                   displayName: display,
+                                                   handle: handle))
             } catch {
                 // An unresolved number keeps the formatted number already shown.
             }
@@ -202,18 +211,24 @@ final class VoiceEngine: NSObject, ObservableObject {
     }
 
     func toggleMute() {
-        isMuted.toggle()
+        isMuted = TwilioVoiceManager.shared.setMuted(!isMuted)
         Telemetry.event("call_mute_toggled", metadata: ["isMuted": "\(isMuted)"])
     }
 
     func toggleHold(onHold: Bool) {
-        isOnHold = onHold
+        isOnHold = TwilioVoiceManager.shared.setOnHold(onHold)
         Telemetry.event("call_hold_toggled", metadata: ["isOnHold": "\(onHold)"])
     }
 
     func forceTerminate() {
         TwilioVoiceManager.shared.disconnect()
         finishCall(status: .ended)
+    }
+
+    private func requestMicrophonePermissionIfNeeded() {
+        if AVAudioSession.sharedInstance().recordPermission == .undetermined {
+            AVAudioSession.sharedInstance().requestRecordPermission { _ in }
+        }
     }
 
     func syncWithServer(_ serverCalls: [RemoteCallStatus]) {
@@ -265,6 +280,16 @@ final class VoiceEngine: NSObject, ObservableObject {
     func handleDisconnect() {
         Telemetry.event("call_end", metadata: ["duration": "\(callDuration)"])
         finishCall(status: .ended)
+    }
+
+    func endReportedCall(uuid: UUID, reason: CXCallEndedReason = .remoteEnded) {
+        provider.reportCall(with: uuid, endedAt: Date(), reason: reason)
+        WatchBridge.shared.send(WatchEvent(kind: .missedCall,
+                                           callId: uuid.uuidString,
+                                           displayName: "", handle: ""))
+        if case .ringing(let active) = state, active == uuid {
+            finishCall(status: .ended)
+        }
     }
 
     private func finishCall(status: State) {
@@ -319,6 +344,7 @@ extension VoiceEngine: @preconcurrency CXProviderDelegate {
     }
 
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
+        requestMicrophonePermissionIfNeeded()
         TwilioVoiceManager.shared.accept()
         startTimer()
         state = .active(action.callUUID)
@@ -328,6 +354,21 @@ extension VoiceEngine: @preconcurrency CXProviderDelegate {
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
         TwilioVoiceManager.shared.disconnect()
         finishCall(status: .ended)
+        action.fulfill()
+    }
+
+    func provider(_ provider: CXProvider, perform action: CXSetMutedCallAction) {
+        isMuted = TwilioVoiceManager.shared.setMuted(action.isMuted)
+        action.fulfill()
+    }
+
+    func provider(_ provider: CXProvider, perform action: CXSetHeldCallAction) {
+        isOnHold = TwilioVoiceManager.shared.setOnHold(action.isOnHold)
+        action.fulfill()
+    }
+
+    func provider(_ provider: CXProvider, perform action: CXPlayDTMFCallAction) {
+        guard TwilioVoiceManager.shared.sendDigits(action.digits) else { action.fail(); return }
         action.fulfill()
     }
 }

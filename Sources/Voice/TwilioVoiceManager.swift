@@ -28,7 +28,8 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
 
     // BOREAL_DIALER_JOIN_CONFERENCE_v46 - `conferenceFriendly` makes the SDK
     // leg join the conference the server built instead of placing a second call.
-    func startCall(uuid: UUID, to number: String, conferenceFriendly: String? = nil) {
+    func startCall(uuid: UUID, to number: String, line: VoiceEngine.Line? = nil,
+                   conferenceFriendly: String? = nil) {
         guard CallStateManager.shared.current() == .idle else { return }
 
         CallStateManager.shared.transition(to: .connecting)
@@ -41,7 +42,9 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
 
         Task {
             do {
-                let token = try await API.getTwilioToken(line: VoiceEngine.shared.activeLine)
+                // Capture the selected line when the call is created; a later UI
+                // selection cannot change this call's attribution/token.
+                let token = try await API.getTwilioToken(line: line ?? VoiceEngine.shared.activeLine)
                 var connectParams: [String: String] = ["To": number]
                 if let conferenceFriendly, !conferenceFriendly.isEmpty {
                     connectParams["conferenceFriendly"] = conferenceFriendly
@@ -98,6 +101,27 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
         }
 
         activeCall?.disconnect()
+    }
+
+    @discardableResult
+    func setMuted(_ muted: Bool) -> Bool {
+        guard let activeCall else { return false }
+        activeCall.isMuted = muted
+        return activeCall.isMuted
+    }
+
+    @discardableResult
+    func setOnHold(_ held: Bool) -> Bool {
+        guard let activeCall else { return false }
+        activeCall.isOnHold = held
+        return activeCall.isOnHold
+    }
+
+    @discardableResult
+    func sendDigits(_ digits: String) -> Bool {
+        guard let activeCall, !digits.isEmpty else { return false }
+        activeCall.sendDigits(digits)
+        return true
     }
 
     func disconnect() {
@@ -248,9 +272,10 @@ extension TwilioVoiceManager: @preconcurrency NotificationDelegate {
     // previously missing. Fires when the caller rings off before we answer.
     func cancelledCallInviteReceived(cancelledCallInvite: CancelledCallInvite, error: any Error) {
         guard pendingCallInvite?.callSid == cancelledCallInvite.callSid else { return }
+        let uuid = pendingCallInvite?.uuid
         pendingCallInvite = nil
         Telemetry.event("call_invite_cancelled")
-        VoiceEngine.shared.handleDisconnect()
+        if let uuid { VoiceEngine.shared.endReportedCall(uuid: uuid, reason: .unanswered) }
         CallStateManager.shared.transition(to: .ended)
         CallStateManager.shared.reset()
     }

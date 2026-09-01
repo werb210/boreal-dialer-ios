@@ -45,6 +45,8 @@ targets:
       # BOREAL_DIALER_KEYPAD_ICON_PLIST_v22 - the app had no icon because the
       # catalogue was never in the target.
       - path: Assets.xcassets
+      - path: Config/PrivacyInfo.xcprivacy
+        buildPhase: resources
     info:
       path: Config/Info.plist
       # XcodeGen GENERATES this file from the properties below. A hand-written
@@ -60,7 +62,10 @@ targets:
           - audio
           - remote-notification
         NSMicrophoneUsageDescription: Boreal Dialer needs the microphone to place and receive calls.
-        NSContactsUsageDescription: Boreal Dialer matches incoming numbers to your CRM contacts.
+        CFBundleURLTypes:
+          - CFBundleURLName: financial.boreal.dialer
+            CFBundleURLSchemes:
+              - borealdialer
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: false
         SentryDSN: ""

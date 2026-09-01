@@ -8,18 +8,18 @@ import Sentry
 
 @main
 struct BorealDialerApp: App {
+    @UIApplicationDelegateAdaptor(DialerAppDelegate.self) private var appDelegate
     @StateObject var auth = AuthService.shared
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
         PushManager.shared.register()
+        StandardNotificationCoordinator.shared.register()
         WatchBridge.shared.activate() // BOREAL_DIALER_WATCH_v55
         _ = VoiceEngine.shared
         _ = NetworkMonitor.shared
         _ = ReachabilityManager.shared
         _ = PersistenceController.shared
-
-        try? AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth])
 
         ReconnectionController.shared.start()
 #if canImport(Sentry)
@@ -52,6 +52,7 @@ struct BorealDialerApp: App {
                 }
             }
             .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
+            .onOpenURL { _ = DeepLinkCoordinator.shared.receive($0) }
             .onReceive(NotificationCenter.default.publisher(
                 for: UIApplication.willEnterForegroundNotification
             )) { _ in
@@ -80,19 +81,18 @@ struct BorealDialerApp: App {
                     Task { await PresenceHeartbeat.shared.goOffline() }
                 }
 
-                if phase == .background, CallStateManager.shared.current() == .idle {
-                    VoiceService.shared.cleanup()
-                }
+                // Scene disconnection (including iPad multitasking) is not a
+                // call-lifecycle event. Twilio/CallKit remain authoritative.
             }
+        }
+    }
+}
 
-            .onReceive(NotificationCenter.default.publisher(
-                for: UIScene.didDisconnectNotification
-            )) { _ in
-                TwilioVoiceManager.shared.cleanup()
-                VoiceManager.shared.cleanup()
-                VoiceEngine.shared.forceTerminate()
-                CallStateManager.shared.reset()
-            }
+final class DialerAppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication,
+                     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        Task { @MainActor in
+            StandardNotificationCoordinator.shared.didReceiveStandardPushToken(deviceToken)
         }
     }
 }

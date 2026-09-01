@@ -1,121 +1,65 @@
 import Foundation
 import PushKit
 import TwilioVoice
-import UserNotifications
 
+/// Sole owner of the application's PushKit registry and VoIP token. Ordinary
+/// APNs notifications are handled by StandardNotificationCoordinator.
 @MainActor
 final class PushManager: NSObject, PKPushRegistryDelegate {
-
     static let shared = PushManager()
 
     private var registry: PKPushRegistry?
-    private var deviceToken: Data?
+    private(set) var voipPushToken: Data?
 
-    var deviceTokenString: String? {
-        guard let deviceToken else { return nil }
-        return deviceToken.map { String(format: "%02x", $0) }.joined()
-    }
-
-    private override init() {
-        super.init()
-    }
+    private override init() { super.init() }
 
     func register() {
-        registry = PKPushRegistry(queue: .main)
-        registry?.delegate = self
-        registry?.desiredPushTypes = [.voIP]
+        guard registry == nil else { return }
+        let registry = PKPushRegistry(queue: .main)
+        registry.delegate = self
+        registry.desiredPushTypes = [.voIP]
+        self.registry = registry
     }
 
     func registerDeviceTokenWithTwilio() {
-        guard let deviceToken else { return }
-        VoiceManager.shared.updateDeviceToken(deviceToken)
+        guard let voipPushToken else { return }
+        VoiceManager.shared.updateDeviceToken(voipPushToken)
     }
 
-    func pushRegistry(_ registry: PKPushRegistry,
-                      didUpdate pushCredentials: PKPushCredentials,
+    func pushRegistry(_ registry: PKPushRegistry, didUpdate credentials: PKPushCredentials,
                       for type: PKPushType) {
         guard type == .voIP else { return }
-        deviceToken = pushCredentials.token
+        voipPushToken = credentials.token
         registerDeviceTokenWithTwilio()
     }
 
     func pushRegistry(_ registry: PKPushRegistry, didInvalidatePushTokenFor type: PKPushType) {
         guard type == .voIP else { return }
-        deviceToken = nil
-        VoiceManager.shared.handleNetworkReconnect()
+        let invalidated = voipPushToken
+        voipPushToken = nil
+        VoiceManager.shared.invalidateDeviceToken(invalidated)
     }
 
     func pushRegistry(_ registry: PKPushRegistry,
                       didReceiveIncomingPushWith payload: PKPushPayload,
-                      for type: PKPushType,
-                      completion: @escaping () -> Void) {
-        guard type == .voIP else {
-            completion()
-            return
-        }
-
+                      for type: PKPushType, completion: @escaping () -> Void) {
+        defer { completion() }
+        guard type == .voIP else { return }
         handlePushPayload(payload.dictionaryPayload)
-        completion()
     }
 
-    func handlePushPayload(_ payload: [AnyHashable: Any]) {
-        let normalized = payload.reduce(into: [String: Any]()) { result, item in
-            result[String(describing: item.key)] = item.value
-        }
-
-        let type = normalized["type"] as? String ?? "incoming_call"
-
-        switch type {
-        case "incoming_call":
-            // Existing VoIP call handling — leave unchanged
-            handleIncomingCallPush(payload)
-
-        case "client_message":
-            let contactName = normalized["contactName"] as? String ?? "Client"
-            let message = normalized["message"] as? String ?? "New message"
-            let applicationId = normalized["applicationId"] as? String
-
-            showLocalNotification(
-                title: contactName,
-                body: message,
-                userInfo: ["type": "client_message", "applicationId": applicationId ?? ""]
-            )
-
-        case "stage_change":
-            let company = normalized["company"] as? String ?? "Application"
-            let newStage = normalized["stage"] as? String ?? "updated"
-            let applicationId = normalized["applicationId"] as? String
-
-            showLocalNotification(
-                title: "Stage Update",
-                body: "\(company) moved to \(newStage)",
-                userInfo: ["type": "stage_change", "applicationId": applicationId ?? ""]
-            )
-
-        default:
-            break
-        }
+    /// Returns false when Twilio rejects the payload. General notification
+    /// types are never converted into local notifications or synthetic calls.
+    @discardableResult
+    func handlePushPayload(_ payload: [AnyHashable: Any]) -> Bool {
+        guard Self.isEligibleVoIPPayload(payload) else { return false }
+        return TwilioVoiceSDK.handleNotification(payload,
+                                                  delegate: TwilioVoiceManager.shared,
+                                                  delegateQueue: nil)
     }
 
-    private func handleIncomingCallPush(_ payload: [AnyHashable: Any]) {
-        TwilioVoiceSDK.handleNotification(payload,
-                                          delegate: VoiceManager.shared,
-                                          delegateQueue: nil)
-    }
-
-    private func showLocalNotification(title: String, body: String, userInfo: [String: Any] = [:]) {
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
-        content.sound = .default
-        content.userInfo = userInfo
-
-        let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
-            content: content,
-            trigger: nil // deliver immediately
-        )
-
-        UNUserNotificationCenter.current().add(request)
+    static func isEligibleVoIPPayload(_ payload: [AnyHashable: Any]) -> Bool {
+        let declaredType = payload["type"] as? String
+        return declaredType != "client_message" && declaredType != "stage_change"
     }
 }

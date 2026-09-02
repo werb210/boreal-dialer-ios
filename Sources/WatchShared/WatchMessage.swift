@@ -62,7 +62,7 @@ public struct WatchEvent: Codable, Sendable, Equatable {
 public enum BorealLine: String, Codable, CaseIterable, Sendable { case BF, BI, SLF }
 public enum WatchCallDirection: String, Codable, Sendable { case incoming, outgoing, missed }
 public enum WatchCallStatus: String, Codable, Sendable {
-    case idle, requesting, waitingForCallback, ringing, connected, ended, failed
+    case idle, requesting, waitingForCallback, bridging, ringing, connected, ended, failed
 }
 public struct CallRequest: Codable, Equatable, Sendable {
     public let destination: String

@@ -9,6 +9,41 @@ protocol WatchCallTransport {
     func sendDTMF(_ digits: String) async throws
 }
 
+/// Selects the fastest available transport without making WatchConnectivity a
+/// prerequisite. A nearby, reachable phone is an optimization only.
+struct WatchCallTransportSelector {
+    let companion: any WatchCallTransport
+    let standalone: any WatchCallTransport
+
+    func mode(companionReachable: Bool) -> WatchOperatingMode {
+        companionReachable ? .companion : .standalone
+    }
+
+    func transport(companionReachable: Bool) -> any WatchCallTransport {
+        companionReachable ? companion : standalone
+    }
+}
+
+/// Companion operations are injected by the connectivity boundary, keeping
+/// WCSession out of the UI and allowing a failed handoff to be represented as
+/// a failure rather than synthetic call success.
+actor CompanionWatchCallTransport: WatchCallTransport {
+    typealias StartOperation = @Sendable (CallRequest) async throws -> WatchCallStatus
+    private let startOperation: StartOperation
+    init(startOperation: @escaping StartOperation) { self.startOperation = startOperation }
+    func startCall(_ request: CallRequest) async throws -> WatchCallStatus {
+        guard PhoneNumberNormalizer.normalize(request.destination) != nil else {
+            throw WatchServiceError.invalidDestination
+        }
+        return try await startOperation(request)
+    }
+    func cancelSetup() async {}
+    func end() async throws { throw WatchServiceError.serverCapabilityUnavailable }
+    func mute() async throws { throw WatchServiceError.serverCapabilityUnavailable }
+    func unmute() async throws { throw WatchServiceError.serverCapabilityUnavailable }
+    func sendDTMF(_ digits: String) async throws { throw WatchServiceError.serverCapabilityUnavailable }
+}
+
 /// Server bridge boundary. No endpoint is guessed: until the server advertises
 /// and configures this capability, a call request fails visibly and safely.
 actor ServerBridgeWatchCallTransport: WatchCallTransport {

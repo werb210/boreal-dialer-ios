@@ -5,6 +5,20 @@ import TwilioVoice
 import Sentry
 #endif
 
+/// Small, SDK-independent ledger used to make retried VoIP deliveries
+/// idempotent. Entries live only for the current call lifecycle.
+struct CallInviteLedger {
+    private(set) var callSIDs = Set<String>()
+
+    mutating func begin(_ callSID: String) -> Bool {
+        guard !callSID.isEmpty else { return false }
+        return callSIDs.insert(callSID).inserted
+    }
+
+    mutating func finish(_ callSID: String) { callSIDs.remove(callSID) }
+    mutating func removeAll() { callSIDs.removeAll() }
+}
+
 @MainActor
 final class TwilioVoiceManager: NSObject, ObservableObject {
 
@@ -16,6 +30,7 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
     private(set) var activeNumber: String?
     private var callStartDate: Date?
     private var callDirection: String = "outbound"
+    private var inviteLedger = CallInviteLedger()
 
     private override init() {
         super.init()
@@ -187,6 +202,7 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
         activeNumber = nil
         callStartDate = nil
         callDirection = "outbound"
+        inviteLedger.removeAll()
 
         let session = AVAudioSession.sharedInstance()
         do {
@@ -251,8 +267,15 @@ extension TwilioVoiceManager: @preconcurrency CallDelegate {
 extension TwilioVoiceManager: @preconcurrency NotificationDelegate {
 
     func callInviteReceived(callInvite: CallInvite) {
+        // Push delivery can be retried. A CallSid is the logical invite
+        // identity, whereas the PushKit delivery itself has no stable ID.
+        guard inviteLedger.begin(callInvite.callSid) else {
+            callInvite.reject()
+            return
+        }
         guard CallStateManager.shared.current() == .idle else {
             callInvite.reject()
+            inviteLedger.finish(callInvite.callSid)
             return
         }
 
@@ -274,6 +297,7 @@ extension TwilioVoiceManager: @preconcurrency NotificationDelegate {
         guard pendingCallInvite?.callSid == cancelledCallInvite.callSid else { return }
         let uuid = pendingCallInvite?.uuid
         pendingCallInvite = nil
+        inviteLedger.finish(cancelledCallInvite.callSid)
         Telemetry.event("call_invite_cancelled")
         if let uuid { VoiceEngine.shared.endReportedCall(uuid: uuid, reason: .unanswered) }
         CallStateManager.shared.transition(to: .ended)

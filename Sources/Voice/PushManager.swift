@@ -37,8 +37,19 @@ final class PushManager: NSObject {
     }
 
     static func isEligibleVoIPPayload(_ payload: [AnyHashable: Any]) -> Bool {
-        let declaredType = payload["type"] as? String
-        return declaredType != "client_message" && declaredType != "stage_change"
+        // PushKit is not a second general-purpose notification channel.  A
+        // payload must positively identify itself as a Twilio Voice call; an
+        // absent/unknown `type` is not sufficient evidence.
+        let applicationType = payload["type"] as? String
+        guard applicationType == nil || applicationType == "incoming_call" else {
+            return false
+        }
+
+        if payload["twi_call_sid"] as? String != nil { return true }
+        if let messageType = payload["twi_message_type"] as? String {
+            return messageType.hasPrefix("twilio.voice.call")
+        }
+        return false
     }
 }
 

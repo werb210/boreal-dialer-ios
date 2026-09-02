@@ -78,7 +78,7 @@ struct ContactDetailView: View {
 struct PrefilledDialView: View { let number: String; var body: some View { WatchDialView(initialNumber: number) } }
 
 struct WatchRecentsView: View {
-    @State private var recents: [RecentCall] = []; @State private var unavailable = false
+    @State private var recents: [WatchRecentCall] = []; @State private var unavailable = false
     private let service: any WatchRecentsService = DirectWatchRecentsService()
     var body: some View { List { if unavailable { Text("Recents await server support").font(.caption) }; ForEach(recents) { Text($0.name ?? $0.number) } }.navigationTitle("Recents").task { do { recents = try await service.fetch(limit: 25) } catch { unavailable = true } } }
 }

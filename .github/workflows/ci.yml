@@ -92,6 +92,82 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             clean build 2>&1 | tee /tmp/xcodebuild-watch.log
 
+      - name: Verify supported native platforms
+        run: ./scripts/check-supported-platforms.sh
+
+      - name: Resolve a watch simulator destination
+        id: watch-sim
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project BorealDialer.xcodeproj \
+            -scheme BorealDialerWatch \
+            -showdestinations 2>&1 | tee /tmp/watch-destinations.txt
+          UDID="$(python3 - <<'PY'
+          import re
+          import sys
+
+          text = open("/tmp/watch-destinations.txt", encoding="utf-8", errors="replace").read()
+          candidates = []
+          for line in text.splitlines():
+              if "platform:watchOS Simulator" not in line or "Placeholder" in line:
+                  continue
+              ident = re.search(r"id:([0-9A-Fa-f-]{8,})", line)
+              name = re.search(r"name:([^,}]+)", line)
+              os_match = re.search(r"OS:([0-9.]+)", line)
+              if not ident or not name:
+                  continue
+              version = tuple(int(part) for part in os_match.group(1).split(".")) if os_match else (0,)
+              candidates.append((version, ident.group(1), name.group(1).strip()))
+
+          if not candidates:
+              sys.stderr.write("No concrete watchOS simulator destination was offered for this scheme.\n")
+              sys.stderr.write(text)
+              raise SystemExit(1)
+
+          selected = max(candidates)
+          sys.stderr.write("Selected simulator: %s (watchOS %s)\n" %
+                           (selected[2], ".".join(str(n) for n in selected[0])))
+          print(selected[1])
+          PY
+          )"
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Run watch unit tests
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project BorealDialer.xcodeproj \
+            -scheme BorealDialerWatch \
+            -destination "id=${{ steps.watch-sim.outputs.udid }}" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            test 2>&1 | tee /tmp/xcodebuild-watch-test.log
+
+      - name: Surface watch test failures
+        if: failure()
+        run: |
+          echo "## Watch test failures" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          if test -f /tmp/xcodebuild-watch-test.log; then
+            grep -Ei "error:|failed|Failing tests" /tmp/xcodebuild-watch-test.log | head -60 \
+              | tee -a "$GITHUB_STEP_SUMMARY" \
+              | while IFS= read -r line; do echo "::error::$line"; done
+          else
+            echo "Watch tests did not start; inspect the destination list." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload watch test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: xcodebuild-watch-test-log
+          path: |
+            /tmp/xcodebuild-watch-test.log
+            /tmp/watch-destinations.txt
+          if-no-files-found: warn
+
       # BOREAL_DIALER_TEST_DESTINATION_v48
       # v44 used 'platform=iOS Simulator,OS=latest'. OS=latest narrows a set of
       # destinations, it does not pick one, so xcodebuild had no device and

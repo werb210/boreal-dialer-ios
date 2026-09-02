@@ -7,6 +7,7 @@ options:
   bundleIdPrefix: financial.boreal
   deploymentTarget:
     iOS: "16.0"
+    watchOS: "9.0"
   createIntermediateGroups: true
 
 packages:
@@ -22,6 +23,10 @@ schemes:
     build:
       targets:
         BorealDialerWatch: all
+        BorealDialerWatchTests: [test]
+    test:
+      targets:
+        - BorealDialerWatchTests
   BorealDialer:
     build:
       targets:
@@ -40,8 +45,6 @@ targets:
         excludes:
           - BorealDialerLinux
       - path: UI
-      # BOREAL_DIALER_WATCH_v55
-      - path: Sources/WatchShared
       # BOREAL_DIALER_KEYPAD_ICON_PLIST_v22 - the app had no icon because the
       # catalogue was never in the target.
       - path: Assets.xcassets
@@ -108,10 +111,23 @@ targets:
         # change if PRODUCT_NAME is ever reintroduced.
         PRODUCT_MODULE_NAME: BorealDialer
         SWIFT_VERSION: 5.9
-        TARGETED_DEVICE_FAMILY: "1,2"
+        TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+
+  BorealDialerWatchTests:
+    type: bundle.unit-test
+    platform: watchOS
+    deploymentTarget: "9.0"
+    sources:
+      - path: Tests/BorealDialerWatchTests
+    dependencies:
+      - target: BorealDialerWatch
+    settings:
+      base:
+        SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: YES
 
   # BOREAL_DIALER_WATCH_v55 - notification surface on the wrist.
   BorealDialerWatch:
@@ -131,6 +147,10 @@ targets:
         CFBundleVersion: "1"
         WKApplication: true
         WKCompanionAppBundleIdentifier: financial.boreal.dialer
+        WKRunsIndependentlyOfCompanionApp: true
+        BorealAPIBaseURL: https://server.boreal.financial/api
+    entitlements:
+      path: Watch/BorealWatch.entitlements
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer.watchkitapp

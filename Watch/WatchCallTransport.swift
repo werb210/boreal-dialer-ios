@@ -9,6 +9,30 @@ protocol WatchCallTransport {
     func sendDTMF(_ digits: String) async throws
 }
 
+/// Applies only server/companion-confirmed states. In particular, elapsed time
+/// can never manufacture a connected call on the Watch.
+struct WatchCallStateTracker {
+    private(set) var status: WatchCallStatus = .idle
+
+    mutating func applyAuthoritative(_ next: WatchCallStatus) -> Bool {
+        guard !Self.terminal.contains(status), Self.allowed[status, default: []].contains(next) else {
+            return false
+        }
+        status = next
+        return true
+    }
+
+    private static let terminal: Set<WatchCallStatus> = [.ended, .failed]
+    private static let allowed: [WatchCallStatus: Set<WatchCallStatus>] = [
+        .idle: [.requesting],
+        .requesting: [.waitingForCallback, .bridging, .ringing, .failed, .ended],
+        .waitingForCallback: [.bridging, .ringing, .failed, .ended],
+        .bridging: [.ringing, .connected, .failed, .ended],
+        .ringing: [.bridging, .connected, .failed, .ended],
+        .connected: [.ended, .failed]
+    ]
+}
+
 /// Selects the fastest available transport without making WatchConnectivity a
 /// prerequisite. A nearby, reachable phone is an optimization only.
 struct WatchCallTransportSelector {

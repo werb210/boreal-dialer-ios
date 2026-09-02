@@ -101,10 +101,31 @@ final class WatchCallTransportTests: XCTestCase {
         catch { XCTAssertEqual(error as? WatchServiceError, .invalidDestination) }
     }
 
-    func testMissingServerCapabilityDoesNotClaimCallStarted() async {
-        let transport = ServerBridgeWatchCallTransport()
-        do { _ = try await transport.startCall(CallRequest(destination: "+14035551234", line: .BF)); XCTFail() }
-        catch { XCTAssertEqual(error as? WatchServiceError, .serverCapabilityUnavailable) }
+    func testUnauthenticatedStandaloneCallDoesNotClaimCallStarted() async throws {
+        let credentials = MemoryCredentialStore()
+        let auth = WatchAuthService(store: credentials)
+
+        let client = try WatchAPIClient(
+            baseURL: URL(string: "https://example.invalid")!,
+            auth: auth
+        )
+
+        let transport = ServerBridgeWatchCallTransport(client: client)
+
+        do {
+            _ = try await transport.startCall(
+                CallRequest(
+                    destination: "+14035551234",
+                    line: .BF
+                )
+            )
+            XCTFail("An unlinked Watch must not report a call state")
+        } catch {
+            XCTAssertEqual(
+                error as? WatchServiceError,
+                .notAuthenticated
+            )
+        }
     }
 
     func testLineIsCapturedAtCreation() async throws {

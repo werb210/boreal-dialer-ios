@@ -41,13 +41,22 @@ enum WatchNotificationRegistration {
 
 final class WatchPushTokenStore {
     static let shared = WatchPushTokenStore()
-    private(set) var registration: DeviceRegistration?
+    private(set) var token: String?
     private let service = "financial.boreal.dialer.watch.apns"
     private let account = "watch-standard-token"
+    private init() {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service, kSecAttrAccount as String: account,
+            kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
+        var value: AnyObject?
+        if SecItemCopyMatching(query as CFDictionary, &value) == errSecSuccess,
+           let data = value as? Data {
+            token = data.map { String(format: "%02x", $0) }.joined()
+        }
+    }
     func capture(_ data: Data) {
         let token = data.map { String(format: "%02x", $0) }.joined()
-        let deviceId = WKInterfaceDevice.current().identifierForVendor?.uuidString ?? UUID().uuidString
-        registration = DeviceRegistration(deviceId: deviceId, platform: .watchos, pushType: .standard, token: token)
+        self.token = token
         let delete: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service, kSecAttrAccount as String: account]
         SecItemDelete(delete as CFDictionary)
@@ -55,8 +64,24 @@ final class WatchPushTokenStore {
         add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         add[kSecValueData as String] = data
         SecItemAdd(add as CFDictionary, nil)
-        // Upload waits for the documented authenticated registration API. The
-        // Watch token has its own Keychain namespace and never transits iPhone.
+        Task { try? await uploadIfPossible() }
+    }
+    func uploadIfPossible(client supplied: WatchAPIClient? = nil) async throws {
+        let client = try supplied ?? WatchAPIClient()
+        guard let token, let current = await client.auth.session else { return }
+        struct Body: Encodable { let pushType, token, environment: String }
+#if DEBUG
+        let environment = "sandbox"
+#else
+        let environment = "production"
+#endif
+        _ = try await client.request(path: "/watch/devices/\(current.deviceId)/push-token", method: "PUT",
+            body: JSONEncoder().encode(Body(pushType: "standard", token: token, environment: environment)))
+    }
+    func clear() {
+        token = nil
+        SecItemDelete([kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service, kSecAttrAccount as String: account] as CFDictionary)
     }
 }
 

@@ -12,6 +12,14 @@ struct AccountSheet: View {
     @ObservedObject private var lineManager = LineManager.shared
 
     @State private var confirmingSignOut = false
+    @State private var watchEnrollment: WatchEnrollment?
+    @State private var watchEnrollmentError: String?
+    @State private var generatingWatchCode = false
+
+    private struct WatchEnrollment: Decodable {
+        let oneTimeCode: String
+        let expiresAt: Date
+    }
 
     // Read from the JWT rather than another round trip - the same claims the
     // Team store already reads for `myId`.
@@ -78,6 +86,20 @@ struct AccountSheet: View {
                 }
 
                 Section {
+                    if let enrollment = watchEnrollment, enrollment.expiresAt > Date() {
+                        Text(enrollment.oneTimeCode)
+                            .font(.system(size: 30, weight: .bold, design: .monospaced))
+                            .frame(maxWidth: .infinity)
+                            .accessibilityLabel("Apple Watch enrollment code \(enrollment.oneTimeCode)")
+                        Text("Enter this code on your Apple Watch. It expires in 5 minutes.").rowSubtitle()
+                    } else {
+                        Button(generatingWatchCode ? "Generating…" : "Link Apple Watch") { generateWatchEnrollment() }
+                            .disabled(generatingWatchCode)
+                    }
+                    if let watchEnrollmentError { Text(watchEnrollmentError).foregroundStyle(.red).font(.caption) }
+                } header: { SectionLabel(text: "Apple Watch") }
+
+                Section {
                     Button(role: .destructive) {
                         confirmingSignOut = true
                     } label: {
@@ -113,6 +135,18 @@ struct AccountSheet: View {
             } message: {
                 Text("You'll need your phone number and a code to sign back in. Any call in progress will end.")
             }
+        }
+    }
+
+    private func generateWatchEnrollment() {
+        generatingWatchCode = true; watchEnrollmentError = nil; watchEnrollment = nil
+        Task { do {
+            let request = try APIClient.shared.authorizedRequest(endpoint: "/watch/auth/enrollment", method: "POST")
+            let data = try await APIClient.shared.execute(request)
+            let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+            let enrollment = try decoder.decode(WatchEnrollment.self, from: data)
+            await MainActor.run { watchEnrollment = enrollment; generatingWatchCode = false }
+        } catch { await MainActor.run { watchEnrollmentError = "Could not generate a Watch code."; generatingWatchCode = false } }
         }
     }
 }

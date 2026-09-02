@@ -88,6 +88,12 @@ public struct WatchRecentCall: Codable, Identifiable, Equatable, Sendable {
     public let direction: WatchCallDirection
     public let occurredAt: Date
     public let line: BorealLine
+    public let status: String?
+    public init(id: String, name: String?, number: String, direction: WatchCallDirection,
+                occurredAt: Date, line: BorealLine, status: String? = nil) {
+        self.id = id; self.name = name; self.number = number; self.direction = direction
+        self.occurredAt = occurredAt; self.line = line; self.status = status
+    }
 }
 
 public enum DevicePlatform: String, Codable, Sendable { case ios, watchos, android }

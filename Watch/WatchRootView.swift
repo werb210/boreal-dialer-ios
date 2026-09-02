@@ -37,7 +37,11 @@ struct WatchDialView: View {
         switch status {
         case .requesting: "Requesting callback…"
         case .waitingForCallback: "Waiting for carrier call…"
-        default: status.rawValue
+        case .bridging: "Bridging…"
+        case .ringing: "Ringing…"
+        case .connected: "Connected"
+        case .ended: "Call ended"
+        default: status.rawValue.capitalized
         }
     }
     private func start() {
@@ -45,7 +49,7 @@ struct WatchDialView: View {
         let captured = CallRequest(destination: destination, line: line)
         status = .requesting; errorMessage = nil
         Task { do { status = try await transport.startCall(captured) }
-            catch WatchServiceError.serverCapabilityUnavailable { status = .failed; errorMessage = "Standalone calling awaits server support" }
+            catch let error as WatchServiceError { status = .failed; errorMessage = error.safeMessage }
             catch { status = .failed; errorMessage = "Call request failed" }
         }
     }
@@ -53,11 +57,13 @@ struct WatchDialView: View {
 
 struct WatchContactsView: View {
     @State private var query = ""; @State private var results: [ContactSummary] = []; @State private var message: String?
+    @State private var line: BorealLine = .BF
     private let service: any WatchDirectoryService = DirectWatchDirectoryService()
     var body: some View {
         List {
             TextField("Search CRM", text: $query)
-            Button("Search") { search() }.disabled(query.trimmingCharacters(in: .whitespaces).isEmpty)
+            Picker("Line", selection: $line) { ForEach(BorealLine.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
+            Button("Search") { search() }.disabled(query.trimmingCharacters(in: .whitespaces).count < 2)
             if let message { Text(message).font(.caption2).foregroundStyle(.secondary) }
             ForEach(results) { contact in
                 NavigationLink(destination: ContactDetailView(contact: contact)) {
@@ -66,8 +72,7 @@ struct WatchContactsView: View {
             }
         }.navigationTitle("Contacts")
     }
-    private func search() { Task { do { results = try await service.search(query, limit: 10) }
-        catch WatchServiceError.serverCapabilityUnavailable { message = "Contact search awaits a confirmed server contract" }
+    private func search() { Task { do { results = try await service.search(query, line: line, limit: 10) }
         catch { message = "Search unavailable" } } }
 }
 
@@ -79,8 +84,9 @@ struct PrefilledDialView: View { let number: String; var body: some View { Watch
 
 struct WatchRecentsView: View {
     @State private var recents: [WatchRecentCall] = []; @State private var unavailable = false
+    @State private var line: BorealLine = .BF
     private let service: any WatchRecentsService = DirectWatchRecentsService()
-    var body: some View { List { if unavailable { Text("Recents await server support").font(.caption) }; ForEach(recents) { Text($0.name ?? $0.number) } }.navigationTitle("Recents").task { do { recents = try await service.fetch(limit: 25) } catch { unavailable = true } } }
+    var body: some View { List { Picker("Line", selection: $line) { ForEach(BorealLine.allCases, id: \.self) { Text($0.rawValue).tag($0) } }; if unavailable { Text("Recents unavailable").font(.caption) }; ForEach(recents) { Text($0.name ?? $0.number) } }.navigationTitle("Recents").task(id: line) { do { unavailable = false; recents = try await service.fetch(line: line, limit: 25) } catch { unavailable = true } } }
 }
 
 struct WatchNotificationsView: View {
@@ -96,6 +102,23 @@ struct CompanionCallView: View {
 
 struct WatchAccountView: View {
     @EnvironmentObject private var store: WatchEventStore
-    @State private var message = "Authentication can be restored independently. Standalone enrollment requires the documented server link flow."
-    var body: some View { List { Text(message).font(.caption); Button("Sign Out", role: .destructive) { Task { await WatchAuthService.shared.logout(); await MainActor.run { store.clearSensitiveData(); message = "Signed out on this Watch" } } } }.navigationTitle("Account") }
+    @State private var code = ""; @State private var linked = false; @State private var fallback = false
+    @State private var message: String?
+    var body: some View { List {
+        if linked {
+            Text("Linked")
+            Toggle("Standalone cellular fallback", isOn: $fallback).onChange(of: fallback) { enabled in updateRouting(enabled) }
+            Button("Sign Out", role: .destructive) { Task { do { try await WatchAuthService.shared.logout(client: WatchAPIClient()); await MainActor.run { store.clearSensitiveData(); linked = false; message = "Signed out on this Watch" } } catch { await MainActor.run { message = "Could not revoke this Watch. Try again." } } } }
+        } else {
+            Text("Link this Apple Watch").font(.headline)
+            TextField("8-digit code", text: $code)
+            Button("Link") { Task { do { try await WatchAuthService.shared.link(oneTimeCode: code); await MainActor.run { code = ""; linked = true; message = nil } } catch let error as WatchServiceError { await MainActor.run { message = error.safeMessage } } catch { await MainActor.run { message = "Unable to link Watch" } } } }.disabled(code.count != 8)
+        }
+        if let message { Text(message).font(.caption).foregroundStyle(.secondary) }
+    }.navigationTitle("Account").task { linked = await WatchAuthService.shared.restore(); if linked { try? await WatchAPIClient().registerDevice() } } }
+    private func updateRouting(_ enabled: Bool) { Task { do {
+        guard let session = await WatchAuthService.shared.session else { return }
+        struct Body: Encodable { let enabled: Bool }
+        _ = try await WatchAPIClient().request(path: "/watch/devices/\(session.deviceId)/standalone-routing", method: "PUT", body: JSONEncoder().encode(Body(enabled: enabled)))
+    } catch let error as WatchServiceError { await MainActor.run { fallback = false; message = error.safeMessage } } catch { await MainActor.run { fallback = false; message = "Unable to update fallback" } } } }
 }

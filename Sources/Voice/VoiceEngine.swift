@@ -74,7 +74,9 @@ final class VoiceEngine: NSObject, ObservableObject {
         // BOREAL_DIALER_CALLKIT_IDENTITY_v38 - "Boreal Financial" is what iOS
         // prints under the caller on the lock screen, so it should be the name
         // a staff member would recognise at a glance.
-        let config = CXProviderConfiguration(localizedName: "Boreal Financial")
+        // The deprecated localized-name initializer is no longer necessary:
+        // CallKit obtains the provider name from the app's display name.
+        let config = CXProviderConfiguration()
         config.supportsVideo = false
         // V1 deliberately supports one external call. A second Twilio invite is
         // rejected deterministically by TwilioVoiceManager.
@@ -99,9 +101,12 @@ final class VoiceEngine: NSObject, ObservableObject {
         let transaction = CXTransaction(action: start)
 
         CXCallController().request(transaction) { [weak self] error in
-            guard let self else { return }
-            if error != nil {
-                self.handleFailure()
+            let failed = error != nil
+            Task { @MainActor in
+                guard let self else { return }
+                if failed {
+                    self.handleFailure()
+                }
             }
         }
 
@@ -132,8 +137,11 @@ final class VoiceEngine: NSObject, ObservableObject {
         let transaction = CXTransaction(action: start)
 
         CXCallController().request(transaction) { [weak self] error in
-            guard let self else { return }
-            if error != nil { self.handleFailure() }
+            let failed = error != nil
+            Task { @MainActor in
+                guard let self else { return }
+                if failed { self.handleFailure() }
+            }
         }
 
         Telemetry.event(
@@ -167,17 +175,20 @@ final class VoiceEngine: NSObject, ObservableObject {
         update.supportsDTMF = true
 
         provider.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
-            guard let self else { return }
-            if error == nil {
-                self.state = .ringing(uuid)
-                WatchBridge.shared.send(WatchEvent(kind: .incomingCall,
-                                                   callId: uuid.uuidString,
-                                                   displayName: "",
-                                                   handle: handle))
-                // Named after the fact. Reporting must not wait on the network:
-                // iOS terminates the app if a VoIP push does not report a call
-                // almost immediately.
-                self.nameIncomingCall(uuid: uuid, handle: handle)
+            let succeeded = error == nil
+            Task { @MainActor in
+                guard let self else { return }
+                if succeeded {
+                    self.state = .ringing(uuid)
+                    WatchBridge.shared.send(WatchEvent(kind: .incomingCall,
+                                                       callId: uuid.uuidString,
+                                                       displayName: "",
+                                                       handle: handle))
+                    // Named after the fact. Reporting must not wait on the network:
+                    // iOS terminates the app if a VoIP push does not report a call
+                    // almost immediately.
+                    self.nameIncomingCall(uuid: uuid, handle: handle)
+                }
             }
         }
     }

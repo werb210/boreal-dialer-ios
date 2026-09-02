@@ -1,6 +1,7 @@
 import Foundation
 import TwilioVoice
 
+@MainActor
 protocol VoiceServiceProtocol {
     func startCall(to number: String)
     func endCall()
@@ -135,7 +136,7 @@ final class VoiceService: NSObject, ObservableObject, VoiceServiceProtocol {
         try? session.setCategory(
             .playAndRecord,
             mode: .voiceChat,
-            options: [.allowBluetooth, .duckOthers]
+            options: [.allowBluetoothHFP, .duckOthers]
         )
         try? session.setActive(true)
 

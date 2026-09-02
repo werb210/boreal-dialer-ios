@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
   name: "BorealDialer",
-  platforms: [.iOS(.v15)],
+  platforms: [.iOS(.v15), .watchOS(.v9)],
   dependencies: [
     .package(url: "https://github.com/twilio/twilio-voice-ios", from: "6.6.0"),
   ],

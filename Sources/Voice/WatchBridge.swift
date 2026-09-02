@@ -65,8 +65,8 @@ extension WatchBridge: WCSessionDelegate {
 
     @MainActor
     private func perform(_ message: WatchActionMessage) {
-        // The watch never carries audio. Answering there hands the call to the
-        // phone, which is the device with the microphone and the Twilio session.
+        // Companion mode controls the iPhone-owned Twilio call. Standalone
+        // Watch calling is a separate server-bridge state machine.
         // BOREAL_DIALER_WATCH_NAME_v56 - acceptCallFromCallKit(uuid:) is the
         // method CXAnswerCallAction drives, so the wrist and the CallKit screen
         // take exactly the same route into the call.

@@ -1,13 +1,22 @@
 # Apple and Twilio release setup
 
-Current app ID/bundle ID: `financial.boreal.dialer` (Watch companion: `financial.boreal.dialer.watchkitapp`). Preserve these identifiers.
+This product has two Apple targets. Preserve the project-defined identifiers: iPhone `financial.boreal.dialer` and Watch `financial.boreal.dialer.watchkitapp`.
 
-After paid Apple Developer access is available:
-1. Register/confirm both App IDs and signing teams/profiles. Enable **Push Notifications** for the dialer.
-2. Enable Background Modes used by the target: **Voice over IP**, remote notifications, and audio for an active call. CallKit is framework functionality, not a separate capability.
-3. Generate a production APNs authentication key/certificate under controlled secret storage. Never commit the `.p8` private key.
-4. In Twilio Programmable Voice configure the TwiML App/server voice URL, iOS VoIP Push Credential linked to production APNs and the exact bundle/environment, incoming-number routing, access-token issuer, and staff identity mapping. Store Account SID/API key secret/Auth Token outside this repo.
-5. Verify Release uses HTTPS production configuration, no localhost/mock/test identity/token, and production `aps-environment` supplied by release signing. The checked-in entitlement is development-only for local signing and must be validated in the archive.
-6. Validate server cookies are `Secure`, `HttpOnly`, HTTPS-only, and have appropriate `SameSite` behavior. This is a server setting; no BF-Server change is included here.
+## iPhone target
 
-Do not add Associated Domains until the HTTPS domain and AASA contract are confirmed. The custom scheme remains the fallback.
+1. Register/confirm the iPhone App ID and signing profile. Enable Push Notifications for ordinary APNs and VoIP PushKit.
+2. Enable the configured background modes: Voice over IP, remote notifications, and audio during an active call. Validate microphone usage disclosure and iPhone-only device family.
+3. Configure Twilio Programmable Voice with the TwiML App/server URL, iOS VoIP Push Credential for the exact bundle/environment, incoming routing, access-token issuer, and staff identity mapping. Keep secrets outside the repository.
+4. Confirm standard APNs and PushKit tokens are registered separately once the documented server device-registration contract exists.
+
+## Independent Watch target
+
+1. Register/confirm the Watch App ID/profile and its relationship to the iPhone app. Verify `WKRunsIndependentlyOfCompanionApp=YES` (“Supports Running Without iOS App Installation”).
+2. Enable Push Notifications for the Watch App ID and provision its `aps-environment`. It uses ordinary APNs—not iPhone token forwarding and not VoIP PushKit.
+3. Confirm Keychain access, HTTPS networking, notification categories, and any justified watchOS background capability. Do not configure permanent execution or deprecated complication pushes.
+4. Implement and deploy the server contracts in `WATCH_SERVER_REQUIREMENTS.md`, then test direct Watch APNs, authentication, Wi-Fi/cellular API access, device revocation, and server bridge on physical cellular hardware.
+5. Verify the Watch binary contains no TwilioVoice framework or unsupported iOS-only frameworks.
+
+## Shared release controls
+
+Generate a production APNs authentication key under controlled secret storage; never commit `.p8` material. Verify Release uses HTTPS production configuration, no localhost/mock identity/token, and production entitlements supplied by archive signing. Validate cookies server-side as `Secure`, `HttpOnly`, HTTPS-only, with appropriate `SameSite` behavior. Do not add Associated Domains until the HTTPS domain/AASA contract is confirmed.

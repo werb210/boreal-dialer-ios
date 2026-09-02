@@ -50,4 +50,27 @@ final class ProductionSafetyTests: XCTestCase {
         let engine = try String(contentsOf: root.appendingPathComponent("Sources/Voice/VoiceEngine.swift"))
         XCTAssertEqual(engine.components(separatedBy: "CXProvider(configuration:").count - 1, 1)
     }
+
+    func testWatchCoreIsIndependentAndTwilioFree() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let watch = root.appendingPathComponent("Watch")
+        let sources = try FileManager.default.contentsOfDirectory(at: watch, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "swift" }
+            .map { try String(contentsOf: $0) }.joined(separator: "\n")
+        XCTAssertFalse(sources.contains("import TwilioVoice"))
+        XCTAssertFalse(sources.contains("WCSession.default.isReachable"))
+        XCTAssertFalse(sources.contains("Answers on " + "your phone"))
+        XCTAssertTrue(sources.contains("registerForRemoteNotifications"))
+        XCTAssertTrue(sources.contains("protocol WatchCallTransport"))
+        XCTAssertTrue(sources.contains("URLSession"))
+    }
+
+    func testProjectSeparatesPhoneAndIndependentWatchProducts() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let project = try String(contentsOf: root.appendingPathComponent("project.yml"))
+        XCTAssertTrue(project.contains("TARGETED_DEVICE_FAMILY: \"1\""))
+        XCTAssertTrue(project.contains("WKRunsIndependentlyOfCompanionApp: true"))
+        let watchTarget = project.components(separatedBy: "BorealDialerWatch:").last ?? ""
+        XCTAssertFalse(watchTarget.contains("product: TwilioVoice"))
+    }
 }

@@ -61,4 +61,30 @@ final class WatchMessageTests: XCTestCase {
         XCTAssertEqual(WatchEvent(kind: .missedCall, callId: "1", displayName: "", handle: "").title, "Missed call")
         XCTAssertEqual(WatchEvent(kind: .newMessage, callId: "1", displayName: "", handle: "").title, "New message")
     }
+
+    func testNotificationRouterRejectsUnknownAndArbitraryURLPayloads() {
+        if case .home = WatchNotificationRouter.route(userInfo: ["type": "unknown", "url": "https://evil.invalid"]) {} else { XCTFail() }
+        if case .message(let id) = WatchNotificationRouter.route(userInfo: ["type": "client_message", "id": "https://evil.invalid"]) {
+            XCTAssertNil(id)
+        } else { XCTFail() }
+    }
+
+    func testNotificationCategoriesRouteToTypedDestinations() {
+        if case .task("task-1") = WatchNotificationRouter.route(userInfo: ["type": "task", "id": "task-1"]) {} else { XCTFail() }
+        if case .meeting("meeting_2") = WatchNotificationRouter.route(userInfo: ["type": "meeting", "id": "meeting_2"]) {} else { XCTFail() }
+        if case .missedCall("call-3") = WatchNotificationRouter.route(userInfo: ["type": "missed_call", "id": "call-3"]) {} else { XCTFail() }
+    }
+
+    func testWatchPushRegistrationIsDistinctFromIOSRegistrations() {
+        let watch = DeviceRegistration(deviceId: "watch", platform: .watchos, pushType: .standard, token: "watch-token")
+        let phone = DeviceRegistration(deviceId: "phone", platform: .ios, pushType: .standard, token: "phone-token")
+        let voip = DeviceRegistration(deviceId: "phone", platform: .ios, pushType: .voip, token: "voip-token")
+        XCTAssertNotEqual(watch, phone); XCTAssertNotEqual(watch, voip); XCTAssertNotEqual(phone, voip)
+    }
+
+    func testPhoneNormalizationUsedByWatchDialer() {
+        XCTAssertEqual(PhoneNumberNormalizer.normalize("(403) 555-1234"), "+14035551234")
+        XCTAssertEqual(PhoneNumberNormalizer.normalize("+44 20 7946 0958"), "+442079460958")
+        XCTAssertNil(PhoneNumberNormalizer.normalize("123"))
+    }
 }

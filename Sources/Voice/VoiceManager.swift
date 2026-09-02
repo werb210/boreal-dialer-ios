@@ -47,7 +47,11 @@ final class VoiceManager: NSObject, ObservableObject {
         updateAccessToken(token)
         scheduleTokenRefresh()
         TwilioVoiceSDK.audioDevice = DefaultAudioDevice()
-        configureIdentityIfNeeded(from: token)
+        configureIdentityIfNeeded(from: token) { [weak self] in
+            guard let self else { return }
+            await self.logout()
+            await AuthService.shared.invalidateSessionAfterIdentityMismatch()
+        }
         PushManager.shared.registerDeviceTokenWithTwilio()
         sendPresence(status: "online")
     }
@@ -252,7 +256,7 @@ final class VoiceManager: NSObject, ObservableObject {
     private func configureAudioSessionForCall() {
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .duckOthers])
+            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP, .duckOthers])
             try session.setActive(true)
         } catch {
 #if DEBUG
@@ -289,15 +293,21 @@ final class VoiceManager: NSObject, ObservableObject {
         AVAudioSession.sharedInstance().requestRecordPermission { _ in }
     }
 
-    private func configureIdentityIfNeeded(from token: String) {
+    /// Configures the first valid voice identity. A different identity is never
+    /// installed over the authenticated one; instead the caller supplies the
+    /// asynchronous session teardown used for that security boundary.
+    func configureIdentityIfNeeded(
+        from token: String,
+        onMismatch: @escaping @MainActor @Sendable () async -> Void
+    ) {
         guard let identity = decodeIdentity(from: token), !identity.isEmpty else { return }
 
         if let existing = IdentityManager.shared.identity {
             guard existing == identity else {
-                Task {
-                    await self.logout()
-                    await AuthService.shared.invalidateSessionAfterIdentityMismatch()
+                Task { @MainActor in
+                    await onMismatch()
                 }
+                return
             }
             return
         }

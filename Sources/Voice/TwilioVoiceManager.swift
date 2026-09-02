@@ -172,7 +172,7 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
             try session.setCategory(
                 .playAndRecord,
                 mode: .voiceChat,
-                options: [.allowBluetooth, .duckOthers]
+                options: [.allowBluetoothHFP, .duckOthers]
             )
             try session.setActive(true)
         } catch {

@@ -9,7 +9,7 @@ jobs:
     env:
       VITE_API_URL: https://server.boreal.financial
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install repo dependencies
         run: npm ci
       - name: Verify dialer-web entrypoint
@@ -33,7 +33,7 @@ jobs:
   swift-lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # BOREAL_DIALER_DUPLICATE_FILENAMES_v2 - fails in seconds on ubuntu rather
       # than partway through a macOS build.
       - name: Check for duplicate Swift filenames
@@ -59,7 +59,7 @@ jobs:
     needs: swift-lint
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate Xcode project
@@ -151,7 +151,7 @@ jobs:
 
       - name: Upload destination list
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: xcodebuild-destinations
           path: /tmp/destinations.txt
@@ -179,7 +179,7 @@ jobs:
 
       - name: Upload test log
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: xcodebuild-test-log
           path: /tmp/xcodebuild-test.log
@@ -196,7 +196,7 @@ jobs:
 
       - name: Upload build log
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: xcodebuild-log
           path: /tmp/xcodebuild.log

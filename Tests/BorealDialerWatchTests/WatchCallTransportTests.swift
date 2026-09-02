@@ -2,6 +2,27 @@ import XCTest
 @testable import BorealDialerWatch
 
 final class WatchCallTransportTests: XCTestCase {
+    func testRecentCallWireContractRoundTrips() throws {
+        XCTAssertEqual(WatchCallDirection.incoming.rawValue, "incoming")
+        XCTAssertEqual(WatchCallDirection.outgoing.rawValue, "outgoing")
+        XCTAssertEqual(WatchCallDirection.missed.rawValue, "missed")
+
+        let call = WatchRecentCall(
+            id: "call-1",
+            name: "Test Contact",
+            number: "+14035551234",
+            direction: .incoming,
+            occurredAt: Date(timeIntervalSince1970: 1_788_291_200),
+            line: .BF
+        )
+        let encoded = try JSONEncoder().encode(call)
+        let decoded = try JSONDecoder().decode(WatchRecentCall.self, from: encoded)
+        XCTAssertEqual(decoded, call)
+        requireSendable(call)
+    }
+
+    private func requireSendable<T: Sendable>(_ value: T) {}
+
     func testInvalidDestinationNeverStartsOperation() async {
         let transport = ServerBridgeWatchCallTransport { _ in XCTFail(); return .waitingForCallback }
         do { _ = try await transport.startCall(CallRequest(destination: "123", line: .BF)); XCTFail() }

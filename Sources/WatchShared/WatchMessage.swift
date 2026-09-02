@@ -60,7 +60,7 @@ public struct WatchEvent: Codable, Sendable, Equatable {
 }
 
 public enum BorealLine: String, Codable, CaseIterable, Sendable { case BF, BI, SLF }
-public enum CallDirection: String, Codable, Sendable { case incoming, outgoing, missed }
+public enum WatchCallDirection: String, Codable, Sendable { case incoming, outgoing, missed }
 public enum WatchCallStatus: String, Codable, Sendable {
     case idle, requesting, waitingForCallback, ringing, connected, ended, failed
 }
@@ -81,11 +81,11 @@ public struct ContactSummary: Codable, Identifiable, Equatable, Sendable {
         self.id = id; self.name = name; self.company = company; self.primaryPhone = primaryPhone
     }
 }
-public struct RecentCall: Codable, Identifiable, Equatable, Sendable {
+public struct WatchRecentCall: Codable, Identifiable, Equatable, Sendable {
     public let id: String
     public let name: String?
     public let number: String
-    public let direction: CallDirection
+    public let direction: WatchCallDirection
     public let occurredAt: Date
     public let line: BorealLine
 }

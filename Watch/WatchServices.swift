@@ -130,9 +130,9 @@ struct DirectWatchDirectoryService: WatchDirectoryService {
     }
 }
 
-protocol WatchRecentsService { func fetch(limit: Int) async throws -> [RecentCall] }
+protocol WatchRecentsService { func fetch(limit: Int) async throws -> [WatchRecentCall] }
 struct DirectWatchRecentsService: WatchRecentsService {
-    func fetch(limit: Int = 25) async throws -> [RecentCall] {
+    func fetch(limit: Int = 25) async throws -> [WatchRecentCall] {
         throw WatchServiceError.serverCapabilityUnavailable
     }
 }

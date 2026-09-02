@@ -147,5 +147,5 @@ final class WatchNetworkMonitor: ObservableObject {
     deinit { monitor.cancel() }
 }
 
-enum WatchOperatingMode { case companion, standalone }
+enum WatchOperatingMode: Equatable { case companion, standalone }
 enum WatchPresence { case available, offline, standaloneCellular, companionAvailable, busy }

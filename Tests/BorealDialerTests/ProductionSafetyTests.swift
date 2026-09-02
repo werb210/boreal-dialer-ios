@@ -60,6 +60,12 @@ final class ProductionSafetyTests: XCTestCase {
     func testVoIPPathRejectsGeneralNotificationTypes() {
         XCTAssertFalse(PushManager.isEligibleVoIPPayload(["type": "client_message"]))
         XCTAssertFalse(PushManager.isEligibleVoIPPayload(["type": "stage_change"]))
+        XCTAssertFalse(PushManager.isEligibleVoIPPayload(["type": "general"]))
+        XCTAssertFalse(PushManager.isEligibleVoIPPayload([:]))
+        XCTAssertTrue(PushManager.isEligibleVoIPPayload([
+            "twi_message_type": "twilio.voice.call",
+            "twi_call_sid": "CA123"
+        ]))
     }
 
     func testTwilioInviteUUIDIsLogicalCallUUID() {
@@ -70,6 +76,15 @@ final class ProductionSafetyTests: XCTestCase {
         XCTAssertEqual(inviteUUID.uuidString, WatchEvent(kind: .incomingCall,
                                                           callId: stateUUID.uuidString,
                                                           displayName: "", handle: "").callId)
+    }
+
+    func testDuplicateCallInviteProtection() {
+        var ledger = CallInviteLedger()
+        XCTAssertTrue(ledger.begin("CA-logical-call"))
+        XCTAssertFalse(ledger.begin("CA-logical-call"))
+        ledger.finish("CA-logical-call")
+        XCTAssertTrue(ledger.begin("CA-logical-call"))
+        XCTAssertFalse(ledger.begin(""))
     }
 
     func testInstalledAppTargetDeclaresSchemeAndSingleProviderOwner() throws {

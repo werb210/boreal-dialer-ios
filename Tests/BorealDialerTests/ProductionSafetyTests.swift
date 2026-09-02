@@ -3,13 +3,42 @@ import XCTest
 
 final class ProductionSafetyTests: XCTestCase {
     func testPhoneDeepLinkNormalizesAndDoesNotStartByDefault() {
-        XCTAssertEqual(DialerDeepLinkParser.parse(URL(string: "borealdialer://call?phone=%2B14165550123")!),
-                       .phone("+14165550123", start: false))
+        XCTAssertEqual(DialerDeepLinkParser.parse(URL(string: "borealdialer://call?phone=+14035551234")!),
+                       .phone("+14035551234", start: false))
+    }
+
+    func testPhoneDeepLinkSupportsExplicitImmediateStart() {
+        XCTAssertEqual(DialerDeepLinkParser.parse(URL(string: "borealdialer://call?phone=+14035551234&start=true")!),
+                       .phone("+14035551234", start: true))
     }
 
     func testContactDeepLinkAndExplicitStart() {
         XCTAssertEqual(DialerDeepLinkParser.parse(URL(string: "borealdialer://call?contactId=abc_123&start=true")!),
                        .contact(id: "abc_123", start: true))
+    }
+
+    func testDeepLinkWithoutQueryIsRejected() {
+        XCTAssertNil(DialerDeepLinkParser.parse(URL(string: "borealdialer://call")!))
+    }
+
+    func testDeepLinkWithDuplicateParameterIsRejected() {
+        XCTAssertNil(DialerDeepLinkParser.parse(URL(string: "borealdialer://call?phone=+14035551234&phone=+14035550000")!))
+    }
+
+    func testDeepLinkWithUnknownParameterIsRejected() {
+        XCTAssertNil(DialerDeepLinkParser.parse(URL(string: "borealdialer://call?phone=+14035551234&unknown=x")!))
+    }
+
+    func testDeepLinkWithPhoneAndContactIsRejected() {
+        XCTAssertNil(DialerDeepLinkParser.parse(URL(string: "borealdialer://call?phone=+123&contactId=abc")!))
+    }
+
+    func testDeepLinkWithInvalidStartIsRejected() {
+        XCTAssertNil(DialerDeepLinkParser.parse(URL(string: "borealdialer://call?phone=+14035551234&start=maybe")!))
+    }
+
+    func testDeepLinkWithInvalidContactCharactersIsRejected() {
+        XCTAssertNil(DialerDeepLinkParser.parse(URL(string: "borealdialer://call?contactId=../../bad")!))
     }
 
     func testMalformedAndUntrustedDeepLinksAreRejected() {

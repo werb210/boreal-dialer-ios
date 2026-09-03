@@ -55,6 +55,9 @@ jobs:
       - name: Check server paths
         run: ./scripts/check-server-paths.sh
 
+      - name: Check Watch authentication crash paths
+        run: ./scripts/check-watch-auth-crash-paths.sh
+
   ios-build:
     needs: swift-lint
     runs-on: macos-latest

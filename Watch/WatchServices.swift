@@ -104,7 +104,12 @@ actor WatchAuthService {
                 body: JSONEncoder().encode(Body(refreshToken: current.refreshToken, deviceId: current.deviceId)))
             let rotated = try Self.decoder.decode(WatchSession.self, from: data)
             try save(rotated)
-        } catch { clear(); throw error }
+        } catch WatchServiceError.invalidLogin {
+            clear()
+            throw WatchServiceError.invalidLogin
+        } catch {
+            throw error
+        }
     }
     func clear() { store.clear(); session = nil }
     func logout(client: WatchAPIClient) async throws {
@@ -135,7 +140,11 @@ struct WatchAPIClient: @unchecked Sendable {
     func request(path: String, method: String = "GET", body: Data? = nil, line: BorealLine? = nil,
                  query: [URLQueryItem] = [], headers: [String: String] = [:], retry401: Bool = true) async throws -> Data {
         guard var current = await auth.session else { throw WatchServiceError.notAuthenticated }
-        if current.expiresAt.timeIntervalSinceNow < 60 { try await auth.refresh(using: self); current = await auth.session! }
+        if current.expiresAt.timeIntervalSinceNow < 60 {
+            try await auth.refresh(using: self)
+            guard let refreshed = await auth.session else { throw WatchServiceError.notAuthenticated }
+            current = refreshed
+        }
         let effectiveHeaders = headers.merging(line.map { ["X-Silo": $0.rawValue] } ?? [:]) { a, _ in a }
         do { return try await execute(path: path, method: method, body: body, query: query,
             headers: effectiveHeaders, token: current.accessToken) }
@@ -177,11 +186,16 @@ struct WatchAPIClient: @unchecked Sendable {
 protocol WatchDirectoryService { func search(_ query: String, line: BorealLine, limit: Int) async throws -> [ContactSummary] }
 extension WatchDirectoryService { func search(_ query: String, limit: Int) async throws -> [ContactSummary] { try await search(query, line: .BF, limit: limit) } }
 struct DirectWatchDirectoryService: WatchDirectoryService {
-    let client: WatchAPIClient
-    init(client: WatchAPIClient? = nil) { self.client = client ?? (try! WatchAPIClient()) }
+    private let client: WatchAPIClient?
+    private let makeClient: () throws -> WatchAPIClient
+    init(client: WatchAPIClient? = nil, makeClient: @escaping () throws -> WatchAPIClient = { try WatchAPIClient() }) {
+        self.client = client
+        self.makeClient = makeClient
+    }
     func search(_ query: String, line: BorealLine, limit: Int = 10) async throws -> [ContactSummary] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines); guard q.count >= 2 else { return [] }
-        let data = try await client.request(path: "/watch/contacts", line: line, query: [.init(name:"q", value:q), .init(name:"line", value:line.rawValue), .init(name:"limit", value:String(min(10,max(1,limit))))])
+        let api = try client ?? makeClient()
+        let data = try await api.request(path: "/watch/contacts", line: line, query: [.init(name:"q", value:q), .init(name:"line", value:line.rawValue), .init(name:"limit", value:String(min(10,max(1,limit))))])
         struct Response: Decodable { let items: [ContactSummary] }
         return try WatchAuthService.decoder.decode(Response.self, from: data).items
     }
@@ -189,12 +203,17 @@ struct DirectWatchDirectoryService: WatchDirectoryService {
 protocol WatchRecentsService { func fetch(line: BorealLine, limit: Int) async throws -> [WatchRecentCall] }
 extension WatchRecentsService { func fetch(limit: Int) async throws -> [WatchRecentCall] { try await fetch(line: .BF, limit: limit) } }
 struct DirectWatchRecentsService: WatchRecentsService {
-    let client: WatchAPIClient
-    init(client: WatchAPIClient? = nil) { self.client = client ?? (try! WatchAPIClient()) }
+    private let client: WatchAPIClient?
+    private let makeClient: () throws -> WatchAPIClient
+    init(client: WatchAPIClient? = nil, makeClient: @escaping () throws -> WatchAPIClient = { try WatchAPIClient() }) {
+        self.client = client
+        self.makeClient = makeClient
+    }
     func fetch(line: BorealLine, limit: Int = 25) async throws -> [WatchRecentCall] {
         struct DTO: Decodable { let id, number: String; let contactName: String?; let direction: WatchCallDirection; let occurredAt: Date; let line: BorealLine; let status: String? }
         struct Response: Decodable { let items: [DTO] }
-        let data = try await client.request(path: "/watch/calls/recent", line: line, query: [.init(name:"line",value:line.rawValue),.init(name:"limit",value:String(min(25,max(1,limit))))])
+        let api = try client ?? makeClient()
+        let data = try await api.request(path: "/watch/calls/recent", line: line, query: [.init(name:"line",value:line.rawValue),.init(name:"limit",value:String(min(25,max(1,limit))))])
         return try WatchAuthService.decoder.decode(Response.self, from:data).items.map { WatchRecentCall(id:$0.id,name:$0.contactName,number:$0.number,direction:$0.direction,occurredAt:$0.occurredAt,line:$0.line,status:$0.status) }
     }
 }

@@ -169,8 +169,14 @@ final class WatchAuthReliabilityTests: XCTestCase {
     }
 
     private func session(access: String, refresh: String) -> WatchSession {
-        WatchSession(accessToken: access, refreshToken: refresh,
-                     expiresAt: Date(timeIntervalSinceNow: 3_600), deviceId: "watch-1")
+        // BOREAL_DIALER_WATCH_TEST_DATE_v28 - the server JSON round-trips expiresAt
+        // through ISO8601 (whole seconds) and the decoder uses .iso8601, so the
+        // fixture date must be whole seconds too. Otherwise the decoded session's
+        // expiresAt differs from this one by a fraction of a second and every
+        // rotation assertion (current == rotated) fails.
+        let expiresAt = Date(timeIntervalSince1970: (Date().timeIntervalSince1970 + 3_600).rounded(.down))
+        return WatchSession(accessToken: access, refreshToken: refresh,
+                            expiresAt: expiresAt, deviceId: "watch-1")
     }
 
     private func sessionJSON(_ session: WatchSession) -> Data {

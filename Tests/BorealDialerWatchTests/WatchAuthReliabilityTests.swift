@@ -9,23 +9,11 @@ final class WatchAuthReliabilityTests: XCTestCase {
         func clear() { value = nil }
     }
 
-    private final class StubURLProtocol: URLProtocol {
+    // BOREAL_DIALER_WATCH_TRANSPORT_SEAM_v27 - a plain static handler read by the
+    // client's injected transport. URLProtocol interception does not run on the
+    // watchOS simulator, so the previous URLProtocol subclass never fired.
+    private final class StubURLProtocol {
         static var handler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
-
-        override class func canInit(with request: URLRequest) -> Bool { true }
-        override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-        override func startLoading() {
-            do {
-                guard let handler = Self.handler else { throw URLError(.badServerResponse) }
-                let (response, data) = try handler(request)
-                client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-                client?.urlProtocol(self, didLoad: data)
-                client?.urlProtocolDidFinishLoading(self)
-            } catch {
-                client?.urlProtocol(self, didFailWithError: error)
-            }
-        }
-        override func stopLoading() {}
     }
 
     private let baseURL = URL(string: "https://watch.test")!
@@ -172,9 +160,11 @@ final class WatchAuthReliabilityTests: XCTestCase {
         let auth = WatchAuthService(store: store)
         let original = session(access: "access-A", refresh: "refresh-A")
         try await auth.save(original)
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [StubURLProtocol.self]
-        let client = try WatchAPIClient(baseURL: baseURL, session: URLSession(configuration: configuration), auth: auth)
+        let client = try WatchAPIClient(baseURL: baseURL, auth: auth, transport: { req in
+            guard let handler = StubURLProtocol.handler else { throw URLError(.badServerResponse) }
+            let (response, data) = try handler(req)
+            return (data, response)
+        })
         return (auth, store, client, original)
     }
 

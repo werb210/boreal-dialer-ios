@@ -123,15 +123,21 @@ actor WatchAuthService {
 }
 
 struct WatchAPIClient: @unchecked Sendable {
+    // BOREAL_DIALER_WATCH_TRANSPORT_SEAM_v27 - injectable transport so tests can
+    // supply canned responses (URLProtocol mocking does not intercept on the
+    // watchOS simulator, which is why WatchAuthReliabilityTests were failing).
+    typealias Transport = @Sendable (URLRequest) async throws -> (Data, URLResponse)
     let baseURL: URL; let session: URLSession; let auth: WatchAuthService
-    init(baseURL: URL, session: URLSession = .shared, auth: WatchAuthService = .shared) throws {
+    let transport: Transport
+    init(baseURL: URL, session: URLSession = .shared, auth: WatchAuthService = .shared, transport: Transport? = nil) throws {
         guard baseURL.scheme == "https" else { throw WatchServiceError.invalidResponse }
         self.baseURL = baseURL; self.session = session; self.auth = auth
+        self.transport = transport ?? { req in try await session.data(for: req) }
     }
-    init(session: URLSession = .shared, auth: WatchAuthService = .shared) throws {
+    init(session: URLSession = .shared, auth: WatchAuthService = .shared, transport: Transport? = nil) throws {
         guard let value = Bundle.main.object(forInfoDictionaryKey: "BorealAPIBaseURL") as? String,
               let url = URL(string: value) else { throw WatchServiceError.invalidResponse }
-        try self.init(baseURL: url, session: session, auth: auth)
+        try self.init(baseURL: url, session: session, auth: auth, transport: transport)
     }
     func unauthenticated(path: String, method: String = "GET", body: Data? = nil,
                          query: [URLQueryItem] = [], headers: [String: String] = [:]) async throws -> Data {
@@ -163,7 +169,7 @@ struct WatchAPIClient: @unchecked Sendable {
         if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         headers.forEach { req.setValue($0.value, forHTTPHeaderField: $0.key) }
         do {
-            let (data, response) = try await session.data(for: req)
+            let (data, response) = try await transport(req)
             guard let http = response as? HTTPURLResponse else { throw WatchServiceError.invalidResponse }
             if http.statusCode == 401 { throw WatchServiceError.invalidLogin }
             guard (200..<300).contains(http.statusCode) else {

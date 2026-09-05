@@ -65,6 +65,7 @@ targets:
           - audio
           - remote-notification
         NSMicrophoneUsageDescription: Boreal Dialer needs the microphone to place and receive calls.
+        ITSAppUsesNonExemptEncryption: false
         CFBundleURLTypes:
           - CFBundleURLName: financial.boreal.dialer
             CFBundleURLSchemes:

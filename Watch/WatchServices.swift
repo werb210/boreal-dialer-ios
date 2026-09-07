@@ -224,6 +224,45 @@ struct DirectWatchRecentsService: WatchRecentsService {
     }
 }
 
+struct WatchSMSTemplate: Decodable, Identifiable, Sendable {
+    let id: String
+    let name: String
+    let body: String
+}
+
+protocol WatchSMSService {
+    func fetchTemplates() async throws -> [WatchSMSTemplate]
+    func send(to: String, body: String) async throws
+}
+
+struct DirectWatchSMSService: WatchSMSService {
+    private let client: WatchAPIClient?
+    private let makeClient: () throws -> WatchAPIClient
+
+    init(client: WatchAPIClient? = nil,
+         makeClient: @escaping () throws -> WatchAPIClient = { try WatchAPIClient() }) {
+        self.client = client
+        self.makeClient = makeClient
+    }
+
+    func fetchTemplates() async throws -> [WatchSMSTemplate] {
+        struct Response: Decodable { let templates: [WatchSMSTemplate] }
+        let api = try client ?? makeClient()
+        let data = try await api.request(path: "/watch/sms-templates")
+        return try WatchAuthService.decoder.decode(Response.self, from: data).templates
+    }
+
+    func send(to: String, body: String) async throws {
+        struct Body: Encodable { let to, body: String }
+        let api = try client ?? makeClient()
+        _ = try await api.request(
+            path: "/watch/sms",
+            method: "POST",
+            body: JSONEncoder().encode(Body(to: to, body: body))
+        )
+    }
+}
+
 enum WatchNetworkState { case online, offline, transitioning }
 final class WatchNetworkMonitor: ObservableObject { @Published private(set) var state: WatchNetworkState = .transitioning; private let monitor=NWPathMonitor(); private let queue=DispatchQueue(label:"watch.network"); func start(){ monitor.pathUpdateHandler={ [weak self] p in DispatchQueue.main.async { self?.state = p.status == .satisfied ? .online:.offline }}; monitor.start(queue:queue)}; deinit{monitor.cancel()} }
 enum WatchOperatingMode: Equatable { case companion, standalone }

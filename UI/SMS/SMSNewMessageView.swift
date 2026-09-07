@@ -9,6 +9,38 @@
 // side, and the thread appears on the next refresh either way.
 import SwiftUI
 
+struct SMSTemplate: Decodable, Identifiable {
+    let id: String
+    let name: String
+    let bodyText: String
+    let bodyHtml: String?
+    let isSnippet: Bool
+    let shortcut: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, shortcut
+        case bodyText = "body_text"
+        case bodyHtml = "body_html"
+        case isSnippet = "is_snippet"
+    }
+}
+
+private struct SMSTemplatesEnvelope: Decodable {
+    let templates: [SMSTemplate]
+
+    private enum CodingKeys: String, CodingKey { case templates, data }
+
+    init(from decoder: Decoder) throws {
+        if let array = try? decoder.singleValueContainer().decode([SMSTemplate].self) {
+            templates = array
+            return
+        }
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        templates = try container.decodeIfPresent([SMSTemplate].self, forKey: .templates)
+            ?? container.decode([SMSTemplate].self, forKey: .data)
+    }
+}
+
 @MainActor
 final class SMSNewMessageViewModel: ObservableObject {
     @Published var contacts: [CRMContact] = []
@@ -18,6 +50,9 @@ final class SMSNewMessageViewModel: ObservableObject {
     @Published var messageBody = ""
     @Published var sending = false
     @Published var error: String?
+    @Published private(set) var templates: [SMSTemplate] = []
+    @Published private(set) var loadingTemplates = false
+    @Published var templateError: String?
 
     private var searchTask: Task<Void, Never>?
 
@@ -64,6 +99,22 @@ final class SMSNewMessageViewModel: ObservableObject {
         }
     }
 
+    func loadTemplates() async {
+        loadingTemplates = true
+        templateError = nil
+        do {
+            let request = try APIClient.shared.makeRequest(path: "/templates?channel=sms")
+            let data = try await APIClient.shared.makeAuthorizedRequest(request)
+            templates = try JSONDecoder().decode(SMSTemplatesEnvelope.self, from: data).templates.sorted {
+                if $0.isSnippet != $1.isSnippet { return $0.isSnippet }
+                return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
+        } catch {
+            templateError = "Could not load templates."
+        }
+        loadingTemplates = false
+    }
+
     func send() async -> Bool {
         guard let to = resolvedNumber else { return false }
         sending = true
@@ -87,6 +138,7 @@ struct SMSNewMessageView: View {
 
     @StateObject private var viewModel = SMSNewMessageViewModel()
     @Environment(\.dismiss) private var dismiss
+    @State private var showingTemplates = false
 
     var body: some View {
         NavigationStack {
@@ -167,7 +219,11 @@ struct SMSNewMessageView: View {
                 ComposerBar(
                     placeholder: "Text message…",
                     text: $viewModel.messageBody,
-                    disabled: !viewModel.canSend
+                    disabled: !viewModel.canSend,
+                    onTemplates: {
+                        showingTemplates = true
+                        Task { await viewModel.loadTemplates() }
+                    }
                 ) {
                     Task {
                         if await viewModel.send() {
@@ -186,6 +242,46 @@ struct SMSNewMessageView: View {
                 }
             }
             .task { await viewModel.load() }
+            .sheet(isPresented: $showingTemplates) {
+                NavigationStack {
+                    List {
+                        if viewModel.loadingTemplates {
+                            HStack { Spacer(); ProgressView(); Spacer() }
+                        } else if let error = viewModel.templateError {
+                            Text(error).foregroundColor(Theme.red)
+                        } else if viewModel.templates.isEmpty {
+                            Text("No SMS templates available.").foregroundColor(Theme.muted)
+                        } else {
+                            ForEach(viewModel.templates) { template in
+                                Button {
+                                    viewModel.messageBody = template.bodyText
+                                    showingTemplates = false
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        HStack {
+                                            Text(template.name).font(.headline)
+                                            if template.isSnippet {
+                                                Text("Snippet").font(.caption2).foregroundColor(Theme.green)
+                                            }
+                                        }
+                                        Text(template.bodyText).font(.subheadline).foregroundColor(Theme.muted).lineLimit(3)
+                                        if let shortcut = template.shortcut, !shortcut.isEmpty {
+                                            Text(shortcut).font(.caption2).foregroundColor(Theme.muted)
+                                        }
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .navigationTitle("Templates")
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") { showingTemplates = false }
+                        }
+                    }
+                }
+            }
         }
     }
 }

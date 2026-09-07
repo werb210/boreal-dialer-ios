@@ -12,6 +12,7 @@ struct WatchRootView: View {
                 NavigationLink("Contacts", destination: WatchContactsView())
                 NavigationLink("Favorites", destination: WatchFavoritesView())
                 NavigationLink("Recent Calls", destination: WatchRecentsView())
+                NavigationLink("Quick Text", destination: WatchQuickTextRecipientsView())
                 NavigationLink("Log Outcome", destination: WatchDispositionView())
                 NavigationLink("Notifications", destination: WatchNotificationsView())
                 NavigationLink("Account", destination: WatchAccountView())
@@ -127,6 +128,113 @@ struct WatchRecentsView: View {
     @State private var line: BorealLine = .BF
     private let service: any WatchRecentsService = DirectWatchRecentsService()
     var body: some View { List { Picker("Line", selection: $line) { ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) } }; if unavailable { Text("Recents unavailable").font(.caption) }; ForEach(recents) { recent in NavigationLink(destination: PrefilledDialView(number: recent.number)) { VStack(alignment: .leading) { Text(recent.name ?? recent.number); if recent.name != nil { Text(recent.number).font(.caption2).foregroundStyle(.secondary) } } } } }.navigationTitle("Recents").task(id: line) { do { unavailable = false; recents = try await service.fetch(line: line, limit: 25) } catch { unavailable = true } } }
+}
+
+struct WatchQuickTextRecipientsView: View {
+    @State private var recents: [WatchRecentCall] = []
+    @State private var line: BorealLine = .BF
+    @State private var unavailable = false
+    private let service: any WatchRecentsService = DirectWatchRecentsService()
+
+    var body: some View {
+        List {
+            Picker("Line", selection: $line) {
+                ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) }
+            }.font(.caption2)
+            if unavailable {
+                Text("Recents unavailable").font(.caption2).foregroundStyle(.secondary)
+            } else if recents.isEmpty {
+                Text("No recent recipients").font(.caption2).foregroundStyle(.secondary)
+            }
+            ForEach(recents) { recent in
+                NavigationLink(destination: WatchQuickTextTemplatesView(recipient: recent)) {
+                    VStack(alignment: .leading) {
+                        Text(recent.name ?? recent.number)
+                        if recent.name != nil {
+                            Text(recent.number).font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("Quick Text")
+        .task(id: line) {
+            do {
+                recents = try await service.fetch(line: line, limit: 25)
+                unavailable = false
+            } catch {
+                recents = []
+                unavailable = true
+            }
+        }
+    }
+}
+
+struct WatchQuickTextTemplatesView: View {
+    let recipient: WatchRecentCall
+    @Environment(\.dismiss) private var dismiss
+    @State private var templates: [WatchSMSTemplate] = []
+    @State private var loading = true
+    @State private var sendingTemplateID: String?
+    @State private var errorMessage: String?
+    private let service: any WatchSMSService = DirectWatchSMSService()
+
+    var body: some View {
+        List {
+            Text(recipient.name ?? recipient.number).font(.headline)
+            if loading { ProgressView() }
+            ForEach(templates) { template in
+                Button {
+                    send(template)
+                } label: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(template.name)
+                        Text(template.body).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+                    }
+                }
+                .disabled(sendingTemplateID != nil)
+            }
+            if let errorMessage {
+                Text(errorMessage).font(.caption2).foregroundStyle(.red)
+            }
+        }
+        .navigationTitle("Choose Text")
+        .task { await loadTemplates() }
+    }
+
+    private func loadTemplates() async {
+        do {
+            templates = try await service.fetchTemplates()
+            errorMessage = templates.isEmpty ? "No quick texts available" : nil
+        } catch let error as WatchServiceError {
+            errorMessage = error.safeMessage
+        } catch {
+            errorMessage = "Quick texts unavailable"
+        }
+        loading = false
+    }
+
+    private func send(_ template: WatchSMSTemplate) {
+        guard let number = PhoneNumberNormalizer.normalize(recipient.number) else {
+            errorMessage = "Invalid recipient number"
+            return
+        }
+        sendingTemplateID = template.id
+        errorMessage = nil
+        Task {
+            do {
+                try await service.send(to: number, body: template.body)
+                await MainActor.run {
+                    WKInterfaceDevice.current().play(.success)
+                    dismiss()
+                }
+            } catch let error as WatchServiceError {
+                await MainActor.run { sendingTemplateID = nil; errorMessage = error.safeMessage }
+            } catch {
+                await MainActor.run { sendingTemplateID = nil; errorMessage = "Could not send text" }
+            }
+        }
+    }
 }
 
 // BOREAL_DIALER_WATCH_DISPOSITION_v1 - log a post-call outcome from the wrist:

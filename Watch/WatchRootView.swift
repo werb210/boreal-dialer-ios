@@ -12,6 +12,7 @@ struct WatchRootView: View {
                 NavigationLink("Contacts", destination: WatchContactsView())
                 NavigationLink("Favorites", destination: WatchFavoritesView())
                 NavigationLink("Recent Calls", destination: WatchRecentsView())
+                NavigationLink("Log Outcome", destination: WatchDispositionView())
                 NavigationLink("Notifications", destination: WatchNotificationsView())
                 NavigationLink("Account", destination: WatchAccountView())
             }.navigationTitle("Boreal")
@@ -126,6 +127,70 @@ struct WatchRecentsView: View {
     @State private var line: BorealLine = .BF
     private let service: any WatchRecentsService = DirectWatchRecentsService()
     var body: some View { List { Picker("Line", selection: $line) { ForEach(BorealLine.allCases, id: \.self) { Text($0.rawValue).tag($0) } }; if unavailable { Text("Recents unavailable").font(.caption) }; ForEach(recents) { recent in NavigationLink(destination: PrefilledDialView(number: recent.number)) { VStack(alignment: .leading) { Text(recent.name ?? recent.number); if recent.name != nil { Text(recent.number).font(.caption2).foregroundStyle(.secondary) } } } } }.navigationTitle("Recents").task(id: line) { do { unavailable = false; recents = try await service.fetch(line: line, limit: 25) } catch { unavailable = true } } }
+}
+
+// BOREAL_DIALER_WATCH_DISPOSITION_v1 - log a post-call outcome from the wrist:
+// pick a recent call, choose an outcome, POST /watch/calls/:id/disposition.
+struct WatchDispositionView: View {
+    @State private var recents: [WatchRecentCall] = []
+    @State private var line: BorealLine = .BF
+    @State private var unavailable = false
+    private let service: any WatchRecentsService = DirectWatchRecentsService()
+    var body: some View {
+        List {
+            Picker("Line", selection: $line) {
+                ForEach(BorealLine.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }.font(.caption2)
+            if unavailable { Text("Unavailable").font(.caption2).foregroundStyle(.secondary) }
+            ForEach(recents) { recent in
+                NavigationLink(destination: DispositionPickerView(recent: recent)) {
+                    VStack(alignment: .leading) {
+                        Text(recent.name ?? recent.number)
+                        Text(recent.number).font(.caption2).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }.navigationTitle("Log Outcome").task(id: line) {
+            do { unavailable = false; recents = try await service.fetch(line: line, limit: 25) }
+            catch { unavailable = true }
+        }
+    }
+}
+
+struct DispositionPickerView: View {
+    let recent: WatchRecentCall
+    @Environment(\.dismiss) private var dismiss
+    @State private var saving = false
+    @State private var message: String?
+    private let options: [(code: String, label: String)] = [
+        ("connected", "Connected"), ("left_voicemail", "Left voicemail"), ("no_answer", "No answer"),
+        ("follow_up", "Follow up"), ("demo_booked", "Demo booked"), ("documents_promised", "Docs promised"),
+        ("needs_lender_review", "Needs lender review"), ("not_interested", "Not interested"), ("do_not_contact", "Do not contact"),
+    ]
+    var body: some View {
+        List {
+            Text(recent.name ?? recent.number).font(.headline)
+            ForEach(options, id: \.code) { opt in
+                Button(opt.label) { save(opt.code) }.disabled(saving)
+            }
+            if let message { Text(message).font(.caption2).foregroundStyle(.red) }
+        }.navigationTitle("Outcome")
+    }
+    private func save(_ disposition: String) {
+        saving = true; message = nil
+        Task {
+            do {
+                let api = try WatchAPIClient()
+                _ = try await api.request(path: "/watch/calls/\(recent.id)/disposition", method: "POST",
+                    body: JSONEncoder().encode(["disposition": disposition]), line: recent.line)
+                await MainActor.run { WKInterfaceDevice.current().play(.success); dismiss() }
+            } catch let error as WatchServiceError {
+                await MainActor.run { saving = false; message = error.safeMessage }
+            } catch {
+                await MainActor.run { saving = false; message = "Could not save" }
+            }
+        }
+    }
 }
 
 struct WatchNotificationsView: View {

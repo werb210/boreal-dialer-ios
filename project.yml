@@ -66,6 +66,7 @@ targets:
           - remote-notification
         NSMicrophoneUsageDescription: Boreal Dialer needs the microphone to place and receive calls.
         ITSAppUsesNonExemptEncryption: false
+        NSSupportsLiveActivities: true
         CFBundleURLTypes:
           - CFBundleURLName: financial.boreal.dialer
             CFBundleURLSchemes:
@@ -80,6 +81,7 @@ targets:
         product: TwilioVoice
       - package: Sentry
         product: Sentry
+      - target: BorealDialerLiveActivity
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer
@@ -173,3 +175,21 @@ targets:
       base:
         SWIFT_VERSION: "5.9"
         GENERATE_INFOPLIST_FILE: YES
+
+  BorealDialerLiveActivity:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.1"
+    sources:
+      - path: LiveActivity
+      - path: Sources/Shared
+    info:
+      path: LiveActivity/Info.plist
+      properties:
+        CFBundleDisplayName: Boreal Call
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer.liveactivity
+        GENERATE_INFOPLIST_FILE: NO

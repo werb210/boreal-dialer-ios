@@ -1,4 +1,5 @@
 import SwiftUI
+import WatchKit
 
 struct WatchRootView: View {
     @EnvironmentObject private var store: WatchEventStore
@@ -17,20 +18,55 @@ struct WatchRootView: View {
 }
 
 struct WatchDialView: View {
+    // BOREAL_DIALER_WATCH_KEYPAD_v1 - real phone keypad replaces the old TextField,
+    // which was unusable on the wrist (Scribble/tiny keyboard). Same call plumbing.
     @State private var number: String
     @State private var line: BorealLine = .BF
     @State private var status: WatchCallStatus = .idle
     @State private var errorMessage: String?
     private let transport: any WatchCallTransport = ServerBridgeWatchCallTransport()
+    private let keys: [[String]] = [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"], ["*", "0", "#"]]
     init(initialNumber: String = "") { _number = State(initialValue: initialNumber) }
     var body: some View {
-        Form {
-            TextField("Phone number", text: $number)
-            Picker("Line", selection: $line) { ForEach(BorealLine.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
-            Button { start() } label: { Label("Call", systemImage: "phone.fill") }
-                .disabled(status == .requesting)
-            if status != .idle { Text(statusText).font(.caption).foregroundStyle(.secondary) }
-            if let errorMessage { Text(errorMessage).font(.caption2).foregroundStyle(.red) }
+        ScrollView {
+            VStack(spacing: 6) {
+                Text(number.isEmpty ? "Enter number" : number)
+                    .font(.title3).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
+                    .foregroundStyle(number.isEmpty ? .secondary : .primary)
+                    .frame(maxWidth: .infinity)
+                ForEach(keys, id: \.self) { row in
+                    HStack(spacing: 6) {
+                        ForEach(row, id: \.self) { key in
+                            Button {
+                                number.append(key)
+                                WKInterfaceDevice.current().play(.click)
+                            } label: {
+                                Text(key).font(.title3).frame(maxWidth: .infinity, minHeight: 38)
+                            }.buttonStyle(.bordered)
+                        }
+                    }
+                }
+                HStack(spacing: 6) {
+                    Button {
+                        if !number.isEmpty { number.removeLast(); WKInterfaceDevice.current().play(.click) }
+                    } label: {
+                        Image(systemName: "delete.left").frame(maxWidth: .infinity, minHeight: 36)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(number.isEmpty)
+                    .onLongPressGesture { number = ""; WKInterfaceDevice.current().play(.click) }
+                    Button { start() } label: {
+                        Image(systemName: "phone.fill").frame(maxWidth: .infinity, minHeight: 36)
+                    }
+                    .buttonStyle(.borderedProminent).tint(.green)
+                    .disabled(number.isEmpty || status == .requesting)
+                }
+                Picker("Line", selection: $line) {
+                    ForEach(BorealLine.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }.font(.caption2)
+                if status != .idle { Text(statusText).font(.caption2).foregroundStyle(.secondary) }
+                if let errorMessage { Text(errorMessage).font(.caption2).foregroundStyle(.red) }
+            }.padding(.horizontal, 4)
         }.navigationTitle("Dial")
     }
     private var statusText: String {
@@ -48,6 +84,7 @@ struct WatchDialView: View {
         guard let destination = PhoneNumberNormalizer.normalize(number) else { errorMessage = "Enter a valid number"; return }
         let captured = CallRequest(destination: destination, line: line)
         status = .requesting; errorMessage = nil
+        WKInterfaceDevice.current().play(.start)
         Task { do { status = try await transport.startCall(captured) }
             catch let error as WatchServiceError { status = .failed; errorMessage = error.safeMessage }
             catch { status = .failed; errorMessage = "Call request failed" }
@@ -86,7 +123,7 @@ struct WatchRecentsView: View {
     @State private var recents: [WatchRecentCall] = []; @State private var unavailable = false
     @State private var line: BorealLine = .BF
     private let service: any WatchRecentsService = DirectWatchRecentsService()
-    var body: some View { List { Picker("Line", selection: $line) { ForEach(BorealLine.allCases, id: \.self) { Text($0.rawValue).tag($0) } }; if unavailable { Text("Recents unavailable").font(.caption) }; ForEach(recents) { Text($0.name ?? $0.number) } }.navigationTitle("Recents").task(id: line) { do { unavailable = false; recents = try await service.fetch(line: line, limit: 25) } catch { unavailable = true } } }
+    var body: some View { List { Picker("Line", selection: $line) { ForEach(BorealLine.allCases, id: \.self) { Text($0.rawValue).tag($0) } }; if unavailable { Text("Recents unavailable").font(.caption) }; ForEach(recents) { recent in NavigationLink(destination: PrefilledDialView(number: recent.number)) { VStack(alignment: .leading) { Text(recent.name ?? recent.number); if recent.name != nil { Text(recent.number).font(.caption2).foregroundStyle(.secondary) } } } } }.navigationTitle("Recents").task(id: line) { do { unavailable = false; recents = try await service.fetch(line: line, limit: 25) } catch { unavailable = true } } }
 }
 
 struct WatchNotificationsView: View {

@@ -10,6 +10,7 @@ import SwiftUI
 struct AccountSheet: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var lineManager = LineManager.shared
+    @ObservedObject private var callDirectory = CallDirectoryManager.shared
 
     @State private var confirmingSignOut = false
     @State private var watchEnrollment: WatchEnrollment?
@@ -70,6 +71,22 @@ struct AccountSheet: View {
                 } header: {
                     SectionLabel(text: "Activity")
                 }
+
+                Section {
+                    if callDirectory.enabledStatus == .enabled {
+                        Label("Caller ID enabled", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(Theme.green)
+                    } else {
+                        Button { callDirectory.openSettings() } label: {
+                            Label("Open Settings", systemImage: "gear")
+                        }
+                        Text("Enable Boreal Caller ID in Settings > Phone > Call Blocking & Identification.")
+                            .rowSubtitle()
+                    }
+                } header: {
+                    SectionLabel(text: "Incoming caller ID")
+                }
+                .onAppear { callDirectory.updateEnabledStatus() }
 
                 Section {
                     // Calling, SMS, messages, team and calendar are BF. Only the

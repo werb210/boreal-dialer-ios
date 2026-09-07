@@ -1,0 +1,1544 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		05CDCD1EDADEA1BCE2F378C8 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0B1F4C323A2541711105D37 /* APIClient.swift */; };
+		09A07503972F6A97AF24C17F /* BorealCallLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2064DD3681EA4C890086E29 /* BorealCallLiveActivity.swift */; };
+		09C7789E4262C32F9013FF4A /* AccountSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DFF9835F2AC40D1ED071431 /* AccountSheet.swift */; };
+		0BF39D6B5FCC46D7EB7F9BB6 /* BIDirectoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD28B68438DF4D46342B9146 /* BIDirectoryTests.swift */; };
+		0C04A524CAED907DB23B8CB2 /* CallStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B353FC3A142C341BAA8AC78E /* CallStateManager.swift */; };
+		0C2EF9AA078995DDBEF8E2C8 /* CalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0B41C8DC6F0DB179B54CB2 /* CalendarView.swift */; };
+		0EA401E621DAB676685FE40E /* VoiceEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAC665A3862E122B2C272420 /* VoiceEngine.swift */; };
+		1307746AC098233F899CD76D /* CallLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 692EBB1903F9711E2060D90B /* CallLog.swift */; };
+		13431E80AC12830C2BA00432 /* MessageEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2429FCE056D96FB2645C879B /* MessageEntity.swift */; };
+		17FCEC683C3D03E491FDBB94 /* BorealDialerWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DEE93E537248CFCE297B4BB /* BorealDialerWidget.swift */; };
+		1A1A18B857F0183C141DBE97 /* CallDirectoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D659C8D1CCB07C7C07A0234A /* CallDirectoryStore.swift */; };
+		1A4B9DC0969684A5453E82B0 /* AvatarCircle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 255E2EA6EC09F058B1C8FAED /* AvatarCircle.swift */; };
+		1AD1C4C65F1718B749E183CC /* BorealDialerCallDirectory.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 82B01F69BBCCB83E4A05B5E4 /* BorealDialerCallDirectory.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		1B6077CCC2EBB9B255D641DB /* Line.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C520BBBD06D3741CD467752 /* Line.swift */; };
+		1FA087A9666717B436DEDA44 /* ReconnectionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C96ED262FC118D1A7D247F53 /* ReconnectionController.swift */; };
+		1FB5F67B19443560F2506685 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = C9A9BBAAF79FA07101C7F4EA /* Sentry */; };
+		20D416085731C75536E5BFC9 /* WidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 192FBF1C1A135D31F7634A2D /* WidgetSnapshot.swift */; };
+		216D732EF194A265F3EE6408 /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22F30B3ED700ECDE1C38553 /* NetworkMonitor.swift */; };
+		2340C9406A620CD507CB133F /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1AAC6E8E84ACE84B91EF7F2 /* Notifications.swift */; };
+		24E9160CD179F71D37FE4C4D /* Silo.swift in Sources */ = {isa = PBXBuildFile; fileRef = E40E80468EF9D3C8C0DA2EBC /* Silo.swift */; };
+		292D2B6146D21DFC8F3B0630 /* CallDurationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 565599A5EFB57E1053EFDD30 /* CallDurationManager.swift */; };
+		2F16A9E100DCA7530BEE2A35 /* PushManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD287E38B32585D6731E9B2C /* PushManager.swift */; };
+		305C9CED4EAC9FAB11EB779E /* WatchEventStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB7B3BACC56B17FE4F36ACF7 /* WatchEventStore.swift */; };
+		32CF1543EFD84DF818ABDA56 /* CallsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9136E73687B5877B68AD11E9 /* CallsView.swift */; };
+		3770EF55116B5F73BF3FE988 /* BorealDialerLiveActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = CEA12AC427F995D56086DDD9 /* BorealDialerLiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		395B9A8D72A496AF05089F72 /* TokenProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E51DE6D3C502FE81067AE41 /* TokenProvider.swift */; };
+		3A2AF7B65826D7A245F60D8D /* SMSView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 147A3CB87C4989EF75B081C0 /* SMSView.swift */; };
+		3CBADC929C81620A3F161D89 /* ConferenceSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF5F811B4557E5B6F83E4B6C /* ConferenceSession.swift */; };
+		3D305F74EB63E7644DCC9913 /* ReachabilityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 972EB94F633F81200950C4B0 /* ReachabilityManager.swift */; };
+		3E32FF20D5E2FE54B2BA17AF /* SMSNewMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A0A90095EB777D78038587 /* SMSNewMessageView.swift */; };
+		3E7DBE60E1CA48B155D9499D /* WatchAuthReliabilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8F1EDB67CBFE702A2552B4C /* WatchAuthReliabilityTests.swift */; };
+		452FC8EA9613C2D6471C5BBB /* WatchMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9DF8D49C7B3DCC1B6C94A13 /* WatchMessage.swift */; };
+		4A8FF7C5449C8E4E13F90018 /* DialerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F8101F3D727F4E64A12E4AC /* DialerView.swift */; };
+		4C724E3B13DEEA2CE1725BA1 /* CallerResolution.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DABDFD237FB8F18BE5823C8 /* CallerResolution.swift */; };
+		4EFBD33DB7A4A3B8C6A469AB /* BIDirectory.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC1E7BA0C7AD058B56101B09 /* BIDirectory.swift */; };
+		5225FA173E400B6EBDA2396E /* IncomingCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 908636C846821A7F19CF1598 /* IncomingCallView.swift */; };
+		55A301BB30D35B8136712F9A /* TwilioVoiceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDD572E3CE82A2E34CB3BDDD /* TwilioVoiceManager.swift */; };
+		58886747A8DDA0963D43EF5D /* CallActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E3D3CE42C41B4C4BC4E5F5 /* CallActivityAttributes.swift */; };
+		59955A318A660F356309D4FA /* BrandConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B995D483EA3C06968527C27 /* BrandConfig.swift */; };
+		5A0F4E9103456B7CD0DD342D /* TeamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED3AF9BCCB21BD6C7875C32B /* TeamView.swift */; };
+		5C3C583723C950A9DFE2CB16 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA927BB104E56D82A8FCEB1C /* LoginView.swift */; };
+		5D46E51B3E6D8081E687131E /* WatchBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA9DC1043B2B2F2C8F37302D /* WatchBridge.swift */; };
+		5F0E8366BE7D0672A95FFF22 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 84F37D20153CA01BBBAE24E0 /* PrivacyInfo.xcprivacy */; };
+		6214BA7D2E4B05120D964EEF /* WatchCallTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3F1295998B63A8CE4A972D7 /* WatchCallTransportTests.swift */; };
+		62196631D89BCA3B547B30EF /* TeamRosterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DFB9D60AC6395C0ADE6B301 /* TeamRosterTests.swift */; };
+		6260CC9EB57AA7D4E1906F68 /* CallDirectoryProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F98FC0AABE6A4055A791EB4 /* CallDirectoryProvider.swift */; };
+		62645CC630DEF49A204372F3 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17484F626671516B5D96FECF /* KeychainService.swift */; };
+		626F23AC549AF0EF4AF98744 /* LineSwitcherView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55D71804E5FDF8427615DD59 /* LineSwitcherView.swift */; };
+		62C7E43094EAF84E86D496AD /* PersistenceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 692F34A67949D2534C816E71 /* PersistenceController.swift */; };
+		632703E06A2B8A9D851497C9 /* API.swift in Sources */ = {isa = PBXBuildFile; fileRef = B97478ADE6A82B9C17F2BD1B /* API.swift */; };
+		63E00D6713CB65310C28BFDD /* ConferenceStartTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28CF8056CCD965B4524A3F11 /* ConferenceStartTests.swift */; };
+		641490BCC756F7824A8A8582 /* VoIPPushManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06623867F85D7E727854BF87 /* VoIPPushManager.swift */; };
+		67C14811E4167C7040C27070 /* FlexibleInt.swift in Sources */ = {isa = PBXBuildFile; fileRef = B33C4F5A7FCC344B50949C09 /* FlexibleInt.swift */; };
+		68263DEC692EDE956F30339F /* OTPService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 875497D69B0CFF40BE94891E /* OTPService.swift */; };
+		6F1E62E6C8DF3F9B39615AA5 /* TelephonyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D554F3197AD5DC8006FDB0F3 /* TelephonyService.swift */; };
+		6FFB8A8025BA2B1AE130664E /* DeepLinkCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5B3AAA525E084166BA6DE05 /* DeepLinkCoordinator.swift */; };
+		7008C5F965E1A45641AF57BB /* CallManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09024564C8C257E152E04E63 /* CallManager.swift */; };
+		710E1CC8D30B05A32DC04F62 /* CallKitManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC30BD408172C4A980DAE272 /* CallKitManager.swift */; };
+		724BCB8511C40DAEEE4263F8 /* BIActivityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC7AF723B0865E1E542481CC /* BIActivityTests.swift */; };
+		74E90D61444672690DEBA792 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 99C1F7032E88ECC210BE25AE /* Assets.xcassets */; };
+		787ED395635C1D94EA55D3AB /* SecureMessageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD4041825A9E736726FF703C /* SecureMessageStore.swift */; };
+		7A314C443AF047678042388D /* RecordingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8965307C88E26A9306B3D56F /* RecordingManager.swift */; };
+		7BFFCCC3B077A0AE032FC5B3 /* ContactsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8D91F685FE02F5ABA3D5AC4 /* ContactsView.swift */; };
+		7D8240388A2D578A78F50ECA /* VoiceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2FFC3A26911F7074D906CEC /* VoiceManager.swift */; };
+		7FA3F0E37A434037494639E4 /* BorealWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E0E2E28590446C3531824AB /* BorealWatchApp.swift */; };
+		82700DEBEDCFF24748F611B6 /* CallerResolutionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07AD1FCDC7C561A07F5BA248 /* CallerResolutionTests.swift */; };
+		827FE70FA464CF8E4031D482 /* CallModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F58F306CF7761EDB9A7ABB3 /* CallModelTests.swift */; };
+		82DD3321BDC707D9BD907D50 /* WidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 192FBF1C1A135D31F7634A2D /* WidgetSnapshot.swift */; };
+		8544D36D6EC8FB3905F79DC5 /* WatchMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F6DB8DF2811C833976312C6 /* WatchMessageTests.swift */; };
+		8C5D2D2AED6F543D36877D7B /* CallDirectoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB97339B555BC38C7C80063C /* CallDirectoryManager.swift */; };
+		8FDE9AB2B93EDC66E794C2D5 /* VoiceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63D08B5C11C9BD0D1F9ADDE0 /* VoiceService.swift */; };
+		906DDBC278D4C525F3D87A90 /* TokenStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F43D0916A700D363315651C3 /* TokenStorage.swift */; };
+		91350440BF8DAC7381C88275 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A9CA8F8CA9C571F42CFDE43 /* Theme.swift */; };
+		94AEAEEEBDB33D9DFB211B9D /* CallLiveActivityController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCE6438E9364BBD44F17EA09 /* CallLiveActivityController.swift */; };
+		9968798A6FCA0ACA26531C88 /* MessagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C757679B9F5F44A959598CD5 /* MessagesView.swift */; };
+		9A3BC0DC333E2642DBA4930C /* DataContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7921AB1648D1F732C15A2FB1 /* DataContainer.swift */; };
+		9A8EEFEF8EA0DAFD015AFC5E /* AuthModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B59FB1B2E1DADF3FA2283B0 /* AuthModels.swift */; };
+		A586A5D37FDCC8301E6DA6B8 /* IdentityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C46E1756CFE52EF06678BAC8 /* IdentityManager.swift */; };
+		A712D2E27A0080BAF1A554CD /* CallDirectoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D659C8D1CCB07C7C07A0234A /* CallDirectoryStore.swift */; };
+		A75F6F075E91AC4A96C34819 /* StandardNotificationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 406AD27F59F213ACA6059296 /* StandardNotificationCoordinator.swift */; };
+		A9E316EE84D89B9942DFA753 /* TwilioVoice in Frameworks */ = {isa = PBXBuildFile; productRef = 26AA4C5F279F225727CD86D9 /* TwilioVoice */; };
+		AAEDC9CF33EFABE62022BA18 /* QuickCallRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFEFB32CA9F29A8081E5C3AE /* QuickCallRow.swift */; };
+		AAF1A77CFE6B2C9A72F83D8C /* InCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AD0DBD3A1FB008EB6CC6D1 /* InCallView.swift */; };
+		AB380B1567C8254268F5EDC5 /* WatchRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A076FD3DFBC25CFC0C8839 /* WatchRootView.swift */; };
+		AB64A2A954DD158B3BEAFC57 /* NewContactView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E0D04843E3FAAE091DB784B /* NewContactView.swift */; };
+		AF70159708EBC6DA8E6AB5FA /* CallDirectoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D659C8D1CCB07C7C07A0234A /* CallDirectoryStore.swift */; };
+		B03255FD0E8579B60A3A0E42 /* BorealDialerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F13024B225AEA2A8AD1767B /* BorealDialerApp.swift */; };
+		B5CFE8C4E48AF59D4D530CB4 /* CallDirectoryStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55B3AD3A19DD19AE7AE0A404 /* CallDirectoryStoreTests.swift */; };
+		B7EAE919DEFD214EFCF1F0DF /* CallActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E3D3CE42C41B4C4BC4E5F5 /* CallActivityAttributes.swift */; };
+		B9A7539018155DA6322DCDC4 /* WatchCallTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6384C90EF43DA9A31E13AE37 /* WatchCallTransport.swift */; };
+		C1E383AC0771258031913971 /* WatchServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E0EAFEA2DAE30B5316520AF /* WatchServices.swift */; };
+		CA07D233B9ACBF87C71FBE38 /* VoiceIdentityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0825C71E25D0B74979A50E99 /* VoiceIdentityTests.swift */; };
+		CC6A9D4458C456C9EF876374 /* ProductionSafetyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A08AF97A1E401652259BF4D /* ProductionSafetyTests.swift */; };
+		CCE619696E39C2A06FFDDB93 /* CallDirection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E1E203B61691D4EB51CBECB /* CallDirection.swift */; };
+		CDAE3CDFE6957EB0AD538720 /* SMSBroadcastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F9EC1A63368B1DAB699BEC6 /* SMSBroadcastView.swift */; };
+		CE471B2F3288DAB73FDA3AB5 /* CallEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 816D5A2E6FE2D2AA00027E6F /* CallEntity.swift */; };
+		CE82C35DD19E67DD784E9164 /* ContactDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CE02AFC7A257AE7E9BB18AF /* ContactDetailView.swift */; };
+		CEE25A1E2A846BE8BB2CFEAD /* MessageModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F76D94EEB4CE0B851521A9B3 /* MessageModel.swift */; };
+		CF6DF95D69A7ED5D3353E978 /* CallLogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4C54EEB773BC6680C83F9D1 /* CallLogStore.swift */; };
+		D013B9DEDD425C1CE40A79AB /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C9014FB34BEE2CF9CCAC39E /* RootTabView.swift */; };
+		D550E936DAC774400F70B063 /* OfflineQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5B06688BAA084CFAA85889C /* OfflineQueue.swift */; };
+		E007D92F77E9F85B38496439 /* LineManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E7F91F32F09206D52AF40DC /* LineManager.swift */; };
+		E312CBEF84A6B6A9933A6C54 /* NetworkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 532F02892698BBB85884C799 /* NetworkManager.swift */; };
+		E574D4A5D39FF5C77CC91D11 /* NotificationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C6000EC1F1C4B1E8F90B5E1 /* NotificationsView.swift */; };
+		E7A291C6A9A33A6A3E91CA4A /* CallState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F33A38350103FF7FC95C5D5 /* CallState.swift */; };
+		E98C2295D5777FEF2224045F /* CallModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D056A59BFDADC531138F428 /* CallModel.swift */; };
+		ECE5D9DFB41767D7C5CC08F6 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31118B038DDF51A900944839 /* AuthService.swift */; };
+		EDBB880909625190F3F3342A /* PresenceHeartbeat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 160CD8EA1BBA7000AFA4C13F /* PresenceHeartbeat.swift */; };
+		F28BE0A47C9C212EF26F6446 /* Telemetry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E0D823C0AC0AEC88C7AC1B4 /* Telemetry.swift */; };
+		F6030EADF0C9FE472ACD2D1D /* IncomingCallController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18137E25E1EAB72981DF6B12 /* IncomingCallController.swift */; };
+		FA0A50EA5FACD7320F28C91D /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2FBF5202AA9C55CA85BAFD7 /* APIConfig.swift */; };
+		FBD774C82D22782458518AE5 /* DecodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06639C6209522E474612E26A /* DecodingTests.swift */; };
+		FDDD537310C2908877FD81F3 /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25DCC19E7A4B9471EDB25FFD /* AuthManager.swift */; };
+		FE5548F12D6AFD2B26777E8E /* WatchMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9DF8D49C7B3DCC1B6C94A13 /* WatchMessage.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		18F060AAA11F8339854EA1AC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B3807F5068508D4960394E64 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 428EFD4F252EB96ABC6B4EAA;
+			remoteInfo = BorealDialerLiveActivity;
+		};
+		2E46EAED5A03B2632CAA62D8 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B3807F5068508D4960394E64 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BA593AB704216C7B1DBB8C3A;
+			remoteInfo = BorealDialer;
+		};
+		7329F439A5508262B3E43BF5 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B3807F5068508D4960394E64 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 768FDC5C2C1901CD5172A361;
+			remoteInfo = BorealDialerWatch;
+		};
+		A18AB17AA56C9462E9F31AAA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B3807F5068508D4960394E64 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C81E3AEF3D6991484D02C0D6;
+			remoteInfo = BorealDialerCallDirectory;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		DDDDE3B2A8CE28023F8B97A9 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				3770EF55116B5F73BF3FE988 /* BorealDialerLiveActivity.appex in Embed Foundation Extensions */,
+				1AD1C4C65F1718B749E183CC /* BorealDialerCallDirectory.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		06623867F85D7E727854BF87 /* VoIPPushManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoIPPushManager.swift; sourceTree = "<group>"; };
+		06639C6209522E474612E26A /* DecodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DecodingTests.swift; sourceTree = "<group>"; };
+		07AD1FCDC7C561A07F5BA248 /* CallerResolutionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallerResolutionTests.swift; sourceTree = "<group>"; };
+		0825C71E25D0B74979A50E99 /* VoiceIdentityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceIdentityTests.swift; sourceTree = "<group>"; };
+		09024564C8C257E152E04E63 /* CallManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallManager.swift; sourceTree = "<group>"; };
+		11AD0DBD3A1FB008EB6CC6D1 /* InCallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InCallView.swift; sourceTree = "<group>"; };
+		147A3CB87C4989EF75B081C0 /* SMSView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMSView.swift; sourceTree = "<group>"; };
+		160CD8EA1BBA7000AFA4C13F /* PresenceHeartbeat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresenceHeartbeat.swift; sourceTree = "<group>"; };
+		17484F626671516B5D96FECF /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
+		17A0A90095EB777D78038587 /* SMSNewMessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMSNewMessageView.swift; sourceTree = "<group>"; };
+		18137E25E1EAB72981DF6B12 /* IncomingCallController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncomingCallController.swift; sourceTree = "<group>"; };
+		192FBF1C1A135D31F7634A2D /* WidgetSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshot.swift; sourceTree = "<group>"; };
+		2429FCE056D96FB2645C879B /* MessageEntity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageEntity.swift; sourceTree = "<group>"; };
+		255E2EA6EC09F058B1C8FAED /* AvatarCircle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarCircle.swift; sourceTree = "<group>"; };
+		25DCC19E7A4B9471EDB25FFD /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
+		28CF8056CCD965B4524A3F11 /* ConferenceStartTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConferenceStartTests.swift; sourceTree = "<group>"; };
+		2E1E203B61691D4EB51CBECB /* CallDirection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallDirection.swift; sourceTree = "<group>"; };
+		2E51DE6D3C502FE81067AE41 /* TokenProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenProvider.swift; sourceTree = "<group>"; };
+		31118B038DDF51A900944839 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
+		3323BD3A1E7AD96A7494F956 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		3A08AF97A1E401652259BF4D /* ProductionSafetyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductionSafetyTests.swift; sourceTree = "<group>"; };
+		3CE02AFC7A257AE7E9BB18AF /* ContactDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactDetailView.swift; sourceTree = "<group>"; };
+		3DFB9D60AC6395C0ADE6B301 /* TeamRosterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamRosterTests.swift; sourceTree = "<group>"; };
+		3DFF9835F2AC40D1ED071431 /* AccountSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSheet.swift; sourceTree = "<group>"; };
+		3E0D823C0AC0AEC88C7AC1B4 /* Telemetry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Telemetry.swift; sourceTree = "<group>"; };
+		3F13024B225AEA2A8AD1767B /* BorealDialerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BorealDialerApp.swift; sourceTree = "<group>"; };
+		406AD27F59F213ACA6059296 /* StandardNotificationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StandardNotificationCoordinator.swift; sourceTree = "<group>"; };
+		4B898180A2FB7E765ABD5399 /* BorealDialerWatchTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BorealDialerWatchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		4F98FC0AABE6A4055A791EB4 /* CallDirectoryProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallDirectoryProvider.swift; sourceTree = "<group>"; };
+		51A076FD3DFBC25CFC0C8839 /* WatchRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchRootView.swift; sourceTree = "<group>"; };
+		532F02892698BBB85884C799 /* NetworkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkManager.swift; sourceTree = "<group>"; };
+		55B3AD3A19DD19AE7AE0A404 /* CallDirectoryStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallDirectoryStoreTests.swift; sourceTree = "<group>"; };
+		55D71804E5FDF8427615DD59 /* LineSwitcherView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineSwitcherView.swift; sourceTree = "<group>"; };
+		565599A5EFB57E1053EFDD30 /* CallDurationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallDurationManager.swift; sourceTree = "<group>"; };
+		5B995D483EA3C06968527C27 /* BrandConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandConfig.swift; sourceTree = "<group>"; };
+		5C520BBBD06D3741CD467752 /* Line.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Line.swift; sourceTree = "<group>"; };
+		5C9014FB34BEE2CF9CCAC39E /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
+		5E0D04843E3FAAE091DB784B /* NewContactView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewContactView.swift; sourceTree = "<group>"; };
+		5E0EAFEA2DAE30B5316520AF /* WatchServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchServices.swift; sourceTree = "<group>"; };
+		5F6DB8DF2811C833976312C6 /* WatchMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchMessageTests.swift; sourceTree = "<group>"; };
+		5F9EC1A63368B1DAB699BEC6 /* SMSBroadcastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMSBroadcastView.swift; sourceTree = "<group>"; };
+		6384C90EF43DA9A31E13AE37 /* WatchCallTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchCallTransport.swift; sourceTree = "<group>"; };
+		63D08B5C11C9BD0D1F9ADDE0 /* VoiceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceService.swift; sourceTree = "<group>"; };
+		65BD815950D16F0096627242 /* BorealDialerWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BorealDialerWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		692EBB1903F9711E2060D90B /* CallLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallLog.swift; sourceTree = "<group>"; };
+		692F34A67949D2534C816E71 /* PersistenceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistenceController.swift; sourceTree = "<group>"; };
+		6A9CA8F8CA9C571F42CFDE43 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		6DEE93E537248CFCE297B4BB /* BorealDialerWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BorealDialerWidget.swift; sourceTree = "<group>"; };
+		6F8101F3D727F4E64A12E4AC /* DialerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DialerView.swift; sourceTree = "<group>"; };
+		7921AB1648D1F732C15A2FB1 /* DataContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataContainer.swift; sourceTree = "<group>"; };
+		7E0E2E28590446C3531824AB /* BorealWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BorealWatchApp.swift; sourceTree = "<group>"; };
+		7E7F91F32F09206D52AF40DC /* LineManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineManager.swift; sourceTree = "<group>"; };
+		7F33A38350103FF7FC95C5D5 /* CallState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallState.swift; sourceTree = "<group>"; };
+		7F58F306CF7761EDB9A7ABB3 /* CallModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallModelTests.swift; sourceTree = "<group>"; };
+		816D5A2E6FE2D2AA00027E6F /* CallEntity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallEntity.swift; sourceTree = "<group>"; };
+		82B01F69BBCCB83E4A05B5E4 /* BorealDialerCallDirectory.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = BorealDialerCallDirectory.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		84F37D20153CA01BBBAE24E0 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		875497D69B0CFF40BE94891E /* OTPService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OTPService.swift; sourceTree = "<group>"; };
+		8965307C88E26A9306B3D56F /* RecordingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingManager.swift; sourceTree = "<group>"; };
+		8B59FB1B2E1DADF3FA2283B0 /* AuthModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthModels.swift; sourceTree = "<group>"; };
+		8C6000EC1F1C4B1E8F90B5E1 /* NotificationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsView.swift; sourceTree = "<group>"; };
+		908636C846821A7F19CF1598 /* IncomingCallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncomingCallView.swift; sourceTree = "<group>"; };
+		9136E73687B5877B68AD11E9 /* CallsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallsView.swift; sourceTree = "<group>"; };
+		95DFC15BA949F94566CD1285 /* BorealDialerCallDirectory.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BorealDialerCallDirectory.entitlements; sourceTree = "<group>"; };
+		972EB94F633F81200950C4B0 /* ReachabilityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReachabilityManager.swift; sourceTree = "<group>"; };
+		99C1F7032E88ECC210BE25AE /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		9D056A59BFDADC531138F428 /* CallModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallModel.swift; sourceTree = "<group>"; };
+		9DABDFD237FB8F18BE5823C8 /* CallerResolution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallerResolution.swift; sourceTree = "<group>"; };
+		A22F30B3ED700ECDE1C38553 /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
+		A3F1295998B63A8CE4A972D7 /* WatchCallTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchCallTransportTests.swift; sourceTree = "<group>"; };
+		A5397E273107459CECE43128 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		A5B3AAA525E084166BA6DE05 /* DeepLinkCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkCoordinator.swift; sourceTree = "<group>"; };
+		A9DF8D49C7B3DCC1B6C94A13 /* WatchMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchMessage.swift; sourceTree = "<group>"; };
+		AA927BB104E56D82A8FCEB1C /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		AC0B41C8DC6F0DB179B54CB2 /* CalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarView.swift; sourceTree = "<group>"; };
+		AC30BD408172C4A980DAE272 /* CallKitManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallKitManager.swift; sourceTree = "<group>"; };
+		AD4041825A9E736726FF703C /* SecureMessageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureMessageStore.swift; sourceTree = "<group>"; };
+		AF5F811B4557E5B6F83E4B6C /* ConferenceSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConferenceSession.swift; sourceTree = "<group>"; };
+		B0B1F4C323A2541711105D37 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		B33C4F5A7FCC344B50949C09 /* FlexibleInt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlexibleInt.swift; sourceTree = "<group>"; };
+		B353FC3A142C341BAA8AC78E /* CallStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallStateManager.swift; sourceTree = "<group>"; };
+		B4D564B483F228FF80BA8FDF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		B5B06688BAA084CFAA85889C /* OfflineQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineQueue.swift; sourceTree = "<group>"; };
+		B97478ADE6A82B9C17F2BD1B /* API.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = API.swift; sourceTree = "<group>"; };
+		B9826E0220780F20648FABF7 /* BorealDialerTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BorealDialerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C1AAC6E8E84ACE84B91EF7F2 /* Notifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
+		C2FFC3A26911F7074D906CEC /* VoiceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceManager.swift; sourceTree = "<group>"; };
+		C46E1756CFE52EF06678BAC8 /* IdentityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdentityManager.swift; sourceTree = "<group>"; };
+		C757679B9F5F44A959598CD5 /* MessagesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagesView.swift; sourceTree = "<group>"; };
+		C8F1EDB67CBFE702A2552B4C /* WatchAuthReliabilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchAuthReliabilityTests.swift; sourceTree = "<group>"; };
+		C96ED262FC118D1A7D247F53 /* ReconnectionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReconnectionController.swift; sourceTree = "<group>"; };
+		CCE6438E9364BBD44F17EA09 /* CallLiveActivityController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallLiveActivityController.swift; sourceTree = "<group>"; };
+		CEA12AC427F995D56086DDD9 /* BorealDialerLiveActivity.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = BorealDialerLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		D2064DD3681EA4C890086E29 /* BorealCallLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BorealCallLiveActivity.swift; sourceTree = "<group>"; };
+		D4C54EEB773BC6680C83F9D1 /* CallLogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallLogStore.swift; sourceTree = "<group>"; };
+		D4E3D3CE42C41B4C4BC4E5F5 /* CallActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallActivityAttributes.swift; sourceTree = "<group>"; };
+		D554F3197AD5DC8006FDB0F3 /* TelephonyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelephonyService.swift; sourceTree = "<group>"; };
+		D659C8D1CCB07C7C07A0234A /* CallDirectoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallDirectoryStore.swift; sourceTree = "<group>"; };
+		DB57A7C3A318E780AE07832F /* BorealWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BorealWatch.entitlements; sourceTree = "<group>"; };
+		DC7AF723B0865E1E542481CC /* BIActivityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BIActivityTests.swift; sourceTree = "<group>"; };
+		DD287E38B32585D6731E9B2C /* PushManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushManager.swift; sourceTree = "<group>"; };
+		DFEFB32CA9F29A8081E5C3AE /* QuickCallRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickCallRow.swift; sourceTree = "<group>"; };
+		E2FBF5202AA9C55CA85BAFD7 /* APIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfig.swift; sourceTree = "<group>"; };
+		E40E80468EF9D3C8C0DA2EBC /* Silo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Silo.swift; sourceTree = "<group>"; };
+		E8D91F685FE02F5ABA3D5AC4 /* ContactsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsView.swift; sourceTree = "<group>"; };
+		EA9DC1043B2B2F2C8F37302D /* WatchBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchBridge.swift; sourceTree = "<group>"; };
+		EAC665A3862E122B2C272420 /* VoiceEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceEngine.swift; sourceTree = "<group>"; };
+		ED3AF9BCCB21BD6C7875C32B /* TeamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamView.swift; sourceTree = "<group>"; };
+		EDD572E3CE82A2E34CB3BDDD /* TwilioVoiceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TwilioVoiceManager.swift; sourceTree = "<group>"; };
+		EF1F7D99BA53498C32468BEE /* BorealCallLiveActivity.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BorealCallLiveActivity.entitlements; sourceTree = "<group>"; };
+		F43D0916A700D363315651C3 /* TokenStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenStorage.swift; sourceTree = "<group>"; };
+		F76D94EEB4CE0B851521A9B3 /* MessageModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageModel.swift; sourceTree = "<group>"; };
+		FB7B3BACC56B17FE4F36ACF7 /* WatchEventStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchEventStore.swift; sourceTree = "<group>"; };
+		FB97339B555BC38C7C80063C /* CallDirectoryManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallDirectoryManager.swift; sourceTree = "<group>"; };
+		FC1E7BA0C7AD058B56101B09 /* BIDirectory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BIDirectory.swift; sourceTree = "<group>"; };
+		FD28B68438DF4D46342B9146 /* BIDirectoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BIDirectoryTests.swift; sourceTree = "<group>"; };
+		FF79206B454876F127B9ED96 /* BorealDialer.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = BorealDialer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		51F0D260A82B6DFCFD45D657 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A9E316EE84D89B9942DFA753 /* TwilioVoice in Frameworks */,
+				1FB5F67B19443560F2506685 /* Sentry in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		06AE8A69B5FB93E91F790A82 /* Lines */ = {
+			isa = PBXGroup;
+			children = (
+				5C520BBBD06D3741CD467752 /* Line.swift */,
+				7E7F91F32F09206D52AF40DC /* LineManager.swift */,
+				E40E80468EF9D3C8C0DA2EBC /* Silo.swift */,
+			);
+			path = Lines;
+			sourceTree = "<group>";
+		};
+		07F0537BE26321A8AF30571F /* Telemetry */ = {
+			isa = PBXGroup;
+			children = (
+				3E0D823C0AC0AEC88C7AC1B4 /* Telemetry.swift */,
+			);
+			path = Telemetry;
+			sourceTree = "<group>";
+		};
+		123578A901E8F59E9CFF1D5C /* CallDirectory */ = {
+			isa = PBXGroup;
+			children = (
+				95DFC15BA949F94566CD1285 /* BorealDialerCallDirectory.entitlements */,
+				4F98FC0AABE6A4055A791EB4 /* CallDirectoryProvider.swift */,
+				3323BD3A1E7AD96A7494F956 /* Info.plist */,
+			);
+			path = CallDirectory;
+			sourceTree = "<group>";
+		};
+		13F8A48659BAACD05C56BB97 /* Calendar */ = {
+			isa = PBXGroup;
+			children = (
+				AC0B41C8DC6F0DB179B54CB2 /* CalendarView.swift */,
+			);
+			path = Calendar;
+			sourceTree = "<group>";
+		};
+		1C2B5F15674012C7AE68AE52 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				5EF0F7C18B9BDB57E8B01F4A /* BorealDialerTests */,
+				C951B90BDDD546D57D7209CB /* BorealDialerWatchTests */,
+			);
+			path = Tests;
+			sourceTree = "<group>";
+		};
+		1E7FBA3AE2EC931E59BCF835 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				B353FC3A142C341BAA8AC78E /* CallStateManager.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		1EAC926DE48A6FA5186FA614 /* Auth */ = {
+			isa = PBXGroup;
+			children = (
+				AA927BB104E56D82A8FCEB1C /* LoginView.swift */,
+			);
+			path = Auth;
+			sourceTree = "<group>";
+		};
+		25BBE878D5327DA98F8E2BA4 /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				5C9014FB34BEE2CF9CCAC39E /* RootTabView.swift */,
+				1EAC926DE48A6FA5186FA614 /* Auth */,
+				13F8A48659BAACD05C56BB97 /* Calendar */,
+				B03226C8D93866D49001AA89 /* Calls */,
+				965792A88531B1A116C57981 /* Components */,
+				7CFC217220724C06F6DCC400 /* Contacts */,
+				F0F557C782C5FDD83DDC14E3 /* Dialer */,
+				BE286FB0F55E54525668FD77 /* Messages */,
+				B35C0A432BBD4A2C7A0BD29B /* Notifications */,
+				5F1C5F7B611B45CB5CB77A61 /* Settings */,
+				EE00F5782ED9BD4FCFFE0683 /* SMS */,
+				FA804CB208AE95C0C135E8EC /* Team */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+		3E04DCCC8E4E89B61510B3B8 /* DeepLink */ = {
+			isa = PBXGroup;
+			children = (
+				A5B3AAA525E084166BA6DE05 /* DeepLinkCoordinator.swift */,
+			);
+			path = DeepLink;
+			sourceTree = "<group>";
+		};
+		41C2EA2C82A7DD8E03B77332 /* Brand */ = {
+			isa = PBXGroup;
+			children = (
+				5B995D483EA3C06968527C27 /* BrandConfig.swift */,
+			);
+			path = Brand;
+			sourceTree = "<group>";
+		};
+		49A5A8C9E38FE29E892712A3 /* Voice */ = {
+			isa = PBXGroup;
+			children = (
+				2E1E203B61691D4EB51CBECB /* CallDirection.swift */,
+				565599A5EFB57E1053EFDD30 /* CallDurationManager.swift */,
+				9DABDFD237FB8F18BE5823C8 /* CallerResolution.swift */,
+				AC30BD408172C4A980DAE272 /* CallKitManager.swift */,
+				CCE6438E9364BBD44F17EA09 /* CallLiveActivityController.swift */,
+				D4C54EEB773BC6680C83F9D1 /* CallLogStore.swift */,
+				09024564C8C257E152E04E63 /* CallManager.swift */,
+				9D056A59BFDADC531138F428 /* CallModel.swift */,
+				7F33A38350103FF7FC95C5D5 /* CallState.swift */,
+				AF5F811B4557E5B6F83E4B6C /* ConferenceSession.swift */,
+				7921AB1648D1F732C15A2FB1 /* DataContainer.swift */,
+				C46E1756CFE52EF06678BAC8 /* IdentityManager.swift */,
+				160CD8EA1BBA7000AFA4C13F /* PresenceHeartbeat.swift */,
+				DD287E38B32585D6731E9B2C /* PushManager.swift */,
+				8965307C88E26A9306B3D56F /* RecordingManager.swift */,
+				2E51DE6D3C502FE81067AE41 /* TokenProvider.swift */,
+				EDD572E3CE82A2E34CB3BDDD /* TwilioVoiceManager.swift */,
+				EAC665A3862E122B2C272420 /* VoiceEngine.swift */,
+				C2FFC3A26911F7074D906CEC /* VoiceManager.swift */,
+				63D08B5C11C9BD0D1F9ADDE0 /* VoiceService.swift */,
+				06623867F85D7E727854BF87 /* VoIPPushManager.swift */,
+				EA9DC1043B2B2F2C8F37302D /* WatchBridge.swift */,
+				4E52417D6428FBC09AF7DD50 /* Models */,
+				1E7FBA3AE2EC931E59BCF835 /* Services */,
+			);
+			path = Voice;
+			sourceTree = "<group>";
+		};
+		4C60E5FD0F81EABAC577066C /* Contacts */ = {
+			isa = PBXGroup;
+			children = (
+				FC1E7BA0C7AD058B56101B09 /* BIDirectory.swift */,
+				FB97339B555BC38C7C80063C /* CallDirectoryManager.swift */,
+			);
+			path = Contacts;
+			sourceTree = "<group>";
+		};
+		4E52417D6428FBC09AF7DD50 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				692EBB1903F9711E2060D90B /* CallLog.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		4F70C7D0F1DFCF0F2DA18962 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				FF79206B454876F127B9ED96 /* BorealDialer.app */,
+				82B01F69BBCCB83E4A05B5E4 /* BorealDialerCallDirectory.appex */,
+				CEA12AC427F995D56086DDD9 /* BorealDialerLiveActivity.appex */,
+				B9826E0220780F20648FABF7 /* BorealDialerTests.xctest */,
+				65BD815950D16F0096627242 /* BorealDialerWatch.app */,
+				4B898180A2FB7E765ABD5399 /* BorealDialerWatchTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		5EF0F7C18B9BDB57E8B01F4A /* BorealDialerTests */ = {
+			isa = PBXGroup;
+			children = (
+				DC7AF723B0865E1E542481CC /* BIActivityTests.swift */,
+				FD28B68438DF4D46342B9146 /* BIDirectoryTests.swift */,
+				55B3AD3A19DD19AE7AE0A404 /* CallDirectoryStoreTests.swift */,
+				07AD1FCDC7C561A07F5BA248 /* CallerResolutionTests.swift */,
+				7F58F306CF7761EDB9A7ABB3 /* CallModelTests.swift */,
+				28CF8056CCD965B4524A3F11 /* ConferenceStartTests.swift */,
+				06639C6209522E474612E26A /* DecodingTests.swift */,
+				3A08AF97A1E401652259BF4D /* ProductionSafetyTests.swift */,
+				3DFB9D60AC6395C0ADE6B301 /* TeamRosterTests.swift */,
+				0825C71E25D0B74979A50E99 /* VoiceIdentityTests.swift */,
+				5F6DB8DF2811C833976312C6 /* WatchMessageTests.swift */,
+			);
+			path = BorealDialerTests;
+			sourceTree = "<group>";
+		};
+		5F1C5F7B611B45CB5CB77A61 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				3DFF9835F2AC40D1ED071431 /* AccountSheet.swift */,
+				55D71804E5FDF8427615DD59 /* LineSwitcherView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		5FD297E1A37F58CCD3156F8E /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				875497D69B0CFF40BE94891E /* OTPService.swift */,
+				D554F3197AD5DC8006FDB0F3 /* TelephonyService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		68F1D7ABD19A678F05D00FE9 /* Networking */ = {
+			isa = PBXGroup;
+			children = (
+				B97478ADE6A82B9C17F2BD1B /* API.swift */,
+				B0B1F4C323A2541711105D37 /* APIClient.swift */,
+				532F02892698BBB85884C799 /* NetworkManager.swift */,
+				A22F30B3ED700ECDE1C38553 /* NetworkMonitor.swift */,
+				B5B06688BAA084CFAA85889C /* OfflineQueue.swift */,
+				972EB94F633F81200950C4B0 /* ReachabilityManager.swift */,
+				C96ED262FC118D1A7D247F53 /* ReconnectionController.swift */,
+			);
+			path = Networking;
+			sourceTree = "<group>";
+		};
+		6A8259B05431F3B8F2FD4FD8 = {
+			isa = PBXGroup;
+			children = (
+				99C1F7032E88ECC210BE25AE /* Assets.xcassets */,
+				123578A901E8F59E9CFF1D5C /* CallDirectory */,
+				CD5826C69703474AA6A93612 /* Config */,
+				8FF6C4BC23E5F8589A9A5623 /* LiveActivity */,
+				9C95BFCA65F833045A9B9A2F /* Sources */,
+				1C2B5F15674012C7AE68AE52 /* Tests */,
+				25BBE878D5327DA98F8E2BA4 /* UI */,
+				9022E7F7C244DD549FBEE929 /* Watch */,
+				4F70C7D0F1DFCF0F2DA18962 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		6C603ECF9BD7C813355E7CEB /* Messaging */ = {
+			isa = PBXGroup;
+			children = (
+				F76D94EEB4CE0B851521A9B3 /* MessageModel.swift */,
+				AD4041825A9E736726FF703C /* SecureMessageStore.swift */,
+			);
+			path = Messaging;
+			sourceTree = "<group>";
+		};
+		7CFC217220724C06F6DCC400 /* Contacts */ = {
+			isa = PBXGroup;
+			children = (
+				3CE02AFC7A257AE7E9BB18AF /* ContactDetailView.swift */,
+				E8D91F685FE02F5ABA3D5AC4 /* ContactsView.swift */,
+				5E0D04843E3FAAE091DB784B /* NewContactView.swift */,
+			);
+			path = Contacts;
+			sourceTree = "<group>";
+		};
+		8145CB17A0693D6A5B588062 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				D4E3D3CE42C41B4C4BC4E5F5 /* CallActivityAttributes.swift */,
+				D659C8D1CCB07C7C07A0234A /* CallDirectoryStore.swift */,
+				192FBF1C1A135D31F7634A2D /* WidgetSnapshot.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		8FF6C4BC23E5F8589A9A5623 /* LiveActivity */ = {
+			isa = PBXGroup;
+			children = (
+				EF1F7D99BA53498C32468BEE /* BorealCallLiveActivity.entitlements */,
+				D2064DD3681EA4C890086E29 /* BorealCallLiveActivity.swift */,
+				6DEE93E537248CFCE297B4BB /* BorealDialerWidget.swift */,
+				A5397E273107459CECE43128 /* Info.plist */,
+			);
+			path = LiveActivity;
+			sourceTree = "<group>";
+		};
+		9022E7F7C244DD549FBEE929 /* Watch */ = {
+			isa = PBXGroup;
+			children = (
+				DB57A7C3A318E780AE07832F /* BorealWatch.entitlements */,
+				7E0E2E28590446C3531824AB /* BorealWatchApp.swift */,
+				B4D564B483F228FF80BA8FDF /* Info.plist */,
+				6384C90EF43DA9A31E13AE37 /* WatchCallTransport.swift */,
+				FB7B3BACC56B17FE4F36ACF7 /* WatchEventStore.swift */,
+				51A076FD3DFBC25CFC0C8839 /* WatchRootView.swift */,
+				5E0EAFEA2DAE30B5316520AF /* WatchServices.swift */,
+			);
+			path = Watch;
+			sourceTree = "<group>";
+		};
+		965792A88531B1A116C57981 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				255E2EA6EC09F058B1C8FAED /* AvatarCircle.swift */,
+				B33C4F5A7FCC344B50949C09 /* FlexibleInt.swift */,
+				6A9CA8F8CA9C571F42CFDE43 /* Theme.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		9A4BA2C5D5D30F445F5DB939 /* BorealDialer */ = {
+			isa = PBXGroup;
+			children = (
+				3F13024B225AEA2A8AD1767B /* BorealDialerApp.swift */,
+			);
+			path = BorealDialer;
+			sourceTree = "<group>";
+		};
+		9C95BFCA65F833045A9B9A2F /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				AABFDED0FF60AA4E945B8473 /* Auth */,
+				9A4BA2C5D5D30F445F5DB939 /* BorealDialer */,
+				41C2EA2C82A7DD8E03B77332 /* Brand */,
+				AEECB62D1F333918679E3BDD /* Config */,
+				4C60E5FD0F81EABAC577066C /* Contacts */,
+				3E04DCCC8E4E89B61510B3B8 /* DeepLink */,
+				06AE8A69B5FB93E91F790A82 /* Lines */,
+				6C603ECF9BD7C813355E7CEB /* Messaging */,
+				68F1D7ABD19A678F05D00FE9 /* Networking */,
+				E2236F40B482B1AAA21733DD /* Notifications */,
+				BCA525227A50D3B32D6A123A /* Persistence */,
+				5FD297E1A37F58CCD3156F8E /* Services */,
+				8145CB17A0693D6A5B588062 /* Shared */,
+				07F0537BE26321A8AF30571F /* Telemetry */,
+				49A5A8C9E38FE29E892712A3 /* Voice */,
+				E7416287D0FD4ED51F3FB0E8 /* WatchShared */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		AABFDED0FF60AA4E945B8473 /* Auth */ = {
+			isa = PBXGroup;
+			children = (
+				25DCC19E7A4B9471EDB25FFD /* AuthManager.swift */,
+				8B59FB1B2E1DADF3FA2283B0 /* AuthModels.swift */,
+				31118B038DDF51A900944839 /* AuthService.swift */,
+				17484F626671516B5D96FECF /* KeychainService.swift */,
+				F43D0916A700D363315651C3 /* TokenStorage.swift */,
+			);
+			path = Auth;
+			sourceTree = "<group>";
+		};
+		AEECB62D1F333918679E3BDD /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				E2FBF5202AA9C55CA85BAFD7 /* APIConfig.swift */,
+				C1AAC6E8E84ACE84B91EF7F2 /* Notifications.swift */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		B03226C8D93866D49001AA89 /* Calls */ = {
+			isa = PBXGroup;
+			children = (
+				9136E73687B5877B68AD11E9 /* CallsView.swift */,
+				11AD0DBD3A1FB008EB6CC6D1 /* InCallView.swift */,
+				18137E25E1EAB72981DF6B12 /* IncomingCallController.swift */,
+				908636C846821A7F19CF1598 /* IncomingCallView.swift */,
+				DFEFB32CA9F29A8081E5C3AE /* QuickCallRow.swift */,
+			);
+			path = Calls;
+			sourceTree = "<group>";
+		};
+		B35C0A432BBD4A2C7A0BD29B /* Notifications */ = {
+			isa = PBXGroup;
+			children = (
+				8C6000EC1F1C4B1E8F90B5E1 /* NotificationsView.swift */,
+			);
+			path = Notifications;
+			sourceTree = "<group>";
+		};
+		BCA525227A50D3B32D6A123A /* Persistence */ = {
+			isa = PBXGroup;
+			children = (
+				816D5A2E6FE2D2AA00027E6F /* CallEntity.swift */,
+				2429FCE056D96FB2645C879B /* MessageEntity.swift */,
+				692F34A67949D2534C816E71 /* PersistenceController.swift */,
+			);
+			path = Persistence;
+			sourceTree = "<group>";
+		};
+		BE286FB0F55E54525668FD77 /* Messages */ = {
+			isa = PBXGroup;
+			children = (
+				C757679B9F5F44A959598CD5 /* MessagesView.swift */,
+			);
+			path = Messages;
+			sourceTree = "<group>";
+		};
+		C951B90BDDD546D57D7209CB /* BorealDialerWatchTests */ = {
+			isa = PBXGroup;
+			children = (
+				C8F1EDB67CBFE702A2552B4C /* WatchAuthReliabilityTests.swift */,
+				A3F1295998B63A8CE4A972D7 /* WatchCallTransportTests.swift */,
+			);
+			path = BorealDialerWatchTests;
+			sourceTree = "<group>";
+		};
+		CD5826C69703474AA6A93612 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				84F37D20153CA01BBBAE24E0 /* PrivacyInfo.xcprivacy */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		E2236F40B482B1AAA21733DD /* Notifications */ = {
+			isa = PBXGroup;
+			children = (
+				406AD27F59F213ACA6059296 /* StandardNotificationCoordinator.swift */,
+			);
+			path = Notifications;
+			sourceTree = "<group>";
+		};
+		E7416287D0FD4ED51F3FB0E8 /* WatchShared */ = {
+			isa = PBXGroup;
+			children = (
+				A9DF8D49C7B3DCC1B6C94A13 /* WatchMessage.swift */,
+			);
+			path = WatchShared;
+			sourceTree = "<group>";
+		};
+		EE00F5782ED9BD4FCFFE0683 /* SMS */ = {
+			isa = PBXGroup;
+			children = (
+				5F9EC1A63368B1DAB699BEC6 /* SMSBroadcastView.swift */,
+				17A0A90095EB777D78038587 /* SMSNewMessageView.swift */,
+				147A3CB87C4989EF75B081C0 /* SMSView.swift */,
+			);
+			path = SMS;
+			sourceTree = "<group>";
+		};
+		F0F557C782C5FDD83DDC14E3 /* Dialer */ = {
+			isa = PBXGroup;
+			children = (
+				6F8101F3D727F4E64A12E4AC /* DialerView.swift */,
+			);
+			path = Dialer;
+			sourceTree = "<group>";
+		};
+		FA804CB208AE95C0C135E8EC /* Team */ = {
+			isa = PBXGroup;
+			children = (
+				ED3AF9BCCB21BD6C7875C32B /* TeamView.swift */,
+			);
+			path = Team;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		428EFD4F252EB96ABC6B4EAA /* BorealDialerLiveActivity */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CE44F2DDCE30DB208BD754C9 /* Build configuration list for PBXNativeTarget "BorealDialerLiveActivity" */;
+			buildPhases = (
+				5C519AB053B8D01FE6CA1E99 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BorealDialerLiveActivity;
+			packageProductDependencies = (
+			);
+			productName = BorealDialerLiveActivity;
+			productReference = CEA12AC427F995D56086DDD9 /* BorealDialerLiveActivity.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		768FDC5C2C1901CD5172A361 /* BorealDialerWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7124EB0BBB414B23E1165ED5 /* Build configuration list for PBXNativeTarget "BorealDialerWatch" */;
+			buildPhases = (
+				8B7C674E93906D767C3DF2EE /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BorealDialerWatch;
+			packageProductDependencies = (
+			);
+			productName = BorealDialerWatch;
+			productReference = 65BD815950D16F0096627242 /* BorealDialerWatch.app */;
+			productType = "com.apple.product-type.application";
+		};
+		8E1BC85F5D3634F677633CA7 /* BorealDialerTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FAB0972049AF3555C509E0AE /* Build configuration list for PBXNativeTarget "BorealDialerTests" */;
+			buildPhases = (
+				9BAA6EAAEEFF78DD91B17D24 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				66262C2698F0E2F7181EF222 /* PBXTargetDependency */,
+			);
+			name = BorealDialerTests;
+			packageProductDependencies = (
+			);
+			productName = BorealDialerTests;
+			productReference = B9826E0220780F20648FABF7 /* BorealDialerTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		A5E60D413AD6E6ABAD4012D6 /* BorealDialerWatchTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 64E6403F7120B931483EE54D /* Build configuration list for PBXNativeTarget "BorealDialerWatchTests" */;
+			buildPhases = (
+				26F8594E735BD4EC61D1489A /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				0951230DEF1951F0FBAB4C81 /* PBXTargetDependency */,
+			);
+			name = BorealDialerWatchTests;
+			packageProductDependencies = (
+			);
+			productName = BorealDialerWatchTests;
+			productReference = 4B898180A2FB7E765ABD5399 /* BorealDialerWatchTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		BA593AB704216C7B1DBB8C3A /* BorealDialer */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 711338544369809DED7FE67E /* Build configuration list for PBXNativeTarget "BorealDialer" */;
+			buildPhases = (
+				F62AF6DA1136406AF6D70FE2 /* Sources */,
+				4B26254ECD14D40E4A21C875 /* Resources */,
+				51F0D260A82B6DFCFD45D657 /* Frameworks */,
+				DDDDE3B2A8CE28023F8B97A9 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				2F23C78BA116AB426C084D56 /* PBXTargetDependency */,
+				0FD8A279B2F62AEF4A3B9B02 /* PBXTargetDependency */,
+			);
+			name = BorealDialer;
+			packageProductDependencies = (
+				26AA4C5F279F225727CD86D9 /* TwilioVoice */,
+				C9A9BBAAF79FA07101C7F4EA /* Sentry */,
+			);
+			productName = BorealDialer;
+			productReference = FF79206B454876F127B9ED96 /* BorealDialer.app */;
+			productType = "com.apple.product-type.application";
+		};
+		C81E3AEF3D6991484D02C0D6 /* BorealDialerCallDirectory */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A22B280CCD99DA3EEBDD5247 /* Build configuration list for PBXNativeTarget "BorealDialerCallDirectory" */;
+			buildPhases = (
+				A10DC43398615DDA3EDDDCB7 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BorealDialerCallDirectory;
+			packageProductDependencies = (
+			);
+			productName = BorealDialerCallDirectory;
+			productReference = 82B01F69BBCCB83E4A05B5E4 /* BorealDialerCallDirectory.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B3807F5068508D4960394E64 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					428EFD4F252EB96ABC6B4EAA = {
+						SystemCapabilities = "[\"com.apple.ApplicationGroups.iOS\": [\"enabled\": 1]]";
+					};
+					768FDC5C2C1901CD5172A361 = {
+						ProvisioningStyle = Automatic;
+					};
+					BA593AB704216C7B1DBB8C3A = {
+						ProvisioningStyle = Automatic;
+						SystemCapabilities = "[\"com.apple.ApplicationGroups.iOS\": [\"enabled\": 1]]";
+					};
+					C81E3AEF3D6991484D02C0D6 = {
+						ProvisioningStyle = Automatic;
+						SystemCapabilities = "[\"com.apple.ApplicationGroups.iOS\": [\"enabled\": 1]]";
+					};
+				};
+			};
+			buildConfigurationList = 01A8706DC65CC75B3FDC55C2 /* Build configuration list for PBXProject "BorealDialer" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 6A8259B05431F3B8F2FD4FD8;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				699B6BB1E196112957466FB6 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
+				B3A0A390A90B13C2763A46B4 /* XCRemoteSwiftPackageReference "twilio-voice-ios" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 4F70C7D0F1DFCF0F2DA18962 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				BA593AB704216C7B1DBB8C3A /* BorealDialer */,
+				A5E60D413AD6E6ABAD4012D6 /* BorealDialerWatchTests */,
+				768FDC5C2C1901CD5172A361 /* BorealDialerWatch */,
+				8E1BC85F5D3634F677633CA7 /* BorealDialerTests */,
+				428EFD4F252EB96ABC6B4EAA /* BorealDialerLiveActivity */,
+				C81E3AEF3D6991484D02C0D6 /* BorealDialerCallDirectory */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		4B26254ECD14D40E4A21C875 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				74E90D61444672690DEBA792 /* Assets.xcassets in Resources */,
+				5F0E8366BE7D0672A95FFF22 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		26F8594E735BD4EC61D1489A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3E7DBE60E1CA48B155D9499D /* WatchAuthReliabilityTests.swift in Sources */,
+				6214BA7D2E4B05120D964EEF /* WatchCallTransportTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5C519AB053B8D01FE6CA1E99 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				09A07503972F6A97AF24C17F /* BorealCallLiveActivity.swift in Sources */,
+				17FCEC683C3D03E491FDBB94 /* BorealDialerWidget.swift in Sources */,
+				B7EAE919DEFD214EFCF1F0DF /* CallActivityAttributes.swift in Sources */,
+				1A1A18B857F0183C141DBE97 /* CallDirectoryStore.swift in Sources */,
+				20D416085731C75536E5BFC9 /* WidgetSnapshot.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8B7C674E93906D767C3DF2EE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7FA3F0E37A434037494639E4 /* BorealWatchApp.swift in Sources */,
+				B9A7539018155DA6322DCDC4 /* WatchCallTransport.swift in Sources */,
+				305C9CED4EAC9FAB11EB779E /* WatchEventStore.swift in Sources */,
+				452FC8EA9613C2D6471C5BBB /* WatchMessage.swift in Sources */,
+				AB380B1567C8254268F5EDC5 /* WatchRootView.swift in Sources */,
+				C1E383AC0771258031913971 /* WatchServices.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9BAA6EAAEEFF78DD91B17D24 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				724BCB8511C40DAEEE4263F8 /* BIActivityTests.swift in Sources */,
+				0BF39D6B5FCC46D7EB7F9BB6 /* BIDirectoryTests.swift in Sources */,
+				B5CFE8C4E48AF59D4D530CB4 /* CallDirectoryStoreTests.swift in Sources */,
+				827FE70FA464CF8E4031D482 /* CallModelTests.swift in Sources */,
+				82700DEBEDCFF24748F611B6 /* CallerResolutionTests.swift in Sources */,
+				63E00D6713CB65310C28BFDD /* ConferenceStartTests.swift in Sources */,
+				FBD774C82D22782458518AE5 /* DecodingTests.swift in Sources */,
+				CC6A9D4458C456C9EF876374 /* ProductionSafetyTests.swift in Sources */,
+				62196631D89BCA3B547B30EF /* TeamRosterTests.swift in Sources */,
+				CA07D233B9ACBF87C71FBE38 /* VoiceIdentityTests.swift in Sources */,
+				8544D36D6EC8FB3905F79DC5 /* WatchMessageTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10DC43398615DDA3EDDDCB7 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6260CC9EB57AA7D4E1906F68 /* CallDirectoryProvider.swift in Sources */,
+				A712D2E27A0080BAF1A554CD /* CallDirectoryStore.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F62AF6DA1136406AF6D70FE2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				632703E06A2B8A9D851497C9 /* API.swift in Sources */,
+				05CDCD1EDADEA1BCE2F378C8 /* APIClient.swift in Sources */,
+				FA0A50EA5FACD7320F28C91D /* APIConfig.swift in Sources */,
+				09C7789E4262C32F9013FF4A /* AccountSheet.swift in Sources */,
+				FDDD537310C2908877FD81F3 /* AuthManager.swift in Sources */,
+				9A8EEFEF8EA0DAFD015AFC5E /* AuthModels.swift in Sources */,
+				ECE5D9DFB41767D7C5CC08F6 /* AuthService.swift in Sources */,
+				1A4B9DC0969684A5453E82B0 /* AvatarCircle.swift in Sources */,
+				4EFBD33DB7A4A3B8C6A469AB /* BIDirectory.swift in Sources */,
+				B03255FD0E8579B60A3A0E42 /* BorealDialerApp.swift in Sources */,
+				59955A318A660F356309D4FA /* BrandConfig.swift in Sources */,
+				0C2EF9AA078995DDBEF8E2C8 /* CalendarView.swift in Sources */,
+				58886747A8DDA0963D43EF5D /* CallActivityAttributes.swift in Sources */,
+				CCE619696E39C2A06FFDDB93 /* CallDirection.swift in Sources */,
+				8C5D2D2AED6F543D36877D7B /* CallDirectoryManager.swift in Sources */,
+				AF70159708EBC6DA8E6AB5FA /* CallDirectoryStore.swift in Sources */,
+				292D2B6146D21DFC8F3B0630 /* CallDurationManager.swift in Sources */,
+				CE471B2F3288DAB73FDA3AB5 /* CallEntity.swift in Sources */,
+				710E1CC8D30B05A32DC04F62 /* CallKitManager.swift in Sources */,
+				94AEAEEEBDB33D9DFB211B9D /* CallLiveActivityController.swift in Sources */,
+				1307746AC098233F899CD76D /* CallLog.swift in Sources */,
+				CF6DF95D69A7ED5D3353E978 /* CallLogStore.swift in Sources */,
+				7008C5F965E1A45641AF57BB /* CallManager.swift in Sources */,
+				E98C2295D5777FEF2224045F /* CallModel.swift in Sources */,
+				E7A291C6A9A33A6A3E91CA4A /* CallState.swift in Sources */,
+				0C04A524CAED907DB23B8CB2 /* CallStateManager.swift in Sources */,
+				4C724E3B13DEEA2CE1725BA1 /* CallerResolution.swift in Sources */,
+				32CF1543EFD84DF818ABDA56 /* CallsView.swift in Sources */,
+				3CBADC929C81620A3F161D89 /* ConferenceSession.swift in Sources */,
+				CE82C35DD19E67DD784E9164 /* ContactDetailView.swift in Sources */,
+				7BFFCCC3B077A0AE032FC5B3 /* ContactsView.swift in Sources */,
+				9A3BC0DC333E2642DBA4930C /* DataContainer.swift in Sources */,
+				6FFB8A8025BA2B1AE130664E /* DeepLinkCoordinator.swift in Sources */,
+				4A8FF7C5449C8E4E13F90018 /* DialerView.swift in Sources */,
+				67C14811E4167C7040C27070 /* FlexibleInt.swift in Sources */,
+				A586A5D37FDCC8301E6DA6B8 /* IdentityManager.swift in Sources */,
+				AAF1A77CFE6B2C9A72F83D8C /* InCallView.swift in Sources */,
+				F6030EADF0C9FE472ACD2D1D /* IncomingCallController.swift in Sources */,
+				5225FA173E400B6EBDA2396E /* IncomingCallView.swift in Sources */,
+				62645CC630DEF49A204372F3 /* KeychainService.swift in Sources */,
+				1B6077CCC2EBB9B255D641DB /* Line.swift in Sources */,
+				E007D92F77E9F85B38496439 /* LineManager.swift in Sources */,
+				626F23AC549AF0EF4AF98744 /* LineSwitcherView.swift in Sources */,
+				5C3C583723C950A9DFE2CB16 /* LoginView.swift in Sources */,
+				13431E80AC12830C2BA00432 /* MessageEntity.swift in Sources */,
+				CEE25A1E2A846BE8BB2CFEAD /* MessageModel.swift in Sources */,
+				9968798A6FCA0ACA26531C88 /* MessagesView.swift in Sources */,
+				E312CBEF84A6B6A9933A6C54 /* NetworkManager.swift in Sources */,
+				216D732EF194A265F3EE6408 /* NetworkMonitor.swift in Sources */,
+				AB64A2A954DD158B3BEAFC57 /* NewContactView.swift in Sources */,
+				2340C9406A620CD507CB133F /* Notifications.swift in Sources */,
+				E574D4A5D39FF5C77CC91D11 /* NotificationsView.swift in Sources */,
+				68263DEC692EDE956F30339F /* OTPService.swift in Sources */,
+				D550E936DAC774400F70B063 /* OfflineQueue.swift in Sources */,
+				62C7E43094EAF84E86D496AD /* PersistenceController.swift in Sources */,
+				EDBB880909625190F3F3342A /* PresenceHeartbeat.swift in Sources */,
+				2F16A9E100DCA7530BEE2A35 /* PushManager.swift in Sources */,
+				AAEDC9CF33EFABE62022BA18 /* QuickCallRow.swift in Sources */,
+				3D305F74EB63E7644DCC9913 /* ReachabilityManager.swift in Sources */,
+				1FA087A9666717B436DEDA44 /* ReconnectionController.swift in Sources */,
+				7A314C443AF047678042388D /* RecordingManager.swift in Sources */,
+				D013B9DEDD425C1CE40A79AB /* RootTabView.swift in Sources */,
+				CDAE3CDFE6957EB0AD538720 /* SMSBroadcastView.swift in Sources */,
+				3E32FF20D5E2FE54B2BA17AF /* SMSNewMessageView.swift in Sources */,
+				3A2AF7B65826D7A245F60D8D /* SMSView.swift in Sources */,
+				787ED395635C1D94EA55D3AB /* SecureMessageStore.swift in Sources */,
+				24E9160CD179F71D37FE4C4D /* Silo.swift in Sources */,
+				A75F6F075E91AC4A96C34819 /* StandardNotificationCoordinator.swift in Sources */,
+				5A0F4E9103456B7CD0DD342D /* TeamView.swift in Sources */,
+				F28BE0A47C9C212EF26F6446 /* Telemetry.swift in Sources */,
+				6F1E62E6C8DF3F9B39615AA5 /* TelephonyService.swift in Sources */,
+				91350440BF8DAC7381C88275 /* Theme.swift in Sources */,
+				395B9A8D72A496AF05089F72 /* TokenProvider.swift in Sources */,
+				906DDBC278D4C525F3D87A90 /* TokenStorage.swift in Sources */,
+				55A301BB30D35B8136712F9A /* TwilioVoiceManager.swift in Sources */,
+				641490BCC756F7824A8A8582 /* VoIPPushManager.swift in Sources */,
+				0EA401E621DAB676685FE40E /* VoiceEngine.swift in Sources */,
+				7D8240388A2D578A78F50ECA /* VoiceManager.swift in Sources */,
+				8FDE9AB2B93EDC66E794C2D5 /* VoiceService.swift in Sources */,
+				5D46E51B3E6D8081E687131E /* WatchBridge.swift in Sources */,
+				FE5548F12D6AFD2B26777E8E /* WatchMessage.swift in Sources */,
+				82DD3321BDC707D9BD907D50 /* WidgetSnapshot.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		0951230DEF1951F0FBAB4C81 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 768FDC5C2C1901CD5172A361 /* BorealDialerWatch */;
+			targetProxy = 7329F439A5508262B3E43BF5 /* PBXContainerItemProxy */;
+		};
+		0FD8A279B2F62AEF4A3B9B02 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C81E3AEF3D6991484D02C0D6 /* BorealDialerCallDirectory */;
+			targetProxy = A18AB17AA56C9462E9F31AAA /* PBXContainerItemProxy */;
+		};
+		2F23C78BA116AB426C084D56 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 428EFD4F252EB96ABC6B4EAA /* BorealDialerLiveActivity */;
+			targetProxy = 18F060AAA11F8339854EA1AC /* PBXContainerItemProxy */;
+		};
+		66262C2698F0E2F7181EF222 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BA593AB704216C7B1DBB8C3A /* BorealDialer */;
+			targetProxy = 2E46EAED5A03B2632CAA62D8 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		099B8DDE74ACD18F2AFAA430 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = CallDirectory/BorealDialerCallDirectory.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = CallDirectory/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = financial.boreal.dialer.calldirectory;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		29D75A198840AE872B79DFBE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = financial.boreal.BorealDialerTests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BorealDialer.app/BorealDialer";
+			};
+			name = Release;
+		};
+		2A223C7A0157D8D28B6A6F79 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Config/BorealDialer.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Config/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = financial.boreal.dialer;
+				PRODUCT_MODULE_NAME = BorealDialer;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		392209BEA79F96E341380C52 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = financial.boreal.BorealDialerWatchTests;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BorealDialerWatch.app/BorealDialerWatch";
+				WATCHOS_DEPLOYMENT_TARGET = 9.0;
+			};
+			name = Debug;
+		};
+		3D8EB6D31CBDCC6EBE55BC2A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = LiveActivity/BorealCallLiveActivity.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = LiveActivity/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = financial.boreal.dialer.liveactivity;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		64E4389EFE9CDBEB7AA0EA14 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Watch/BorealWatch.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Watch/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = financial.boreal.dialer.watchkitapp;
+				PRODUCT_MODULE_NAME = BorealDialerWatch;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 9.0;
+			};
+			name = Release;
+		};
+		67826C47F1247E82A622C043 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Watch/BorealWatch.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Watch/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = financial.boreal.dialer.watchkitapp;
+				PRODUCT_MODULE_NAME = BorealDialerWatch;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 9.0;
+			};
+			name = Debug;
+		};
+		93286E75594F6C358F1AFCB7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = financial.boreal.BorealDialerTests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BorealDialer.app/BorealDialer";
+			};
+			name = Debug;
+		};
+		AB0DF72DA00C50E9333ADC36 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = financial.boreal.BorealDialerWatchTests;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BorealDialerWatch.app/BorealDialerWatch";
+				WATCHOS_DEPLOYMENT_TARGET = 9.0;
+			};
+			name = Release;
+		};
+		B6D4978B22F0F11DB3B4D37D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Config/BorealDialer.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Config/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = financial.boreal.dialer;
+				PRODUCT_MODULE_NAME = BorealDialer;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		BFC391214A96D85DB0E36874 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				WATCHOS_DEPLOYMENT_TARGET = 9.0;
+			};
+			name = Debug;
+		};
+		C34267EFC2742977D7786472 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				WATCHOS_DEPLOYMENT_TARGET = 9.0;
+			};
+			name = Release;
+		};
+		D871EF5C6E0D7F9B1D238301 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = LiveActivity/BorealCallLiveActivity.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = LiveActivity/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = financial.boreal.dialer.liveactivity;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		DD85887062344A560B8E7430 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = CallDirectory/BorealDialerCallDirectory.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = CallDirectory/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = financial.boreal.dialer.calldirectory;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		01A8706DC65CC75B3FDC55C2 /* Build configuration list for PBXProject "BorealDialer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BFC391214A96D85DB0E36874 /* Debug */,
+				C34267EFC2742977D7786472 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		64E6403F7120B931483EE54D /* Build configuration list for PBXNativeTarget "BorealDialerWatchTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				392209BEA79F96E341380C52 /* Debug */,
+				AB0DF72DA00C50E9333ADC36 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		711338544369809DED7FE67E /* Build configuration list for PBXNativeTarget "BorealDialer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2A223C7A0157D8D28B6A6F79 /* Debug */,
+				B6D4978B22F0F11DB3B4D37D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		7124EB0BBB414B23E1165ED5 /* Build configuration list for PBXNativeTarget "BorealDialerWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				67826C47F1247E82A622C043 /* Debug */,
+				64E4389EFE9CDBEB7AA0EA14 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A22B280CCD99DA3EEBDD5247 /* Build configuration list for PBXNativeTarget "BorealDialerCallDirectory" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				099B8DDE74ACD18F2AFAA430 /* Debug */,
+				DD85887062344A560B8E7430 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		CE44F2DDCE30DB208BD754C9 /* Build configuration list for PBXNativeTarget "BorealDialerLiveActivity" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D871EF5C6E0D7F9B1D238301 /* Debug */,
+				3D8EB6D31CBDCC6EBE55BC2A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		FAB0972049AF3555C509E0AE /* Build configuration list for PBXNativeTarget "BorealDialerTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				93286E75594F6C358F1AFCB7 /* Debug */,
+				29D75A198840AE872B79DFBE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		699B6BB1E196112957466FB6 /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/getsentry/sentry-cocoa";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 8.0.0;
+			};
+		};
+		B3A0A390A90B13C2763A46B4 /* XCRemoteSwiftPackageReference "twilio-voice-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/twilio/twilio-voice-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.6.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		26AA4C5F279F225727CD86D9 /* TwilioVoice */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B3A0A390A90B13C2763A46B4 /* XCRemoteSwiftPackageReference "twilio-voice-ios" */;
+			productName = TwilioVoice;
+		};
+		C9A9BBAAF79FA07101C7F4EA /* Sentry */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 699B6BB1E196112957466FB6 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
+			productName = Sentry;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = B3807F5068508D4960394E64 /* Project object */;
+}

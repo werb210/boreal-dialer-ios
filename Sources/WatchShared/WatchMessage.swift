@@ -59,7 +59,12 @@ public struct WatchEvent: Codable, Sendable, Equatable {
     }
 }
 
-public enum BorealLine: String, Codable, CaseIterable, Sendable { case BF, BI, SLF }
+public enum BorealLine: String, Codable, CaseIterable, Sendable {
+    case BF, BI, SLF
+    // BOREAL_DIALER_SINGLE_LINE_v1 - lines actually in use. One entry => pickers
+    // auto-select it. Add BI/SLF here to bring the line pickers back.
+    public static let enabled: [BorealLine] = [.BF]
+}
 public enum WatchCallDirection: String, Codable, Sendable { case incoming, outgoing, missed }
 public enum WatchCallStatus: String, Codable, Sendable {
     case idle, requesting, waitingForCallback, bridging, ringing, connected, ended, failed

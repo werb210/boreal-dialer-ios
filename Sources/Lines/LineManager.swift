@@ -8,26 +8,14 @@ final class LineManager: ObservableObject {
     @Published var activeLine: Line
 
     let availableLines: [Line] = [
+        // BOREAL_DIALER_SINGLE_LINE_v1 - only the line in use. Re-add BI/SLF here
+        // to restore the phone line switcher.
         Line(
             id: "BF",
             name: "Boreal Financial",
             baseURL: URL(string: APIConfig.BASE_URL)!,
             wsURL: nil,
             silo: .bf
-        ),
-        Line(
-            id: "BI",
-            name: "Boreal Insurance",
-            baseURL: URL(string: APIConfig.BASE_URL)!,
-            wsURL: nil,
-            silo: .bi
-        ),
-        Line(
-            id: "SLF",
-            name: "Site Level Financial",
-            baseURL: URL(string: APIConfig.BASE_URL)!,
-            wsURL: nil,
-            silo: .slf
         )
     ]
 

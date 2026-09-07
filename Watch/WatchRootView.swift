@@ -10,6 +10,7 @@ struct WatchRootView: View {
                 NavigationLink("Dial", destination: WatchDialView())
                 NavigationLink("Call by Voice", destination: WatchVoiceCallView())
                 NavigationLink("Contacts", destination: WatchContactsView())
+                NavigationLink("Favorites", destination: WatchFavoritesView())
                 NavigationLink("Recent Calls", destination: WatchRecentsView())
                 NavigationLink("Notifications", destination: WatchNotificationsView())
                 NavigationLink("Account", destination: WatchAccountView())
@@ -238,6 +239,56 @@ struct ConfirmCallView: View {
             do { status = try await transport.startCall(CallRequest(destination: destination, line: line, contactId: contact.id)) }
             catch let error as WatchServiceError { status = .failed; errorMessage = error.safeMessage }
             catch { status = .failed; errorMessage = "Call request failed" }
+        }
+    }
+}
+
+
+// BOREAL_DIALER_WATCH_FAVORITES_v1 - speed-dial derived from the CRM call history
+// (most-called numbers), so no new server endpoint is needed. One tap to dial.
+struct WatchFavoritesView: View {
+    @State private var favorites: [WatchRecentCall] = []
+    @State private var line: BorealLine = .BF
+    @State private var unavailable = false
+    private let service: any WatchRecentsService = DirectWatchRecentsService()
+    var body: some View {
+        List {
+            Picker("Line", selection: $line) {
+                ForEach(BorealLine.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }.font(.caption2)
+            if unavailable { Text("Favorites unavailable").font(.caption2).foregroundStyle(.secondary) }
+            if favorites.isEmpty && !unavailable {
+                Text("Call people to build favorites").font(.caption2).foregroundStyle(.secondary)
+            }
+            ForEach(favorites) { fav in
+                NavigationLink(destination: PrefilledDialView(number: fav.number)) {
+                    VStack(alignment: .leading) {
+                        Text(fav.name ?? fav.number)
+                        if fav.name != nil { Text(fav.number).font(.caption2).foregroundStyle(.secondary) }
+                    }
+                }
+            }
+        }.navigationTitle("Favorites").task(id: line) { await load() }
+    }
+    private func load() async {
+        do {
+            let recents = try await service.fetch(line: line, limit: 25)
+            var counts: [String: Int] = [:]
+            var latest: [String: WatchRecentCall] = [:]
+            for r in recents {
+                counts[r.number, default: 0] += 1
+                if let existing = latest[r.number] {
+                    if r.occurredAt > existing.occurredAt { latest[r.number] = r }
+                } else {
+                    latest[r.number] = r
+                }
+            }
+            let ranked = latest.values.sorted {
+                (counts[$0.number] ?? 0, $0.occurredAt) > (counts[$1.number] ?? 0, $1.occurredAt)
+            }
+            await MainActor.run { favorites = Array(ranked.prefix(6)); unavailable = false }
+        } catch {
+            await MainActor.run { unavailable = true }
         }
     }
 }

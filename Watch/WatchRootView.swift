@@ -8,6 +8,7 @@ struct WatchRootView: View {
             List {
                 if let call = store.companionCall { CompanionCallView(call: call) }
                 NavigationLink("Dial", destination: WatchDialView())
+                NavigationLink("Call by Voice", destination: WatchVoiceCallView())
                 NavigationLink("Contacts", destination: WatchContactsView())
                 NavigationLink("Recent Calls", destination: WatchRecentsView())
                 NavigationLink("Notifications", destination: WatchNotificationsView())
@@ -158,4 +159,85 @@ struct WatchAccountView: View {
         struct Body: Encodable { let enabled: Bool }
         _ = try await WatchAPIClient().request(path: "/watch/devices/\(session.deviceId)/standalone-routing", method: "PUT", body: JSONEncoder().encode(Body(enabled: enabled)))
     } catch let error as WatchServiceError { await MainActor.run { fallback = false; message = error.safeMessage } } catch { await MainActor.run { fallback = false; message = "Unable to update fallback" } } } }
+}
+
+
+// BOREAL_DIALER_WATCH_VOICE_v1 - "Call <name>": dictate a name (TextFieldLink uses
+// the watch dictation UI), search the CRM, then confirm the person before dialing.
+struct WatchVoiceCallView: View {
+    @State private var query = ""
+    @State private var results: [ContactSummary] = []
+    @State private var line: BorealLine = .BF
+    @State private var message: String?
+    @State private var searching = false
+    private let service: any WatchDirectoryService = DirectWatchDirectoryService()
+    var body: some View {
+        List {
+            TextFieldLink(prompt: Text("Say a name")) {
+                Label("Speak a name", systemImage: "mic.fill")
+            } onSubmit: { text in
+                query = text
+                search()
+            }
+            Picker("Line", selection: $line) {
+                ForEach(BorealLine.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }.font(.caption2)
+            if !query.isEmpty { Text("Heard: \(query)").font(.caption2).foregroundStyle(.secondary) }
+            if searching { Text("Searching…").font(.caption2).foregroundStyle(.secondary) }
+            if let message { Text(message).font(.caption2).foregroundStyle(.secondary) }
+            ForEach(results) { contact in
+                NavigationLink(destination: ConfirmCallView(contact: contact, line: line)) {
+                    VStack(alignment: .leading) {
+                        Text(contact.name)
+                        if let company = contact.company { Text(company).font(.caption2).foregroundStyle(.secondary) }
+                    }
+                }
+            }
+        }.navigationTitle("Voice Call")
+    }
+    private func search() {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard q.count >= 2 else { message = "Say a full name"; return }
+        searching = true; message = nil; results = []
+        Task {
+            do {
+                let items = try await service.search(q, line: line, limit: 10)
+                await MainActor.run { results = items; searching = false; if items.isEmpty { message = "No match for \(q)" } }
+            } catch {
+                await MainActor.run { searching = false; message = "Search unavailable" }
+            }
+        }
+    }
+}
+
+struct ConfirmCallView: View {
+    let contact: ContactSummary
+    let line: BorealLine
+    @State private var status: WatchCallStatus = .idle
+    @State private var errorMessage: String?
+    private let transport: any WatchCallTransport = ServerBridgeWatchCallTransport()
+    var body: some View {
+        List {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(contact.name).font(.headline)
+                if let company = contact.company { Text(company).font(.caption2).foregroundStyle(.secondary) }
+                Text(contact.primaryPhone).font(.caption)
+            }
+            Button { start() } label: {
+                Label("Call \(contact.name)", systemImage: "phone.fill")
+            }.buttonStyle(.borderedProminent).tint(.green).disabled(status == .requesting)
+            if status != .idle { Text(status.rawValue.capitalized).font(.caption2).foregroundStyle(.secondary) }
+            if let errorMessage { Text(errorMessage).font(.caption2).foregroundStyle(.red) }
+        }.navigationTitle("Confirm")
+    }
+    private func start() {
+        guard let destination = PhoneNumberNormalizer.normalize(contact.primaryPhone) else { errorMessage = "Invalid number"; return }
+        status = .requesting; errorMessage = nil
+        WKInterfaceDevice.current().play(.start)
+        Task {
+            do { status = try await transport.startCall(CallRequest(destination: destination, line: line, contactId: contact.id)) }
+            catch let error as WatchServiceError { status = .failed; errorMessage = error.safeMessage }
+            catch { status = .failed; errorMessage = "Call request failed" }
+        }
+    }
 }

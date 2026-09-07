@@ -65,7 +65,7 @@ struct WatchDialView: View {
                     .disabled(number.isEmpty || status == .requesting)
                 }
                 Picker("Line", selection: $line) {
-                    ForEach(BorealLine.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) }
                 }.font(.caption2)
                 if status != .idle { Text(statusText).font(.caption2).foregroundStyle(.secondary) }
                 if let errorMessage { Text(errorMessage).font(.caption2).foregroundStyle(.red) }
@@ -102,7 +102,7 @@ struct WatchContactsView: View {
     var body: some View {
         List {
             TextField("Search CRM", text: $query)
-            Picker("Line", selection: $line) { ForEach(BorealLine.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
+            Picker("Line", selection: $line) { ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) } }
             Button("Search") { search() }.disabled(query.trimmingCharacters(in: .whitespaces).count < 2)
             if let message { Text(message).font(.caption2).foregroundStyle(.secondary) }
             ForEach(results) { contact in
@@ -126,7 +126,7 @@ struct WatchRecentsView: View {
     @State private var recents: [WatchRecentCall] = []; @State private var unavailable = false
     @State private var line: BorealLine = .BF
     private let service: any WatchRecentsService = DirectWatchRecentsService()
-    var body: some View { List { Picker("Line", selection: $line) { ForEach(BorealLine.allCases, id: \.self) { Text($0.rawValue).tag($0) } }; if unavailable { Text("Recents unavailable").font(.caption) }; ForEach(recents) { recent in NavigationLink(destination: PrefilledDialView(number: recent.number)) { VStack(alignment: .leading) { Text(recent.name ?? recent.number); if recent.name != nil { Text(recent.number).font(.caption2).foregroundStyle(.secondary) } } } } }.navigationTitle("Recents").task(id: line) { do { unavailable = false; recents = try await service.fetch(line: line, limit: 25) } catch { unavailable = true } } }
+    var body: some View { List { Picker("Line", selection: $line) { ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) } }; if unavailable { Text("Recents unavailable").font(.caption) }; ForEach(recents) { recent in NavigationLink(destination: PrefilledDialView(number: recent.number)) { VStack(alignment: .leading) { Text(recent.name ?? recent.number); if recent.name != nil { Text(recent.number).font(.caption2).foregroundStyle(.secondary) } } } } }.navigationTitle("Recents").task(id: line) { do { unavailable = false; recents = try await service.fetch(line: line, limit: 25) } catch { unavailable = true } } }
 }
 
 // BOREAL_DIALER_WATCH_DISPOSITION_v1 - log a post-call outcome from the wrist:
@@ -139,7 +139,7 @@ struct WatchDispositionView: View {
     var body: some View {
         List {
             Picker("Line", selection: $line) {
-                ForEach(BorealLine.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) }
             }.font(.caption2)
             if unavailable { Text("Unavailable").font(.caption2).foregroundStyle(.secondary) }
             ForEach(recents) { recent in
@@ -246,7 +246,7 @@ struct WatchVoiceCallView: View {
                 search()
             }
             Picker("Line", selection: $line) {
-                ForEach(BorealLine.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) }
             }.font(.caption2)
             if !query.isEmpty { Text("Heard: \(query)").font(.caption2).foregroundStyle(.secondary) }
             if searching { Text("Searching…").font(.caption2).foregroundStyle(.secondary) }
@@ -319,7 +319,7 @@ struct WatchFavoritesView: View {
     var body: some View {
         List {
             Picker("Line", selection: $line) {
-                ForEach(BorealLine.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) }
             }.font(.caption2)
             if unavailable { Text("Favorites unavailable").font(.caption2).foregroundStyle(.secondary) }
             if favorites.isEmpty && !unavailable {

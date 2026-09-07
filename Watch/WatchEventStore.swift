@@ -51,7 +51,7 @@ extension WatchEventStore: WCSessionDelegate {
         // BOREAL_DIALER_WATCH_AUTOLINK_v1 - phone pushed an enrollment code; link silently.
         if let enroll = WatchPayload.decode(WatchEnrollMessage.self, from: message, key: WatchPayload.enrollKey) {
             Task { @MainActor in
-                if WatchAuthService.shared.token == nil { try? await WatchAuthService.shared.link(oneTimeCode: enroll.oneTimeCode) }
+                if await WatchAuthService.shared.token == nil { try? await WatchAuthService.shared.link(oneTimeCode: enroll.oneTimeCode) }
             }
             return
         }

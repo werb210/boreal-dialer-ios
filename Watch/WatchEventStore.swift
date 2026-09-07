@@ -48,6 +48,13 @@ extension WatchEventStore: WCSessionDelegate {
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) { handle(message) }
     nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) { handle(userInfo) }
     nonisolated private func handle(_ message: [String: Any]) {
+        // BOREAL_DIALER_WATCH_AUTOLINK_v1 - phone pushed an enrollment code; link silently.
+        if let enroll = WatchPayload.decode(WatchEnrollMessage.self, from: message, key: WatchPayload.enrollKey) {
+            Task { @MainActor in
+                if WatchAuthService.shared.token == nil { try? await WatchAuthService.shared.link(oneTimeCode: enroll.oneTimeCode) }
+            }
+            return
+        }
         guard let event = WatchPayload.decode(WatchEvent.self, from: message, key: WatchPayload.eventKey) else { return }
         Task { @MainActor in WatchEventStore.shared.ingest(event) }
     }

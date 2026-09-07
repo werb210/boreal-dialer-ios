@@ -37,9 +37,18 @@ public final class WatchBridge: NSObject {
         // needs: it is still worth seeing two minutes later.
         session.transferUserInfo(payload)
     }
+
+    // BOREAL_DIALER_WATCH_AUTOLINK_v1 - push the enrollment code to the wrist so it links itself.
+    public func sendEnrollment(_ code: String) {
+        guard let session, session.activationState == .activated else { return }
+        let payload = WatchPayload.encode(WatchEnrollMessage(oneTimeCode: code), under: WatchPayload.enrollKey)
+        guard !payload.isEmpty else { return }
+        session.transferUserInfo(payload)
+    }
 #else
     public func activate() {}
     public func send(_ event: WatchEvent) {}
+    public func sendEnrollment(_ code: String) {}
 #endif
 }
 

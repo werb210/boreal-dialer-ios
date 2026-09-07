@@ -161,6 +161,11 @@ public enum WatchAction: String, Codable, Sendable {
     case decline
 }
 
+public struct WatchEnrollMessage: Codable, Sendable, Equatable {
+    public let oneTimeCode: String
+    public init(oneTimeCode: String) { self.oneTimeCode = oneTimeCode }
+}
+
 public struct WatchActionMessage: Codable, Sendable, Equatable {
     public let action: WatchAction
     public let callId: String
@@ -174,6 +179,7 @@ public struct WatchActionMessage: Codable, Sendable, Equatable {
 public enum WatchPayload {
     public static let eventKey = "boreal.watch.event"
     public static let actionKey = "boreal.watch.action"
+    public static let enrollKey = "boreal.watch.enroll" // BOREAL_DIALER_WATCH_AUTOLINK_v1
 
     public static func encode<T: Encodable>(_ value: T, under key: String) -> [String: Any] {
         guard let data = try? JSONEncoder().encode(value) else { return [:] }

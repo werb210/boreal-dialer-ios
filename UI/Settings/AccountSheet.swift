@@ -15,6 +15,7 @@ struct AccountSheet: View {
     @State private var watchEnrollment: WatchEnrollment?
     @State private var watchEnrollmentError: String?
     @State private var generatingWatchCode = false
+    @State private var watchLinkSent = false // BOREAL_DIALER_WATCH_AUTOLINK_v1
 
     private struct WatchEnrollment: Decodable {
         let oneTimeCode: String
@@ -86,18 +87,15 @@ struct AccountSheet: View {
                 }
 
                 Section {
-                    if let enrollment = watchEnrollment, enrollment.expiresAt > Date() {
-                        Text(enrollment.oneTimeCode)
-                            .font(.system(size: 30, weight: .bold, design: .monospaced))
-                            .frame(maxWidth: .infinity)
-                            .accessibilityLabel("Apple Watch enrollment code \(enrollment.oneTimeCode)")
-                        Text("Enter this code on your Apple Watch. It expires in 5 minutes.").rowSubtitle()
+                    if watchLinkSent {
+                        Text("Your Apple Watch links automatically. Just open the Boreal app on your Watch.").rowSubtitle()
                     } else {
-                        Button(generatingWatchCode ? "Generating…" : "Link Apple Watch") { generateWatchEnrollment() }
+                        Button(generatingWatchCode ? "Linking…" : "Link Apple Watch") { generateWatchEnrollment() }
                             .disabled(generatingWatchCode)
                     }
                     if let watchEnrollmentError { Text(watchEnrollmentError).foregroundStyle(.red).font(.caption) }
                 } header: { SectionLabel(text: "Apple Watch") }
+                .onAppear { if !watchLinkSent { generateWatchEnrollment() } }
 
                 Section {
                     Button(role: .destructive) {
@@ -145,7 +143,7 @@ struct AccountSheet: View {
             let data = try await APIClient.shared.execute(request)
             let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
             let enrollment = try decoder.decode(WatchEnrollment.self, from: data)
-            await MainActor.run { watchEnrollment = enrollment; generatingWatchCode = false }
+            await MainActor.run { WatchBridge.shared.sendEnrollment(enrollment.oneTimeCode); watchLinkSent = true; generatingWatchCode = false }
         } catch { await MainActor.run { watchEnrollmentError = "Could not generate a Watch code."; generatingWatchCode = false } }
         }
     }

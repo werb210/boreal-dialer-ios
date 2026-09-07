@@ -76,10 +76,23 @@ struct ComposerBar: View {
     let placeholder: String
     @Binding var text: String
     let disabled: Bool
+    var onTemplates: (() -> Void)? = nil
     let onSend: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
+            if let onTemplates {
+                Button(action: onTemplates) {
+                    Label("Templates", systemImage: "text.badge.plus")
+                        .labelStyle(.iconOnly)
+                        .foregroundColor(Theme.green)
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(Theme.surface2))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Templates")
+            }
+
             TextField(placeholder, text: $text, axis: .vertical)
                 .lineLimit(1...5)
                 .textFieldStyle(.plain)

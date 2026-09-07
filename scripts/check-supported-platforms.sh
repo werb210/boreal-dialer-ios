@@ -39,7 +39,13 @@ if "TwilioVoice" in watch:
     raise SystemExit("TwilioVoice must not be linked to BorealDialerWatch")
 
 declared = re.findall(r"(?m)^  ([A-Za-z][A-Za-z0-9]*):\n", targets)
-allowed = {"BorealDialer", "BorealDialerTests", "BorealDialerWatch", "BorealDialerWatchTests"}
+allowed = {
+    "BorealDialer",
+    "BorealDialerTests",
+    "BorealDialerWatch",
+    "BorealDialerWatchTests",
+    "BorealDialerLiveActivity",
+}
 unexpected = sorted(set(declared) - allowed)
 if unexpected:
     raise SystemExit("Unexpected native target(s): " + ", ".join(unexpected))

@@ -44,7 +44,10 @@ final class VoiceEngine: NSObject, ObservableObject {
         }
     }
 
-    @Published private(set) var state: State = .idle
+    @Published private(set) var state: State = .idle {
+        didSet { syncLiveActivity() } // BOREAL_DIALER_LIVE_ACTIVITY_WIRE_v1
+    }
+    private var currentHandle: String = "" // BOREAL_DIALER_LIVE_ACTIVITY_WIRE_v1
     @Published private(set) var callDuration: Int = 0
     @Published var activeLine: Line = .bf
     @Published var silo: Silo = .bf
@@ -94,6 +97,7 @@ final class VoiceEngine: NSObject, ObservableObject {
         requestMicrophonePermissionIfNeeded()
         state = .dialing(uuid)
 
+        currentHandle = PhoneFormat.display(number)
         let handle = CXHandle(type: .phoneNumber, value: number)
         let start = CXStartCallAction(call: uuid, handle: handle)
         // BOREAL_DIALER_CALLKIT_IDENTITY_v38 - names the call in iOS Recents.
@@ -131,6 +135,7 @@ final class VoiceEngine: NSObject, ObservableObject {
         let uuid = UUID()
         state = .dialing(uuid)
 
+        currentHandle = displayName
         let handle = CXHandle(type: .generic, value: displayName)
         let start = CXStartCallAction(call: uuid, handle: handle)
         start.contactIdentifier = displayName
@@ -164,6 +169,7 @@ final class VoiceEngine: NSObject, ObservableObject {
         guard case .idle = state else { return }
 
         let update = CXCallUpdate()
+        currentHandle = PhoneFormat.display(handle)
         update.remoteHandle = CXHandle(type: .phoneNumber, value: handle)
         // BOREAL_DIALER_CALLKIT_IDENTITY_v38 - a readable number until the
         // contact lookup comes back. iOS shows this verbatim.
@@ -282,6 +288,20 @@ final class VoiceEngine: NSObject, ObservableObject {
         stopTimer()
         startTimer()
         state = .active(uuid)
+    }
+
+    // BOREAL_DIALER_LIVE_ACTIVITY_WIRE_v1 - one hook off state: show on connect, clear on end.
+    private func syncLiveActivity() {
+        switch state {
+        case .active:
+            CallLiveActivityController.shared.start(handle: currentHandle.isEmpty ? "Call" : currentHandle,
+                                                    line: activeLine.rawValue.uppercased(),
+                                                    status: "Connected")
+        case .idle, .ended, .failed:
+            CallLiveActivityController.shared.end()
+        default:
+            break
+        }
     }
 
     func handleFailure() {

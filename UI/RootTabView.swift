@@ -13,6 +13,7 @@ struct RootTabView: View {
     }
 
     @State private var tab: Tab = .calls
+    @ObservedObject private var deepLinks = DeepLinkCoordinator.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -79,5 +80,8 @@ struct RootTabView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .sheet(isPresented: $showAccount) { AccountSheet() }
+        .onChange(of: deepLinks.pending) { link in
+            if link != nil { tab = .calls }
+        }
     }
 }

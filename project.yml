@@ -76,6 +76,10 @@ targets:
         SentryDSN: ""
     entitlements:
       path: Config/BorealDialer.entitlements
+    attributes:
+      SystemCapabilities:
+        com.apple.ApplicationGroups.iOS:
+          enabled: 1
     dependencies:
       - package: TwilioVoice
         product: TwilioVoice
@@ -189,6 +193,12 @@ targets:
         CFBundleDisplayName: Boreal Call
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: LiveActivity/BorealCallLiveActivity.entitlements
+    attributes:
+      SystemCapabilities:
+        com.apple.ApplicationGroups.iOS:
+          enabled: 1
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer.liveactivity

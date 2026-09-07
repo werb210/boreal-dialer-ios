@@ -94,6 +94,8 @@ struct DialerView: View {
     private func applyPendingDeepLink() {
         guard let link = deepLinks.consumeWhenAuthenticated() else { return }
         switch link {
+        case .newCall:
+            number = ""
         case .phone(let phone, let start):
             number = phone
             if start, isIdle { VoiceEngine.shared.startCall(to: phone) }

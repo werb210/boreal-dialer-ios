@@ -2,6 +2,20 @@ import XCTest
 @testable import BorealDialer
 
 final class ProductionSafetyTests: XCTestCase {
+    func testWidgetCallDeepLinkStartsImmediately() {
+        XCTAssertEqual(
+            DialerDeepLinkParser.parse(URL(string: "borealdialer://call?number=%2B14035551234")!),
+            .phone("+14035551234", start: true)
+        )
+    }
+
+    func testNewCallDeepLinkOpensKeypad() {
+        XCTAssertEqual(
+            DialerDeepLinkParser.parse(URL(string: "borealdialer://new-call")!),
+            .newCall
+        )
+    }
+
     func testPhoneDeepLinkNormalizesAndDoesNotStartByDefault() {
         XCTAssertEqual(DialerDeepLinkParser.parse(URL(string: "borealdialer://call?phone=+14035551234")!),
                        .phone("+14035551234", start: false))

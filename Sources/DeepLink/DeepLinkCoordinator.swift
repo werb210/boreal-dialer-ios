@@ -4,12 +4,18 @@ import Combine
 enum DialerDeepLink: Equatable {
     case phone(String, start: Bool)
     case contact(id: String, start: Bool)
+    case newCall
 }
 
 enum DialerDeepLinkParser {
     static func parse(_ url: URL) -> DialerDeepLink? {
+        guard url.scheme?.lowercased() == "borealdialer" else { return nil }
+
+        if url.host?.lowercased() == "new-call", url.query == nil {
+            return .newCall
+        }
+
         guard
-            url.scheme?.lowercased() == "borealdialer",
             url.host?.lowercased() == "call",
             let components = URLComponents(
                 url: url,
@@ -23,6 +29,7 @@ enum DialerDeepLinkParser {
 
         let allowedNames: Set<String> = [
             "phone",
+            "number",
             "contactId",
             "start"
         ]
@@ -58,9 +65,15 @@ enum DialerDeepLinkParser {
             return nil
         }
 
+        if let rawPhone = values["number"], values.count == 1,
+           let phone = normalizedPhone(rawPhone) {
+            return .phone(phone, start: true)
+        }
+
         if
             let rawPhone = values["phone"],
             values["contactId"] == nil,
+            values["number"] == nil,
             let phone = normalizedPhone(rawPhone)
         {
             return .phone(
@@ -72,6 +85,7 @@ enum DialerDeepLinkParser {
         if
             let contactId = values["contactId"],
             values["phone"] == nil,
+            values["number"] == nil,
             !contactId.isEmpty,
             contactId.count <= 128,
             contactId.range(
@@ -88,7 +102,7 @@ enum DialerDeepLinkParser {
         return nil
     }
 
-    private static func normalizedPhone(
+    static func normalizedPhone(
         _ raw: String
     ) -> String? {
         let trimmed = raw.trimmingCharacters(

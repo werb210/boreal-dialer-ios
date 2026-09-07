@@ -36,5 +36,6 @@ struct BorealCallLiveActivity: Widget {
 struct BorealDialerWidgetsBundle: WidgetBundle {
     var body: some Widget {
         if #available(iOS 16.1, *) { BorealCallLiveActivity() }
+        BorealDialerWidget()
     }
 }

@@ -38,6 +38,7 @@ struct CallsView: View {
     }
 
     @State private var section: CallSection = .keypad
+    @ObservedObject private var deepLinks = DeepLinkCoordinator.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -64,6 +65,9 @@ struct CallsView: View {
             case .recents: RecentCallsView()
             case .voicemail: VoicemailView()
             }
+        }
+        .onChange(of: deepLinks.pending) { link in
+            if link != nil { section = .keypad }
         }
     }
 }
@@ -139,6 +143,11 @@ final class RecentCallsViewModel: ObservableObject {
             let request = try APIClient.shared.makeRequest(path: "/voice/recent-calls")
             let data = try await APIClient.shared.makeAuthorizedRequest(request)
             calls = try JSONDecoder().decode(RecentCallsEnvelope.self, from: data).items
+            WidgetSnapshotStore.save(calls.compactMap { call in
+                guard let number = call.phoneNumber,
+                      let normalized = DialerDeepLinkParser.normalizedPhone(number) else { return nil }
+                return WidgetContact(name: call.title, number: normalized)
+            })
         } catch {
             self.error = "Could not load recent calls."
         }

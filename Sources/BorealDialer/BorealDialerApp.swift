@@ -69,6 +69,7 @@ struct BorealDialerApp: App {
             }
             .onChange(of: scenePhase) { phase in
                 if phase == .active {
+                    WidgetSnapshotStore.refreshStoredSnapshot()
                     Task {
                         await OfflineQueue.shared.flush()
                         // BOREAL_DIALER_PRESENCE_v41
@@ -89,6 +90,11 @@ struct BorealDialerApp: App {
 }
 
 final class DialerAppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ app: UIApplication, open url: URL,
+                     options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+        DeepLinkCoordinator.shared.receive(url)
+    }
+
     func application(_ application: UIApplication,
                      didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         Task { @MainActor in

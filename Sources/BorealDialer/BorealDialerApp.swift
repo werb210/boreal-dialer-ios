@@ -72,6 +72,8 @@ struct BorealDialerApp: App {
                     WidgetSnapshotStore.refreshStoredSnapshot()
                     Task {
                         await OfflineQueue.shared.flush()
+                        await CallDirectoryManager.shared.refresh()
+                        CallDirectoryManager.shared.updateEnabledStatus()
                         // BOREAL_DIALER_PRESENCE_v41
                         PresenceHeartbeat.shared.start()
                     }

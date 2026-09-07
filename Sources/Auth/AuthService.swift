@@ -25,6 +25,8 @@ final class AuthService: ObservableObject {
             self.isAuthenticated = true
         }
 
+        Task { await CallDirectoryManager.shared.refresh() }
+
         if shouldInitializeVoice(from: token) {
             // BOREAL_DIALER_SDK_AND_ISOLATION_v5 - PushManager is main-actor.
             await MainActor.run { PushManager.shared.register() }

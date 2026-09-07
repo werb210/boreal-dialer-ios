@@ -18,6 +18,7 @@ def target_block(name: str) -> str:
 
 phone = target_block("BorealDialer")
 watch = target_block("BorealDialerWatch")
+call_directory = target_block("BorealDialerCallDirectory")
 
 checks = [
     ('platform: iOS', phone, "BorealDialer must remain an iOS target"),
@@ -28,6 +29,9 @@ checks = [
     ('PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer.watchkitapp', watch, "Watch bundle ID changed"),
     ('WKRunsIndependentlyOfCompanionApp: true', watch, "independent Watch mode was disabled"),
     ('WKCompanionAppBundleIdentifier: financial.boreal.dialer', watch, "Watch companion ID changed"),
+    ('platform: iOS', call_directory, "Call Directory must remain an iOS target"),
+    ('PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer.calldirectory', call_directory, "Call Directory bundle ID changed"),
+    ('NSExtensionPointIdentifier: com.apple.callkit.call-directory', call_directory, "Call Directory extension point changed"),
 ]
 for expected, block, message in checks:
     if expected not in block:
@@ -45,6 +49,7 @@ allowed = {
     "BorealDialerWatch",
     "BorealDialerWatchTests",
     "BorealDialerLiveActivity",
+    "BorealDialerCallDirectory",
 }
 unexpected = sorted(set(declared) - allowed)
 if unexpected:

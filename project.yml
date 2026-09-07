@@ -35,6 +35,10 @@ schemes:
     test:
       targets:
         - BorealDialerTests
+  BorealDialerCallDirectory:
+    build:
+      targets:
+        BorealDialerCallDirectory: all
 
 targets:
   BorealDialer:
@@ -76,6 +80,10 @@ targets:
         SentryDSN: ""
     entitlements:
       path: Config/BorealDialer.entitlements
+      properties:
+        aps-environment: development
+        com.apple.security.application-groups:
+          - group.financial.boreal.dialer
     attributes:
       SystemCapabilities:
         com.apple.ApplicationGroups.iOS:
@@ -86,6 +94,7 @@ targets:
       - package: Sentry
         product: Sentry
       - target: BorealDialerLiveActivity
+      - target: BorealDialerCallDirectory
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer
@@ -158,6 +167,8 @@ targets:
         BorealAPIBaseURL: https://server.boreal.financial/api
     entitlements:
       path: Watch/BorealWatch.entitlements
+      properties:
+        aps-environment: development
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer.watchkitapp
@@ -195,6 +206,9 @@ targets:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
       path: LiveActivity/BorealCallLiveActivity.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.financial.boreal.dialer
     attributes:
       SystemCapabilities:
         com.apple.ApplicationGroups.iOS:
@@ -202,4 +216,34 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer.liveactivity
+        GENERATE_INFOPLIST_FILE: NO
+
+  BorealDialerCallDirectory:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: CallDirectory
+      - path: Sources/Shared/CallDirectoryStore.swift
+    info:
+      path: CallDirectory/Info.plist
+      properties:
+        CFBundleDisplayName: Boreal Caller ID
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.callkit.call-directory
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).CallDirectoryProvider
+    entitlements:
+      path: CallDirectory/BorealDialerCallDirectory.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.financial.boreal.dialer
+    attributes:
+      SystemCapabilities:
+        com.apple.ApplicationGroups.iOS:
+          enabled: 1
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer.calldirectory
+        SWIFT_VERSION: 5.9
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: NO

@@ -171,6 +171,8 @@ targets:
       path: Watch/BorealWatch.entitlements
       properties:
         aps-environment: development
+        com.apple.security.application-groups:
+          - group.financial.boreal.dialer
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer.watchkitapp
@@ -186,6 +188,28 @@ targets:
     deploymentTarget: "10.0"
     sources:
       - path: WatchWidget
+    # INFOPLIST_KEY_NSExtensionPointIdentifier is not a real build setting --
+    # Xcode only honours a fixed allowlist of INFOPLIST_KEY_* keys and silently
+    # drops the rest. The generated plist had no NSExtension dictionary, so the
+    # simulator rejected the .appex at install with "extensionDictionary must be
+    # set in placeholder attributes". BorealDialerLiveActivity below is the
+    # working pattern: XcodeGen writes the plist from these properties.
+    info:
+      path: WatchWidget/Info.plist
+      properties:
+        CFBundleDisplayName: Boreal
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    # The provider reads UserDefaults(suiteName:) for its snapshot; without the
+    # group entitlement that read returns nil and every complication renders the
+    # placeholder. The group already exists -- LiveActivity declares it.
+    entitlements:
+      path: WatchWidget/BorealWatchWidget.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.financial.boreal.dialer
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer.watchkitapp.widget
@@ -193,9 +217,7 @@ targets:
         SWIFT_VERSION: "5.9"
         TARGETED_DEVICE_FAMILY: "4"
         CODE_SIGN_STYLE: Automatic
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Boreal
-        INFOPLIST_KEY_NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        GENERATE_INFOPLIST_FILE: NO
 
   # BOREAL_DIALER_TESTS_v40 - the repo had no test target at all.
   BorealDialerTests:

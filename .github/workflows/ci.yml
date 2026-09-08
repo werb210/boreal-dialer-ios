@@ -83,6 +83,7 @@ jobs:
 
       # BOREAL_DIALER_WATCH_v55 - the watch target is only real if it builds.
       - name: Build watch app
+        id: watch-build
         run: |
           set -o pipefail
           xcodebuild \
@@ -94,12 +95,18 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             clean build 2>&1 | tee /tmp/xcodebuild-watch.log
+          # BOREAL_DIALER_CI_TRUTHFUL_v1 - downstream steps and the job summary
+          # need to distinguish a compile failure from a launch failure. Without
+          # this the summary blamed the simulator destination list for what were
+          # Swift errors two steps earlier.
+          echo "watch_built=true" >> "$GITHUB_OUTPUT"
 
       - name: Verify supported native platforms
         run: ./scripts/check-supported-platforms.sh
 
       - name: Resolve a watch simulator destination
         id: watch-sim
+        if: steps.watch-build.outputs.watch_built == 'true'
         run: |
           set -o pipefail
           xcodebuild \
@@ -152,6 +159,18 @@ jobs:
         run: |
           echo "## Watch test failures" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
+          # BOREAL_DIALER_CI_TRUTHFUL_v1 - report the failure that happened.
+          if grep -qE "error: " /tmp/xcodebuild-watch.log 2>/dev/null; then
+            echo "### Watch app did not compile" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            grep -E "error: " /tmp/xcodebuild-watch.log | head -20 >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "Tests were not attempted. The destination list is not relevant." >> "$GITHUB_STEP_SUMMARY"
+          elif test ! -f /tmp/xcodebuild-watch-test.log; then
+            echo "### Watch tests never started" >> "$GITHUB_STEP_SUMMARY"
+            echo "The app compiled but the test run produced no log." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
           if test -f /tmp/xcodebuild-watch-test.log; then
             grep -Ei "error:|failed|Failing tests" /tmp/xcodebuild-watch-test.log | head -60 \
               | tee -a "$GITHUB_STEP_SUMMARY" \

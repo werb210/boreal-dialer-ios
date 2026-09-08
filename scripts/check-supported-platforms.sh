@@ -19,6 +19,7 @@ def target_block(name: str) -> str:
 phone = target_block("BorealDialer")
 watch = target_block("BorealDialerWatch")
 call_directory = target_block("BorealDialerCallDirectory")
+watch_widget = target_block("BorealWatchWidget")
 
 checks = [
     ('platform: iOS', phone, "BorealDialer must remain an iOS target"),
@@ -32,6 +33,10 @@ checks = [
     ('platform: iOS', call_directory, "Call Directory must remain an iOS target"),
     ('PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer.calldirectory', call_directory, "Call Directory bundle ID changed"),
     ('NSExtensionPointIdentifier: com.apple.callkit.call-directory', call_directory, "Call Directory extension point changed"),
+    ('platform: watchOS', watch_widget, "Watch widget must remain a watchOS target"),
+    ('TARGETED_DEVICE_FAMILY: "4"', watch_widget, "Watch widget must remain Watch-only"),
+    ('PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer.watchkitapp.widget', watch_widget, "Watch widget bundle ID changed"),
+    ('INFOPLIST_KEY_NSExtensionPointIdentifier: com.apple.widgetkit-extension', watch_widget, "Watch widget extension point changed"),
 ]
 for expected, block, message in checks:
     if expected not in block:
@@ -48,6 +53,7 @@ allowed = {
     "BorealDialerTests",
     "BorealDialerWatch",
     "BorealDialerWatchTests",
+    "BorealWatchWidget",
     "BorealDialerLiveActivity",
     "BorealDialerCallDirectory",
 }

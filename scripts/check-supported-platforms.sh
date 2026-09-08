@@ -36,7 +36,7 @@ checks = [
     ('platform: watchOS', watch_widget, "Watch widget must remain a watchOS target"),
     ('TARGETED_DEVICE_FAMILY: "4"', watch_widget, "Watch widget must remain Watch-only"),
     ('PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer.watchkitapp.widget', watch_widget, "Watch widget bundle ID changed"),
-    ('INFOPLIST_KEY_NSExtensionPointIdentifier: com.apple.widgetkit-extension', watch_widget, "Watch widget extension point changed"),
+    ('NSExtensionPointIdentifier: com.apple.widgetkit-extension', watch_widget, "Watch widget extension point changed"),
 ]
 for expected, block, message in checks:
     if expected not in block:

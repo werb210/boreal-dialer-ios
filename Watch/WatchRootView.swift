@@ -357,9 +357,13 @@ struct WatchAccountView: View {
             Text("On your iPhone, open Boreal Dialer → Settings → Account → Link Apple Watch. This Watch links itself.")
                 .font(.caption2).foregroundStyle(.secondary)
             Text("Waiting for iPhone…").font(.caption2).foregroundStyle(.tertiary)
-            DisclosureGroup("Enter code manually") {
-                TextField("8-digit code", text: $code)
-                Button("Link") { Task { do { try await WatchAuthService.shared.link(oneTimeCode: code); await MainActor.run { code = ""; linked = true; message = nil } } catch let error as WatchServiceError { await MainActor.run { message = error.safeMessage } } catch { await MainActor.run { message = "Unable to link Watch" } } } }.disabled(code.count != 8)
+            // BOREAL_DIALER_WATCH_LINK_COPY_v2 - v1 used DisclosureGroup, which
+            // SwiftUI marks unavailable on watchOS; the target would not
+            // compile. A NavigationLink to a small screen is the watchOS
+            // pattern for a rarely-needed secondary path, and reads better on
+            // a 40mm display than an inline expanding field.
+            NavigationLink("Enter code manually") {
+                WatchManualLinkView(linked: $linked, message: $message)
             }.font(.caption2)
         }
         if let message { Text(message).font(.caption).foregroundStyle(.secondary) }
@@ -499,5 +503,37 @@ struct WatchFavoritesView: View {
         } catch {
             await MainActor.run { unavailable = true }
         }
+    }
+}
+
+
+// BOREAL_DIALER_WATCH_LINK_COPY_v2
+// Fallback only: the phone normally pushes the code over WCSession and
+// WatchEventStore links silently. This exists for a phone that is off or out
+// of range.
+struct WatchManualLinkView: View {
+    @Binding var linked: Bool
+    @Binding var message: String?
+    @Environment(\.dismiss) private var dismiss
+    @State private var code = ""
+
+    var body: some View {
+        List {
+            TextField("8-digit code", text: $code)
+            Button("Link") {
+                Task {
+                    do {
+                        try await WatchAuthService.shared.link(oneTimeCode: code)
+                        await MainActor.run { code = ""; linked = true; message = nil; dismiss() }
+                    } catch let error as WatchServiceError {
+                        await MainActor.run { message = error.safeMessage }
+                    } catch {
+                        await MainActor.run { message = "Unable to link Watch" }
+                    }
+                }
+            }.disabled(code.count != 8)
+            if let message { Text(message).font(.caption2).foregroundStyle(.secondary) }
+        }
+        .navigationTitle("Manual link")
     }
 }

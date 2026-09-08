@@ -11,15 +11,22 @@ public final class InCallControlRelay {
     public static let shared = InCallControlRelay()
     private init() {}
 
-    /// Set by the call layer while a conference is live; nil between calls.
-    public var activeConferenceId: String?
-    public var activeParticipantId: String?
+    // BOREAL_DIALER_WATCH_INCALL_v2
+    // v1 declared its own copies of these and nothing ever set them, so mute
+    // silently did nothing. ConferenceSession already publishes conferenceId
+    // and selfParticipantId and is maintained by the call layer; read from it
+    // rather than mirroring state that can drift out of sync with the call.
+    weak var session: ConferenceSession?
+
+    /// Only the DTMF path needs a raw Twilio call SID, which the conference
+    /// session does not carry. Set by the voice layer when a call connects.
     public var activeCallSid: String?
 
     public func perform(_ message: WatchInCallMessage) async {
         switch message.control {
         case .mute, .unmute:
-            guard let conferenceId = activeConferenceId, let participantId = activeParticipantId else { return }
+            guard let conferenceId = session?.conferenceId,
+                  let participantId = session?.selfParticipantId else { return }
             await post(path: "/voice/conferences/\(conferenceId)/participants/\(participantId)/mute",
                        body: ["muted": message.control == .mute])
         case .dtmf:
@@ -30,7 +37,7 @@ public final class InCallControlRelay {
     }
 
     private func post(path: String, body: [String: Any]) async {
-        guard let url = URL(string: APIConfig.baseURL + path),
+        guard let url = URL(string: APIConfig.BASE_URL + path),
               let payload = try? JSONSerialization.data(withJSONObject: body) else { return }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"

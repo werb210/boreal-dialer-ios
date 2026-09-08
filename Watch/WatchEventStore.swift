@@ -39,6 +39,19 @@ final class WatchEventStore: NSObject, ObservableObject {
 #endif
         companionCall = nil
     }
+    // BOREAL_DIALER_WATCH_INCALL_v1 - relayed to the phone, which holds the
+    // conference and participant ids the mute endpoint requires.
+    func sendInCallControl(_ control: WatchInCallControl, digits: String? = nil) {
+        guard let call = companionCall else { return }
+#if canImport(WatchConnectivity)
+        let payload = WatchPayload.encode(
+            WatchInCallMessage(control: control, callId: call.callId, digits: digits),
+            under: WatchPayload.inCallKey)
+        guard !payload.isEmpty, WCSession.default.activationState == .activated else { return }
+        WCSession.default.sendMessage(payload, replyHandler: nil, errorHandler: nil)
+#endif
+    }
+
     func clearSensitiveData() { events.removeAll(); companionCall = nil; route = .home }
 }
 

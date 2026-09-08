@@ -65,6 +65,14 @@ extension WatchBridge: WCSessionDelegate {
     }
 
     nonisolated public func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        // BOREAL_DIALER_WATCH_INCALL_v1 - the wrist asked for mute or a digit.
+        // The phone owns the conference and participant ids these endpoints
+        // need; the Watch only knows a callId.
+        if let control = WatchPayload.decode(WatchInCallMessage.self, from: message,
+                                             key: WatchPayload.inCallKey) {
+            Task { @MainActor in await InCallControlRelay.shared.perform(control) }
+            return
+        }
         guard let action = WatchPayload.decode(WatchActionMessage.self, from: message,
                                                key: WatchPayload.actionKey) else { return }
         Task { @MainActor in

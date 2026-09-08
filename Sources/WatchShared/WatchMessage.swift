@@ -180,6 +180,7 @@ public enum WatchPayload {
     public static let eventKey = "boreal.watch.event"
     public static let actionKey = "boreal.watch.action"
     public static let enrollKey = "boreal.watch.enroll" // BOREAL_DIALER_WATCH_AUTOLINK_v1
+    public static let inCallKey = "boreal.watch.incall" // BOREAL_DIALER_WATCH_INCALL_v1
 
     public static func encode<T: Encodable>(_ value: T, under key: String) -> [String: Any] {
         guard let data = try? JSONEncoder().encode(value) else { return [:] }
@@ -189,5 +190,29 @@ public enum WatchPayload {
     public static func decode<T: Decodable>(_ type: T.Type, from message: [String: Any], key: String) -> T? {
         guard let data = message[key] as? Data else { return nil }
         return try? JSONDecoder().decode(type, from: data)
+    }
+}
+
+// BOREAL_DIALER_WATCH_INCALL_v1
+// Mute needs a conference id and a participant id. The Watch has neither --
+// it only knows a callId -- and the phone already holds both, so mute is
+// relayed rather than called directly. DTMF needs only the callSid, but it is
+// relayed too so both controls behave identically when the phone is out of
+// range: the button simply does nothing rather than half-working.
+public enum WatchInCallControl: String, Codable, Sendable, Equatable {
+    case mute
+    case unmute
+    case dtmf
+}
+
+public struct WatchInCallMessage: Codable, Sendable, Equatable {
+    public let control: WatchInCallControl
+    public let callId: String
+    public let digits: String?
+
+    public init(control: WatchInCallControl, callId: String, digits: String? = nil) {
+        self.control = control
+        self.callId = callId
+        self.digits = digits
     }
 }

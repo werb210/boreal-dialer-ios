@@ -309,7 +309,32 @@ struct WatchNotificationsView: View {
 struct CompanionCallView: View {
     let call: WatchEvent
     @EnvironmentObject private var store: WatchEventStore
-    var body: some View { Section("iPhone call") { Text(call.subtitle); HStack { Button { store.sendCompanionAction(.decline) } label: { Image(systemName: "phone.down.fill") }.tint(.red); Button { store.sendCompanionAction(.answer) } label: { Image(systemName: "phone.fill") }.tint(.green) }; Text("Controlled by nearby iPhone").font(.caption2).foregroundStyle(.secondary) } }
+    // BOREAL_DIALER_WATCH_INCALL_v1 - mute and keypad during an active call.
+    @State private var muted = false
+    @State private var showingKeypad = false
+    var body: some View { Section("iPhone call") {
+        Text(call.subtitle)
+        HStack {
+            Button { store.sendCompanionAction(.decline) } label: { Image(systemName: "phone.down.fill") }.tint(.red)
+            Button { store.sendCompanionAction(.answer) } label: { Image(systemName: "phone.fill") }.tint(.green)
+        }
+        HStack {
+            Button {
+                muted.toggle()
+                store.sendInCallControl(muted ? .mute : .unmute)
+            } label: {
+                Image(systemName: muted ? "mic.slash.fill" : "mic.fill")
+            }.tint(muted ? .orange : .gray)
+            Button { showingKeypad = true } label: { Image(systemName: "circle.grid.3x3.fill") }.tint(.gray)
+        }
+        Text("Controlled by nearby iPhone").font(.caption2).foregroundStyle(.secondary)
+    }.sheet(isPresented: $showingKeypad) {
+        List {
+            ForEach(["1","2","3","4","5","6","7","8","9","*","0","#"], id: \.self) { key in
+                Button(key) { store.sendInCallControl(.dtmf, digits: key) }
+            }
+        }.navigationTitle("Keypad")
+    } }
 }
 
 struct WatchAccountView: View {

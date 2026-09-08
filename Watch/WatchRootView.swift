@@ -322,9 +322,20 @@ struct WatchAccountView: View {
             Toggle("Standalone cellular fallback", isOn: $fallback).onChange(of: fallback) { enabled in updateRouting(enabled) }
             Button("Sign Out", role: .destructive) { Task { do { try await WatchAuthService.shared.logout(client: WatchAPIClient()); await MainActor.run { store.clearSensitiveData(); linked = false; message = "Signed out on this Watch" } } catch { await MainActor.run { message = "Could not revoke this Watch. Try again." } } } }
         } else {
+            // BOREAL_DIALER_WATCH_LINK_COPY_v1
+            // Auto-link already works: AccountSheet.swift:163 sends the code
+            // over WCSession and WatchEventStore.handle() links silently. This
+            // screen previously led with a bare code field, which made the
+            // supported path look unavailable. Say where the code comes from;
+            // keep manual entry collapsed for an out-of-range phone.
             Text("Link this Apple Watch").font(.headline)
-            TextField("8-digit code", text: $code)
-            Button("Link") { Task { do { try await WatchAuthService.shared.link(oneTimeCode: code); await MainActor.run { code = ""; linked = true; message = nil } } catch let error as WatchServiceError { await MainActor.run { message = error.safeMessage } } catch { await MainActor.run { message = "Unable to link Watch" } } } }.disabled(code.count != 8)
+            Text("On your iPhone, open Boreal Dialer → Settings → Account → Link Apple Watch. This Watch links itself.")
+                .font(.caption2).foregroundStyle(.secondary)
+            Text("Waiting for iPhone…").font(.caption2).foregroundStyle(.tertiary)
+            DisclosureGroup("Enter code manually") {
+                TextField("8-digit code", text: $code)
+                Button("Link") { Task { do { try await WatchAuthService.shared.link(oneTimeCode: code); await MainActor.run { code = ""; linked = true; message = nil } } catch let error as WatchServiceError { await MainActor.run { message = error.safeMessage } } catch { await MainActor.run { message = "Unable to link Watch" } } } }.disabled(code.count != 8)
+            }.font(.caption2)
         }
         if let message { Text(message).font(.caption).foregroundStyle(.secondary) }
     }.navigationTitle("Account").task { linked = await WatchAuthService.shared.restore(); if linked { try? await WatchAPIClient().registerDevice() } } }

@@ -4,6 +4,11 @@ import Foundation
 /// Server-backed state for calls that were placed as controllable conferences.
 @MainActor
 final class ConferenceSession: ObservableObject {
+    // BOREAL_DIALER_WATCH_INCALL_v2 - the wrist's mute button resolves its
+    // conference and participant ids through this session.
+    private func publishToWatchRelay() {
+        Task { @MainActor in InCallControlRelay.shared.session = self }
+    }
     static let shared = ConferenceSession()
 
     @Published private(set) var conferenceId: String?
@@ -19,7 +24,9 @@ final class ConferenceSession: ObservableObject {
 
     var isActive: Bool { conferenceId != nil }
 
-    private init() {}
+    private init() {
+        publishToWatchRelay()
+    }
 
     struct ConferenceParticipant: Identifiable, Decodable, Hashable {
         let id: String

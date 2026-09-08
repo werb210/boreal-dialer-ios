@@ -12,6 +12,9 @@ checks = [
     ("Sources/Voice/WatchBridge.swift", "WatchInCallMessage", "phone does not receive controls"),
     ("Sources/Voice/InCallControlRelay.swift", "/dtmf", "relay does not call the DTMF endpoint"),
     ("Sources/Voice/InCallControlRelay.swift", "/mute", "relay does not call the mute endpoint"),
+    # v1 shipped fields nothing ever populated; mute no-opped in silence.
+    ("Sources/Voice/InCallControlRelay.swift", "session?.conferenceId", "relay is not reading live conference state"),
+    ("Sources/Voice/InCallControlRelay.swift", "APIConfig.BASE_URL", "relay uses a base URL that does not exist"),
 ]
 bad = [f"{p}: {w}" for p, n, w in checks if n not in open(p).read()]
 if bad:

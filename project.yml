@@ -165,6 +165,8 @@ targets:
         WKCompanionAppBundleIdentifier: financial.boreal.dialer
         WKRunsIndependentlyOfCompanionApp: true
         BorealAPIBaseURL: https://server.boreal.financial/api
+    dependencies:
+      - target: BorealWatchWidget
     entitlements:
       path: Watch/BorealWatch.entitlements
       properties:
@@ -177,6 +179,23 @@ targets:
         TARGETED_DEVICE_FAMILY: "4"
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: NO
+
+  BorealWatchWidget:
+    type: app-extension
+    platform: watchOS
+    deploymentTarget: "10.0"
+    sources:
+      - path: WatchWidget
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer.watchkitapp.widget
+        PRODUCT_MODULE_NAME: BorealWatchWidget
+        SWIFT_VERSION: "5.9"
+        TARGETED_DEVICE_FAMILY: "4"
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Boreal
+        INFOPLIST_KEY_NSExtensionPointIdentifier: com.apple.widgetkit-extension
 
   # BOREAL_DIALER_TESTS_v40 - the repo had no test target at all.
   BorealDialerTests:

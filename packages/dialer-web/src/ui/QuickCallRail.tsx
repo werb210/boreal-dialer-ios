@@ -4,6 +4,9 @@ import {
   fetchQuickCall,
   pinnedStaff,
   startInternalCall,
+  saveQuickCallSlots,
+  withSlot,
+  QUICK_CALL_SLOTS,
   displayNameOf,
   initialsOf,
   isCallable,
@@ -15,6 +18,7 @@ import { setUiError } from "../telephony/state/callStore";
 export default function QuickCallRail() {
   const [data, setData] = useState<QuickCallData | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -26,7 +30,17 @@ export default function QuickCallRail() {
   }, []);
 
   const staff = pinnedStaff(data);
-  if (staff.length === 0) return null;
+  const pick = async (index: number, userId: string) => {
+    if (!data) return;
+    const slots = withSlot(data.slots, index, userId || null);
+    setData({ ...data, slots });
+    await saveQuickCallSlots(slots);
+  };
+  if (editing && data) return <div className="bd-rail-edit">
+    {Array.from({ length: QUICK_CALL_SLOTS }).map((_, index) => <select key={index} className="bd-qc-select" value={data.slots[index] ?? ""} onChange={(event) => void pick(index, event.target.value)}><option value="">Empty</option>{data.staff.map((member) => <option key={member.user_id} value={member.user_id}>{displayNameOf(member)}</option>)}</select>)}
+    <button type="button" className="bd-qc-done" onClick={() => setEditing(false)}>Done</button>
+  </div>;
+  if (staff.length === 0) return data ? <div className="bd-rail-empty"><button type="button" className="bd-qc-edit" onClick={() => setEditing(true)}>Pin staff for quick call</button></div> : null;
 
   const ring = async (member: QuickCallStaff) => {
     setBusy(member.user_id);
@@ -57,6 +71,7 @@ export default function QuickCallRail() {
           <span className="bd-lbl">{displayNameOf(member)}</span>
         </button>
       ))}
+      <button type="button" className="bd-qc-edit" onClick={() => setEditing(true)}>Edit</button>
     </div>
   );
 }

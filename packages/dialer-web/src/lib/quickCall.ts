@@ -97,3 +97,21 @@ export async function startInternalCall(
     return { ok: false, error: error instanceof Error ? error.message : "call_setup_failed" };
   }
 }
+
+
+// BOREAL_DIALER_QUICK_CALL_EDIT_v154
+export async function saveQuickCallSlots(slots: string[]): Promise<boolean> {
+  try {
+    const raw = await apiPost<any>("/api/telephony/quick-call", { slots: slots.filter(Boolean).slice(0, QUICK_CALL_SLOTS) });
+    const body = raw?.data ?? raw;
+    return body?.ok !== false;
+  } catch { return false; }
+}
+
+export function withSlot(slots: string[], index: number, userId: string | null): string[] {
+  const next = slots.slice(0, QUICK_CALL_SLOTS);
+  while (next.length < QUICK_CALL_SLOTS) next.push("");
+  if (userId) for (let i = 0; i < next.length; i += 1) if (i !== index && next[i] === userId) next[i] = "";
+  next[index] = userId ?? "";
+  return next;
+}

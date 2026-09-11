@@ -79,3 +79,12 @@ describe("BOREAL_DIALER_QUICK_CALL_STAFF_v149", () => {
     expect(src).not.toContain('className="bd-qc"');
   });
 });
+
+describe("BOREAL_DIALER_QUICK_CALL_EDIT_v154", () => {
+  it("sets, moves, and clears slots", async () => {
+    const { withSlot } = await import("../quickCall");
+    expect(withSlot(["a", "b", "c"], 1, "z")).toEqual(["a", "z", "c"]);
+    expect(withSlot(["a", "b", "c"], 2, "a")).toEqual(["", "b", "a"]);
+    expect(withSlot(["a", "b", "c"], 0, null)).toEqual(["", "b", "c"]);
+  });
+});

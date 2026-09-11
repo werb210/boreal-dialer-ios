@@ -14,6 +14,8 @@ import { api } from "../../network/api";
 import { API_ENDPOINTS } from "../../constants/endpoints";
 import { clearAuth, registerAuthResetter } from "../../auth/useDialerAuth";
 import { isTokenExpired } from "../../auth/token";
+// BOREAL_DIALER_POSTCALL_MOUNT_v161
+import { noteCallEnded } from "../../lib/lastCall";
 
 let device: Device | null = null;
 let deviceReady = false;
@@ -315,7 +317,15 @@ export function rejectIncomingCall() {
 }
 
 export function hangupCall() {
-  const { activeCall } = getCallStoreState();
+  const { activeCall, callStatus } = getCallStoreState();
+  // BOREAL_DIALER_POSTCALL_MOUNT_v161 - capture what just ended before the
+  // handle is dropped. Only a call that actually connected is offered for
+  // disposition; a ring that never answered already has its outcome.
+  noteCallEnded({
+    sid: (activeCall as { parameters?: Record<string, string> } | null)?.parameters?.CallSid,
+    contactName: (activeCall as { parameters?: Record<string, string> } | null)?.parameters?.To,
+    connected: callStatus === "in-call",
+  });
   activeCall?.disconnect();
   setActiveCall(null);
   setCallStatus("ended");

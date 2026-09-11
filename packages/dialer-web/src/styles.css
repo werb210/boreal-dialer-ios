@@ -58,3 +58,7 @@ body{margin:0;color:var(--text);
 .bd-postcall{padding:18px 16px 22px;border-top:1px solid var(--line);background:var(--surface)}.bd-postcall-title{margin:0 0 14px;font-size:17px}.bd-postcall-msg{color:var(--green)}.bd-postcall-opts{display:grid;gap:8px}.bd-postcall-opt{display:flex;justify-content:space-between;padding:13px 15px;border:1px solid var(--line2);border-radius:12px;background:transparent;color:var(--text);font-size:16px}.bd-postcall-opt small{color:var(--muted)}.bd-postcall-skip{margin-top:14px;width:100%;background:none;border:none;color:var(--muted);padding:10px}
 /* BOREAL_DIALER_QUICK_CALL_EDIT_v154 */
 .bd-rail-edit{display:flex;gap:8px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}.bd-qc-select{background:var(--surface2);color:var(--text);border:1px solid var(--line2);border-radius:10px;padding:8px 10px;flex:1 1 30%;min-width:0}.bd-qc-done,.bd-qc-edit{background:none;border:none;color:var(--green);padding:8px}.bd-rail-empty{padding:10px 16px;border-bottom:1px solid var(--line)}
+
+/* BOREAL_DIALER_SNIPPETS_v156 */
+.bd-composer-tools{display:flex;gap:8px;margin:8px 0}
+.bd-tool-select{flex:1 1 0;min-width:0;background:var(--surface2);color:var(--text);border:1px solid var(--line2);border-radius:10px;padding:9px 10px;font-size:14px}

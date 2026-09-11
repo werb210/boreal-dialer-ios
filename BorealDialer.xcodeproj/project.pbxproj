@@ -49,6 +49,7 @@
 		5A0F4E9103456B7CD0DD342D /* TeamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED3AF9BCCB21BD6C7875C32B /* TeamView.swift */; };
 		5C3C583723C950A9DFE2CB16 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA927BB104E56D82A8FCEB1C /* LoginView.swift */; };
 		5D46E51B3E6D8081E687131E /* WatchBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA9DC1043B2B2F2C8F37302D /* WatchBridge.swift */; };
+		5D46E51B3E6D8081E6871320 /* InCallControlRelay.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA9DC1043B2B2F2C8F373020 /* InCallControlRelay.swift */; };
 		5F0E8366BE7D0672A95FFF22 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 84F37D20153CA01BBBAE24E0 /* PrivacyInfo.xcprivacy */; };
 		6214BA7D2E4B05120D964EEF /* WatchCallTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3F1295998B63A8CE4A972D7 /* WatchCallTransportTests.swift */; };
 		62196631D89BCA3B547B30EF /* TeamRosterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DFB9D60AC6395C0ADE6B301 /* TeamRosterTests.swift */; };
@@ -278,6 +279,7 @@
 		E40E80468EF9D3C8C0DA2EBC /* Silo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Silo.swift; sourceTree = "<group>"; };
 		E8D91F685FE02F5ABA3D5AC4 /* ContactsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsView.swift; sourceTree = "<group>"; };
 		EA9DC1043B2B2F2C8F37302D /* WatchBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchBridge.swift; sourceTree = "<group>"; };
+		EA9DC1043B2B2F2C8F373020 /* InCallControlRelay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InCallControlRelay.swift; sourceTree = "<group>"; };
 		EAC665A3862E122B2C272420 /* VoiceEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceEngine.swift; sourceTree = "<group>"; };
 		ED3AF9BCCB21BD6C7875C32B /* TeamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamView.swift; sourceTree = "<group>"; };
 		EDD572E3CE82A2E34CB3BDDD /* TwilioVoiceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TwilioVoiceManager.swift; sourceTree = "<group>"; };
@@ -426,6 +428,7 @@
 				63D08B5C11C9BD0D1F9ADDE0 /* VoiceService.swift */,
 				06623867F85D7E727854BF87 /* VoIPPushManager.swift */,
 				EA9DC1043B2B2F2C8F37302D /* WatchBridge.swift */,
+				EA9DC1043B2B2F2C8F373020 /* InCallControlRelay.swift */,
 				4E52417D6428FBC09AF7DD50 /* Models */,
 				1E7FBA3AE2EC931E59BCF835 /* Services */,
 			);
@@ -1066,6 +1069,7 @@
 				7D8240388A2D578A78F50ECA /* VoiceManager.swift in Sources */,
 				8FDE9AB2B93EDC66E794C2D5 /* VoiceService.swift in Sources */,
 				5D46E51B3E6D8081E687131E /* WatchBridge.swift in Sources */,
+				5D46E51B3E6D8081E6871320 /* InCallControlRelay.swift in Sources */,
 				FE5548F12D6AFD2B26777E8E /* WatchMessage.swift in Sources */,
 				82DD3321BDC707D9BD907D50 /* WidgetSnapshot.swift in Sources */,
 			);

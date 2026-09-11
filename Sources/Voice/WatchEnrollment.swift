@@ -14,6 +14,24 @@ import Foundation
 // could not place a call, and could not receive one: all three paths go
 // through an authenticated WatchAPIClient.
 
+// BOREAL_DIALER_WATCH_ENROLL_FIX_v150
+// @MainActor on the enclosing class propagated to its static members and nested
+// types, so WatchEnrollment.parse(_:) was main-actor-isolated and could not be
+// called from a synchronous XCTestCase method — six compile errors in
+// WatchEnrollmentTests.swift, which failed the ios-build job. parse() decodes
+// JSON and touches no main-actor state, so the decodable and the error type now
+// live at file scope and parse() is explicitly nonisolated.
+public enum WatchEnrollError: Error, Equatable {
+    case notStaff
+    case requestFailed(Int)
+    case malformedResponse
+}
+
+struct WatchEnrollmentResponse: Decodable {
+    let oneTimeCode: String
+    let expiresAt: String?
+}
+
 @MainActor
 public final class WatchEnrollment {
 
@@ -26,26 +44,15 @@ public final class WatchEnrollment {
 
     private init() {}
 
-    public enum EnrollError: Error, Equatable {
-        case notStaff
-        case requestFailed(Int)
-        case malformedResponse
-    }
-
-    struct EnrollmentResponse: Decodable {
-        let oneTimeCode: String
-        let expiresAt: String?
-    }
-
     /// Parses the enrollment response. Split out so the contract is testable
-    /// without a network or a paired device.
-    static func parse(_ data: Data) throws -> String {
-        guard let decoded = try? JSONDecoder().decode(EnrollmentResponse.self, from: data) else {
-            throw EnrollError.malformedResponse
+    /// without a network or a paired device. Nonisolated — see the note above.
+    nonisolated static func parse(_ data: Data) throws -> String {
+        guard let decoded = try? JSONDecoder().decode(WatchEnrollmentResponse.self, from: data) else {
+            throw WatchEnrollError.malformedResponse
         }
         let code = decoded.oneTimeCode.trimmingCharacters(in: .whitespaces)
         guard code.count == 8, code.allSatisfy({ $0.isNumber }) else {
-            throw EnrollError.malformedResponse
+            throw WatchEnrollError.malformedResponse
         }
         return code
     }
@@ -74,8 +81,8 @@ public final class WatchEnrollment {
             let (data, response) = try await URLSession.shared.data(for: request)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             guard (200..<300).contains(status) else {
-                if status == 403 { throw EnrollError.notStaff }
-                throw EnrollError.requestFailed(status)
+                if status == 403 { throw WatchEnrollError.notStaff }
+                throw WatchEnrollError.requestFailed(status)
             }
             let code = try WatchEnrollment.parse(data)
             WatchBridge.shared.sendEnrollment(code)

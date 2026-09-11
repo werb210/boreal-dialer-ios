@@ -76,6 +76,10 @@ struct BorealDialerApp: App {
                         CallDirectoryManager.shared.updateEnabledStatus()
                         // BOREAL_DIALER_PRESENCE_v41
                         PresenceHeartbeat.shared.start()
+                        // BOREAL_DIALER_WATCH_ENROLL_v146 - hand the wrist a
+                        // link code so it can authenticate itself. No-op once
+                        // the Watch already holds a token.
+                        await WatchEnrollment.shared.enrollWatchIfNeeded()
                     }
                 }
 

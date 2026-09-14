@@ -29,6 +29,10 @@ final class WatchEventStore: NSObject, ObservableObject {
         if event.kind == .incomingCall { companionCall = event }
         if event.kind == .missedCall, companionCall?.callId == event.callId { companionCall = nil }
     }
+    // BOREAL_DIALER_WATCH_ENROLL_DELIVERY_v173 - surfaced on the root view so a
+    // failed pairing is visible instead of silent.
+    @Published var lastLinkError: String?
+
     func routeNotification(_ userInfo: [AnyHashable: Any]) { route = WatchNotificationRouter.route(userInfo: userInfo) }
     func sendCompanionAction(_ action: WatchAction) {
         guard let call = companionCall else { return }
@@ -64,7 +68,19 @@ extension WatchEventStore: WCSessionDelegate {
         // BOREAL_DIALER_WATCH_AUTOLINK_v1 - phone pushed an enrollment code; link silently.
         if let enroll = WatchPayload.decode(WatchEnrollMessage.self, from: message, key: WatchPayload.enrollKey) {
             Task { @MainActor in
-                if await WatchAuthService.shared.token == nil { try? await WatchAuthService.shared.link(oneTimeCode: enroll.oneTimeCode) }
+                // BOREAL_DIALER_WATCH_ENROLL_DELIVERY_v173 - record the outcome.
+                // This was `try?`, so a rejected or expired code failed in
+                // total silence: the wrist kept rendering its local UI while
+                // every authenticated request returned an error, which reads to
+                // the user as "paired but nothing works".
+                guard await WatchAuthService.shared.token == nil else { return }
+                do {
+                    try await WatchAuthService.shared.link(oneTimeCode: enroll.oneTimeCode)
+                    WatchEventStore.shared.lastLinkError = nil
+                } catch {
+                    WatchEventStore.shared.lastLinkError =
+                        (error as? WatchServiceError)?.safeMessage ?? "Pairing failed"
+                }
             }
             return
         }

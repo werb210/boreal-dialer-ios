@@ -7,6 +7,17 @@ struct WatchRootView: View {
         NavigationStack {
             List {
                 if let call = store.companionCall { CompanionCallView(call: call) }
+                // BOREAL_DIALER_WATCH_ENROLL_DELIVERY_v173 - an unpaired wrist
+                // used to look identical to a paired one: the menu rendered
+                // either way and only the server-backed screens failed, which
+                // reads as "it's paired but broken". Say it plainly instead.
+                if let pairingError = store.lastLinkError {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Not paired").font(.caption).foregroundStyle(.orange)
+                        Text(pairingError).font(.caption2).foregroundStyle(.secondary)
+                        Text("Open Boreal on your iPhone").font(.caption2).foregroundStyle(.secondary)
+                    }
+                }
                 NavigationLink("Dial", destination: WatchDialView())
                 NavigationLink("Call by Voice", destination: WatchVoiceCallView())
                 NavigationLink("Contacts", destination: WatchContactsView())
@@ -33,41 +44,53 @@ struct WatchDialView: View {
     init(initialNumber: String = "") { _number = State(initialValue: initialNumber) }
     var body: some View {
         ScrollView {
-            VStack(spacing: 6) {
+            VStack(spacing: 4) {
                 Text(number.isEmpty ? "Enter number" : number)
                     .font(.title3).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
                     .foregroundStyle(number.isEmpty ? .secondary : .primary)
                     .frame(maxWidth: .infinity)
                 ForEach(keys, id: \.self) { row in
-                    HStack(spacing: 6) {
+                    HStack(spacing: 4) {
                         ForEach(row, id: \.self) { key in
                             Button {
                                 number.append(key)
                                 WKInterfaceDevice.current().play(.click)
                             } label: {
-                                Text(key).font(.title3).frame(maxWidth: .infinity, minHeight: 38)
+                                // BOREAL_DIALER_WATCH_DIAL_FIT_v173 - 38pt rows put
+                                // four rows plus the display, action row and picker
+                                // well past the ~160pt usable height of a 41mm
+                                // watch, so 1-9 sat off-screen above and the pad
+                                // could not be used without scrolling first.
+                                Text(key).font(.body).frame(maxWidth: .infinity, minHeight: 30)
                             }.buttonStyle(.bordered)
                         }
                     }
                 }
-                HStack(spacing: 6) {
+                HStack(spacing: 4) {
                     Button {
                         if !number.isEmpty { number.removeLast(); WKInterfaceDevice.current().play(.click) }
                     } label: {
-                        Image(systemName: "delete.left").frame(maxWidth: .infinity, minHeight: 36)
+                        Image(systemName: "delete.left").frame(maxWidth: .infinity, minHeight: 30)
                     }
                     .buttonStyle(.bordered)
                     .disabled(number.isEmpty)
                     .onLongPressGesture { number = ""; WKInterfaceDevice.current().play(.click) }
                     Button { start() } label: {
-                        Image(systemName: "phone.fill").frame(maxWidth: .infinity, minHeight: 36)
+                        Image(systemName: "phone.fill").frame(maxWidth: .infinity, minHeight: 30)
                     }
                     .buttonStyle(.borderedProminent).tint(.green)
                     .disabled(number.isEmpty || status == .requesting)
                 }
+                // BOREAL_DIALER_WATCH_DIAL_FIT_v173 - the default inline style
+                // renders a fixed-height wheel inside this VStack and clipped its
+                // own value ("BF" cut by the frame). The navigationLink style is
+                // what Favorites and Recents already use, where it reads cleanly
+                // as a row, and it costs one line of height instead of three.
                 Picker("Line", selection: $line) {
                     ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) }
-                }.font(.caption2)
+                }
+                .pickerStyle(.navigationLink)
+                .font(.caption2)
                 if status != .idle { Text(statusText).font(.caption2).foregroundStyle(.secondary) }
                 if let errorMessage { Text(errorMessage).font(.caption2).foregroundStyle(.red) }
             }.padding(.horizontal, 4)

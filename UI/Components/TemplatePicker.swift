@@ -45,7 +45,13 @@ final class TemplateLibrary: ObservableObject {
 struct TemplateLibraryEnvelope: Decodable {
     let templates: [SMSTemplate]
 
-    private enum CodingKeys: String, CodingKey { case templates, data }
+    // BOREAL_DIALER_TEMPLATES_ITEMS_v179
+    // GET /api/templates answers { items: [...] } - the shape the portal
+    // composer reads. v167 modelled this on /api/watch/sms-templates, which
+    // answers { templates: [...] }, so every fetch decoded to nothing and the
+    // sheet showed "Could not load templates." Accept "items" first, and keep
+    // the other keys so the Watch route and any bare array still decode.
+    private enum CodingKeys: String, CodingKey { case items, templates, data }
 
     init(from decoder: Decoder) throws {
         if let array = try? decoder.singleValueContainer().decode([SMSTemplate].self) {
@@ -53,6 +59,10 @@ struct TemplateLibraryEnvelope: Decodable {
             return
         }
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let items = try container.decodeIfPresent([SMSTemplate].self, forKey: .items) {
+            templates = items
+            return
+        }
         templates = try container.decodeIfPresent([SMSTemplate].self, forKey: .templates)
             ?? container.decode([SMSTemplate].self, forKey: .data)
     }

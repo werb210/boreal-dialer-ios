@@ -96,7 +96,18 @@ final class APIClient {
 
         if http.statusCode == 401 {
             print("[AUTH FAIL] TOKEN REJECTED")
+            // BOREAL_DIALER_SESSION_EXPIRY_v174
+            // Clearing the token was only half the job: nothing anywhere caught
+            // APIError.unauthorized, so the app stayed on the tab bar with a
+            // wiped token and every screen rendered its own "Could not load"
+            // message - quick call, recents, contacts, messages, voicemail,
+            // team, all at once - with no indication that the session had
+            // simply expired. The Watch then could not link either, because the
+            // enrollment code is minted by this same authenticated client.
+            // Flipping isAuthenticated returns the app to the login gate that
+            // BorealDialerApp already renders.
             TokenStorage.shared.clear()
+            Task { await AuthService.shared.invalidateSessionAfterIdentityMismatch() }
             throw APIError.unauthorized
         }
 

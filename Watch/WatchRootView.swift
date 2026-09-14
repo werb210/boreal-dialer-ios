@@ -86,8 +86,12 @@ struct WatchDialView: View {
                 // own value ("BF" cut by the frame). The navigationLink style is
                 // what Favorites and Recents already use, where it reads cleanly
                 // as a row, and it costs one line of height instead of three.
-                Picker("Line", selection: $line) {
+                // BOREAL_DIALER_SINGLE_LINE_v174 - BorealLine.enabled is [.BF]; a picker
+                // with one option is pure noise on a 41mm screen.
+                if BorealLine.enabled.count > 1 {
+                    Picker("Line", selection: $line) {
                     ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) }
+                }
                 }
                 .pickerStyle(.navigationLink)
                 .font(.caption2)
@@ -126,7 +130,11 @@ struct WatchContactsView: View {
     var body: some View {
         List {
             TextField("Search CRM", text: $query)
-            Picker("Line", selection: $line) { ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) } }
+            // BOREAL_DIALER_SINGLE_LINE_v174 - BorealLine.enabled is [.BF]; a picker
+            // with one option is pure noise on a 41mm screen.
+            if BorealLine.enabled.count > 1 {
+                Picker("Line", selection: $line) { ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) } }
+            }
             Button("Search") { search() }.disabled(query.trimmingCharacters(in: .whitespaces).count < 2)
             if let message { Text(message).font(.caption2).foregroundStyle(.secondary) }
             ForEach(results) { contact in
@@ -150,7 +158,29 @@ struct WatchRecentsView: View {
     @State private var recents: [WatchRecentCall] = []; @State private var unavailable = false
     @State private var line: BorealLine = .BF
     private let service: any WatchRecentsService = DirectWatchRecentsService()
-    var body: some View { List { Picker("Line", selection: $line) { ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) } }; if unavailable { Text("Recents unavailable").font(.caption) }; ForEach(recents) { recent in NavigationLink(destination: PrefilledDialView(number: recent.number)) { VStack(alignment: .leading) { Text(recent.name ?? recent.number); if recent.name != nil { Text(recent.number).font(.caption2).foregroundStyle(.secondary) } } } } }.navigationTitle("Recents").task(id: line) { do { unavailable = false; recents = try await service.fetch(line: line, limit: 25) } catch { unavailable = true } } }
+    var body: some View {
+        List {
+            // BOREAL_DIALER_SINGLE_LINE_v174 - BorealLine.enabled is [.BF]; a picker
+            // with one option is pure noise on a 41mm screen.
+            if BorealLine.enabled.count > 1 {
+                Picker("Line", selection: $line) { ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) } }
+            }
+            if unavailable { Text("Recents unavailable").font(.caption) }
+            ForEach(recents) { recent in
+                NavigationLink(destination: PrefilledDialView(number: recent.number)) {
+                    VStack(alignment: .leading) {
+                        Text(recent.name ?? recent.number)
+                        if recent.name != nil { Text(recent.number).font(.caption2).foregroundStyle(.secondary) }
+                    }
+                }
+            }
+        }
+        .navigationTitle("Recents")
+        .task(id: line) {
+            do { unavailable = false; recents = try await service.fetch(line: line, limit: 25) }
+            catch { unavailable = true }
+        }
+    }
 }
 
 struct WatchQuickTextRecipientsView: View {
@@ -161,8 +191,12 @@ struct WatchQuickTextRecipientsView: View {
 
     var body: some View {
         List {
-            Picker("Line", selection: $line) {
+            // BOREAL_DIALER_SINGLE_LINE_v174 - BorealLine.enabled is [.BF]; a picker
+            // with one option is pure noise on a 41mm screen.
+            if BorealLine.enabled.count > 1 {
+                Picker("Line", selection: $line) {
                 ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) }
+            }
             }.font(.caption2)
             if unavailable {
                 Text("Recents unavailable").font(.caption2).foregroundStyle(.secondary)
@@ -269,8 +303,12 @@ struct WatchDispositionView: View {
     private let service: any WatchRecentsService = DirectWatchRecentsService()
     var body: some View {
         List {
-            Picker("Line", selection: $line) {
+            // BOREAL_DIALER_SINGLE_LINE_v174 - BorealLine.enabled is [.BF]; a picker
+            // with one option is pure noise on a 41mm screen.
+            if BorealLine.enabled.count > 1 {
+                Picker("Line", selection: $line) {
                 ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) }
+            }
             }.font(.caption2)
             if unavailable { Text("Unavailable").font(.caption2).foregroundStyle(.secondary) }
             ForEach(recents) { recent in
@@ -416,8 +454,12 @@ struct WatchVoiceCallView: View {
                 query = text
                 search()
             }
-            Picker("Line", selection: $line) {
+            // BOREAL_DIALER_SINGLE_LINE_v174 - BorealLine.enabled is [.BF]; a picker
+            // with one option is pure noise on a 41mm screen.
+            if BorealLine.enabled.count > 1 {
+                Picker("Line", selection: $line) {
                 ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) }
+            }
             }.font(.caption2)
             if !query.isEmpty { Text("Heard: \(query)").font(.caption2).foregroundStyle(.secondary) }
             if searching { Text("Searching…").font(.caption2).foregroundStyle(.secondary) }
@@ -489,8 +531,12 @@ struct WatchFavoritesView: View {
     private let service: any WatchRecentsService = DirectWatchRecentsService()
     var body: some View {
         List {
-            Picker("Line", selection: $line) {
+            // BOREAL_DIALER_SINGLE_LINE_v174 - BorealLine.enabled is [.BF]; a picker
+            // with one option is pure noise on a 41mm screen.
+            if BorealLine.enabled.count > 1 {
+                Picker("Line", selection: $line) {
                 ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) }
+            }
             }.font(.caption2)
             if unavailable { Text("Favorites unavailable").font(.caption2).foregroundStyle(.secondary) }
             if favorites.isEmpty && !unavailable {

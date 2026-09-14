@@ -39,24 +39,53 @@ public final class WatchBridge: NSObject {
     }
 
     // BOREAL_DIALER_WATCH_AUTOLINK_v1 - push the enrollment code to the wrist so it links itself.
-    public func sendEnrollment(_ code: String) {
-        guard let session, session.activationState == .activated else { return }
+    // BOREAL_DIALER_WATCH_ENROLL_DELIVERY_v173
+    // This returned Void and dropped the code silently whenever the session was
+    // not yet activated - which is the normal state at app foreground, because
+    // activate() completes asynchronously. The caller then armed its re-mint
+    // rate limit as though the code had been delivered, so the next attempt was
+    // suppressed for four minutes while the code itself expired in five. The
+    // wrist could therefore never link. Reporting delivery lets the caller only
+    // arm that limit when something actually went out.
+    @discardableResult
+    public func sendEnrollment(_ code: String) -> Bool {
+        guard let session else { return false }
+        // Activation is idempotent; calling it here costs nothing and closes the
+        // window where the very first foreground finds the session inactive.
+        if session.activationState != .activated {
+            activate()
+            return false
+        }
         let payload = WatchPayload.encode(WatchEnrollMessage(oneTimeCode: code), under: WatchPayload.enrollKey)
-        guard !payload.isEmpty else { return }
+        guard !payload.isEmpty else { return false }
+        // transferUserInfo queues, so an asleep or out-of-range watch still gets
+        // the code when it wakes.
         session.transferUserInfo(payload)
+        return true
     }
 #else
     public func activate() {}
     public func send(_ event: WatchEvent) {}
-    public func sendEnrollment(_ code: String) {}
+    // BOREAL_DIALER_WATCH_ENROLL_DELIVERY_v173 - signature matches the real one.
+    @discardableResult
+    public func sendEnrollment(_ code: String) -> Bool { false }
 #endif
 }
 
 #if canImport(WatchConnectivity)
 extension WatchBridge: WCSessionDelegate {
+    // BOREAL_DIALER_WATCH_ENROLL_DELIVERY_v173
+    // Activation completes asynchronously, so the foreground enrollment attempt
+    // can run before the session is usable. Rather than wait for the user to
+    // foreground the app a second time, retry the moment the session is ready.
     nonisolated public func session(_ session: WCSession,
                                     activationDidCompleteWith state: WCSessionActivationState,
-                                    error: Error?) {}
+                                    error: Error?) {
+        guard error == nil, state == .activated else { return }
+        Task { @MainActor in
+            await WatchEnrollment.shared.enrollWatchIfNeeded()
+        }
+    }
 
     nonisolated public func sessionDidBecomeInactive(_ session: WCSession) {}
 

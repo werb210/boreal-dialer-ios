@@ -85,7 +85,14 @@ public final class WatchEnrollment {
                 throw WatchEnrollError.requestFailed(status)
             }
             let code = try WatchEnrollment.parse(data)
-            WatchBridge.shared.sendEnrollment(code)
+            // BOREAL_DIALER_WATCH_ENROLL_DELIVERY_v173
+            // Only arm the re-mint limit when the code actually reached the
+            // bridge. Previously this ran unconditionally, so a code dropped
+            // because WCSession had not finished activating still suppressed
+            // the next four minutes of attempts - and the code expired in five.
+            // Returning false here means the next foreground tries again.
+            let delivered = WatchBridge.shared.sendEnrollment(code)
+            guard delivered else { return false }
             lastMintedAt = Date()
             return true
         } catch {

@@ -23,12 +23,33 @@ struct SMSTemplate: Decodable, Identifiable {
         case bodyHtml = "body_html"
         case isSnippet = "is_snippet"
     }
+
+    // BOREAL_DIALER_TEMPLATES_ITEMS_v179
+    // body_text and is_snippet are nullable on message_templates - a snippet
+    // saved with only body_html has a null body_text. Decoding them as
+    // non-optional threw, and the thrown error was swallowed into the same
+    // "Could not load templates." as a transport failure.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? "Untitled"
+        bodyHtml = try c.decodeIfPresent(String.self, forKey: .bodyHtml)
+        bodyText = try c.decodeIfPresent(String.self, forKey: .bodyText) ?? ""
+        isSnippet = try c.decodeIfPresent(Bool.self, forKey: .isSnippet) ?? false
+        shortcut = try c.decodeIfPresent(String.self, forKey: .shortcut)
+    }
 }
 
 private struct SMSTemplatesEnvelope: Decodable {
     let templates: [SMSTemplate]
 
-    private enum CodingKeys: String, CodingKey { case templates, data }
+    // BOREAL_DIALER_TEMPLATES_ITEMS_v179
+    // GET /api/templates answers { items: [...] } - the shape the portal
+    // composer reads. v167 modelled this on /api/watch/sms-templates, which
+    // answers { templates: [...] }, so every fetch decoded to nothing and the
+    // sheet showed "Could not load templates." Accept "items" first, and keep
+    // the other keys so the Watch route and any bare array still decode.
+    private enum CodingKeys: String, CodingKey { case items, templates, data }
 
     init(from decoder: Decoder) throws {
         if let array = try? decoder.singleValueContainer().decode([SMSTemplate].self) {
@@ -36,6 +57,10 @@ private struct SMSTemplatesEnvelope: Decodable {
             return
         }
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let items = try container.decodeIfPresent([SMSTemplate].self, forKey: .items) {
+            templates = items
+            return
+        }
         templates = try container.decodeIfPresent([SMSTemplate].self, forKey: .templates)
             ?? container.decode([SMSTemplate].self, forKey: .data)
     }

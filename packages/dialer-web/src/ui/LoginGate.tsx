@@ -1,9 +1,0 @@
-import { useState } from "react";
-import { startOtp, verifyOtp } from "../auth/otpLogin";
-
-export default function LoginGate({ onAuthed }: { onAuthed: () => void }) {
-  const [phone, setPhone] = useState(""); const [code, setCode] = useState(""); const [stage, setStage] = useState<"phone" | "code">("phone"); const [error, setError] = useState<string | null>(null); const [busy, setBusy] = useState(false);
-  const doStart = async () => { setBusy(true); setError(null); try { await startOtp(phone.trim()); setStage("code"); } catch (caught) { setError(caught instanceof Error ? caught.message : "Failed"); } finally { setBusy(false); } };
-  const doVerify = async () => { setBusy(true); setError(null); try { await verifyOtp(phone.trim(), code.trim()); onAuthed(); } catch (caught) { setError(caught instanceof Error ? caught.message : "Failed"); } finally { setBusy(false); } };
-  return <div className="bd-app"><div style={{ maxWidth: 340, margin: "72px auto 0", width: "100%", padding: "0 20px" }}><h2 style={{ marginBottom: 20 }}>Boreal Dialer</h2>{stage === "phone" ? <><input className="bd-input" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Phone (e.g. +15875551234)" style={{ marginBottom: 12 }} /><button className="bd-btn bd-btn-green" onClick={doStart} disabled={busy || !phone.trim()}>{busy ? "Sending..." : "Send code"}</button></> : <><input className="bd-input" value={code} onChange={(event) => setCode(event.target.value)} placeholder="6-digit code" style={{ marginBottom: 12 }} /><div className="bd-row-gap"><button className="bd-btn bd-btn-green" onClick={doVerify} disabled={busy || !code.trim()}>{busy ? "Verifying..." : "Verify"}</button><button className="bd-btn" onClick={() => setStage("phone")}>Back</button></div></>}{error ? <p style={{ color: "var(--red)" }}>{error}</p> : null}</div></div>;
-}

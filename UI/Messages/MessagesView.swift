@@ -220,6 +220,19 @@ private struct MessageThreadRow: View {
 }
 
 struct MessageThreadView: View {
+    // BOREAL_DIALER_THREAD_SCROLL_v166
+    private func scrollToLatest(_ proxy: ScrollViewProxy, animated: Bool) {
+        guard let last = messages.last else { return }
+        // A first render needs a turn of the run loop before the rows exist.
+        DispatchQueue.main.async {
+            if animated {
+                withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+            } else {
+                proxy.scrollTo(last.id, anchor: .bottom)
+            }
+        }
+    }
+
     let thread: CommunicationThread
     var onChange: () -> Void
 
@@ -248,10 +261,12 @@ struct MessageThreadView: View {
                         .padding(.horizontal)
                         .padding(.vertical, 12)
                     }
+                    // BOREAL_DIALER_THREAD_SCROLL_v166
+                    // onAppear covers the first render; onChange covers new
+                    // messages arriving afterwards.
+                    .onAppear { scrollToLatest(proxy, animated: false) }
                     .onChange(of: messages.count) { _ in
-                        if let last = messages.last {
-                            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
-                        }
+                        scrollToLatest(proxy, animated: true)
                     }
                 }
             }

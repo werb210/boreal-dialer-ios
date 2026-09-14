@@ -74,8 +74,17 @@ enum CalendarFormatters {
         return f
     }()
 
-    // Graph returns local ISO strings with no offset alongside fully qualified
-    // ones, so try both rather than dropping half the events on the floor.
+    // BOREAL_DIALER_CALENDAR_NAIVE_UTC_v181
+    // The comment here used to claim Graph returns LOCAL strings with no
+    // offset. It does not - the wall-clock is UTC, and Graph names the zone in
+    // a sibling field the server was discarding. The unzoned string fell
+    // through to the DateFormatter below, which has no timeZone set and so
+    // defaults to the device's, and every event rendered six hours late in
+    // Alberta. BF-portal hit the same thing and fixed it client-side in v711.
+    //
+    // v180 makes the server emit a true instant, so the ISO8601 branches now
+    // handle every event. This fallback stays for older payloads and pins the
+    // zone to UTC so it can never silently re-introduce the offset.
     static func parse(_ raw: String?) -> Date? {
         guard let raw, !raw.isEmpty else { return nil }
         let withFraction = ISO8601DateFormatter()
@@ -87,6 +96,8 @@ enum CalendarFormatters {
         if let d = plain.date(from: raw) { return d }
 
         let naive = DateFormatter()
+        naive.locale = Locale(identifier: "en_US_POSIX")
+        naive.timeZone = TimeZone(identifier: "UTC")
         naive.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
         if let d = naive.date(from: raw) { return d }
 

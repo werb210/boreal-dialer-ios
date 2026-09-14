@@ -387,6 +387,18 @@ struct TeamView: View {
 }
 
 struct TeamChannelView: View {
+    // BOREAL_DIALER_THREAD_SCROLL_v166
+    private func scrollToLatest(_ proxy: ScrollViewProxy, animated: Bool) {
+        guard let last = store.messages.last else { return }
+        DispatchQueue.main.async {
+            if animated {
+                withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+            } else {
+                proxy.scrollTo(last.id, anchor: .bottom)
+            }
+        }
+    }
+
     let channelId: String
     let title: String
     @ObservedObject private var store = TeamStore.shared
@@ -394,6 +406,11 @@ struct TeamChannelView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // BOREAL_DIALER_THREAD_SCROLL_v166
+            // This channel view had no ScrollViewReader at all, so it never
+            // scrolled to the newest message under any circumstance - not on
+            // open, not when a message arrived.
+            ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 8) {
                     ForEach(store.messages) { message in
@@ -415,9 +432,17 @@ struct TeamChannelView: View {
                             }
                             if !mine { Spacer() }
                         }
+                        // BOREAL_DIALER_THREAD_SCROLL_v166 - explicit id so
+                        // proxy.scrollTo has a row to target.
+                        .id(message.id)
                     }
                 }
                 .padding()
+            }
+            .onAppear { scrollToLatest(proxy, animated: false) }
+            .onChange(of: store.messages.count) { _ in
+                scrollToLatest(proxy, animated: true)
+            }
             }
             Divider()
             HStack {

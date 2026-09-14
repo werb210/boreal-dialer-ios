@@ -55,6 +55,16 @@ jobs:
       - name: Check server paths
         run: ./scripts/check-server-paths.sh
 
+      # BOREAL_DIALER_IF_MODIFIER_GUARD_v178 - catches a SwiftUI modifier left on
+      # the closing brace of an `if`, which is a parse error swiftc reports in
+      # terms that name neither. Seconds on ubuntu instead of three minutes into
+      # the macOS Watch build.
+      - name: Check SwiftUI modifiers on control-flow braces
+        run: |
+          set -euo pipefail
+          find . -name '*.swift' -not -path './.git/*' -print0 \
+            | xargs -0 python3 ./scripts/check-if-modifiers.py
+
       - name: Check Watch authentication crash paths
         run: ./scripts/check-watch-auth-crash-paths.sh
 

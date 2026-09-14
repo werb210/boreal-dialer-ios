@@ -90,11 +90,11 @@ struct WatchDialView: View {
                 // with one option is pure noise on a 41mm screen.
                 if BorealLine.enabled.count > 1 {
                     Picker("Line", selection: $line) {
-                    ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) }
+                        ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.navigationLink)
+                    .font(.caption2)
                 }
-                }
-                .pickerStyle(.navigationLink)
-                .font(.caption2)
                 if status != .idle { Text(statusText).font(.caption2).foregroundStyle(.secondary) }
                 if let errorMessage { Text(errorMessage).font(.caption2).foregroundStyle(.red) }
             }.padding(.horizontal, 4)
@@ -197,7 +197,8 @@ struct WatchQuickTextRecipientsView: View {
                 Picker("Line", selection: $line) {
                 ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) }
             }
-            }.font(.caption2)
+                .font(.caption2)
+            }
             if unavailable {
                 Text("Recents unavailable").font(.caption2).foregroundStyle(.secondary)
             } else if recents.isEmpty {
@@ -309,7 +310,8 @@ struct WatchDispositionView: View {
                 Picker("Line", selection: $line) {
                 ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) }
             }
-            }.font(.caption2)
+                .font(.caption2)
+            }
             if unavailable { Text("Unavailable").font(.caption2).foregroundStyle(.secondary) }
             ForEach(recents) { recent in
                 NavigationLink(destination: DispositionPickerView(recent: recent)) {
@@ -460,7 +462,8 @@ struct WatchVoiceCallView: View {
                 Picker("Line", selection: $line) {
                 ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) }
             }
-            }.font(.caption2)
+                .font(.caption2)
+            }
             if !query.isEmpty { Text("Heard: \(query)").font(.caption2).foregroundStyle(.secondary) }
             if searching { Text("Searching…").font(.caption2).foregroundStyle(.secondary) }
             if let message { Text(message).font(.caption2).foregroundStyle(.secondary) }
@@ -537,7 +540,8 @@ struct WatchFavoritesView: View {
                 Picker("Line", selection: $line) {
                 ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) }
             }
-            }.font(.caption2)
+                .font(.caption2)
+            }
             if unavailable { Text("Favorites unavailable").font(.caption2).foregroundStyle(.secondary) }
             if favorites.isEmpty && !unavailable {
                 Text("Call people to build favorites").font(.caption2).foregroundStyle(.secondary)

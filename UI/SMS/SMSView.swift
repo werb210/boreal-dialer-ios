@@ -207,6 +207,8 @@ struct SMSThreadView: View {
 
     @State private var messages: [SMSMessage] = []
     @State private var draft = ""
+    // BOREAL_DIALER_TEMPLATES_EVERYWHERE_v167
+    @State private var showingTemplates = false
     @State private var sending = false
     @State private var loading = true
     @State private var error: String?
@@ -240,12 +242,23 @@ struct SMSThreadView: View {
                 Text(error).font(.footnote).foregroundColor(.red).padding(.horizontal)
             }
 
+            // BOREAL_DIALER_TEMPLATES_EVERYWHERE_v167 - supplying onTemplates
+            // is what makes ComposerBar render the templates button; without it
+            // the button is simply absent, which is why this thread had none.
             ComposerBar(
                 placeholder: "Text message…",
                 text: $draft,
                 disabled: sending || draft.trimmingCharacters(in: .whitespaces).isEmpty,
+                onTemplates: { showingTemplates = true },
                 onSend: send
             )
+            .sheet(isPresented: $showingTemplates) {
+                TemplatePickerSheet(
+                    channel: "sms",
+                    isPresented: $showingTemplates,
+                    text: $draft
+                )
+            }
         }
         .background(Theme.bg)
         .navigationTitle(thread.title)

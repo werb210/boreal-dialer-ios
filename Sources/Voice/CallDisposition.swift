@@ -116,6 +116,65 @@ enum DispositionError: LocalizedError {
 struct CallSummaryResult: Decodable, Sendable, Equatable {
     let status: String
     let summary: String?
+    // BOREAL_DIALER_SUGGESTED_TASKS_v254 - BF-Server v253.
+    let contactId: String?
+    let suggestedTasks: [SuggestedCallTask]?
+
+    init(status: String, summary: String?, contactId: String? = nil, suggestedTasks: [SuggestedCallTask]? = nil) {
+        self.status = status
+        self.summary = summary
+        self.contactId = contactId
+        self.suggestedTasks = suggestedTasks
+    }
+}
+
+// BOREAL_DIALER_SUGGESTED_TASKS_v254
+// Suggestions only: a task is created when staff tap Add, never automatically.
+struct SuggestedCallTask: Decodable, Sendable, Equatable, Identifiable {
+    let title: String
+    let type: String
+    let dueInDays: Int
+
+    var id: String { "\(type)|\(dueInDays)|\(title)" }
+
+    var detail: String {
+        let kind: String
+        switch type {
+        case "CALL": kind = "Call"
+        case "EMAIL": kind = "Email"
+        case "SMS": kind = "Text"
+        default: kind = "To-do"
+        }
+        switch dueInDays {
+        case 0: return "\(kind) - today"
+        case 1: return "\(kind) - tomorrow"
+        default: return "\(kind) - in \(dueInDays) days"
+        }
+    }
+}
+
+enum SuggestedTaskService {
+    /// The same body the portal's task modal sends to POST /api/tasks. Call, email
+    /// and SMS tasks need a contact, so without one the task becomes a to-do.
+    static func body(for task: SuggestedCallTask, contactId: String?, now: Date = Date()) -> [String: Any] {
+        let hasContact = !(contactId ?? "").isEmpty
+        let type = (hasContact || task.type == "TODO") ? task.type : "TODO"
+        let due = Calendar.current.date(byAdding: .day, value: max(0, task.dueInDays), to: now) ?? now
+        var body: [String: Any] = [
+            "title": task.title,
+            "type": type,
+            "priority": "MEDIUM",
+            "due_at": ISO8601DateFormatter().string(from: due)
+        ]
+        if hasContact, let contactId { body["contact_id"] = contactId }
+        return body
+    }
+
+    static func add(_ task: SuggestedCallTask, contactId: String?) async throws {
+        let data = try JSONSerialization.data(withJSONObject: body(for: task, contactId: contactId))
+        let request = try APIClient.shared.makeRequest(path: "/tasks", method: "POST", body: data)
+        _ = try await APIClient.shared.makeAuthorizedRequest(request)
+    }
 }
 
 private struct CallSummaryEnvelope: Decodable {

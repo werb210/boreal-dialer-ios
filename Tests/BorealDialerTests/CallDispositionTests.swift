@@ -193,3 +193,34 @@ final class StartCallActivityTests: XCTestCase {
         XCTAssertNil(StartCallActivity.dialURL(handle: "client:staff-42"))
     }
 }
+
+// BOREAL_DIALER_SUGGESTED_TASKS_v254
+final class SuggestedTaskTests: XCTestCase {
+    func testDecodesSuggestionsFromTheSummaryEnvelope() throws {
+        let json = Data(#"{"status":"ok","data":{"status":"ready","summary":"S","contactId":"c1","suggestedTasks":[{"title":"Call Walter","type":"CALL","dueInDays":3}]}}"#.utf8)
+        let result = try CallSummaryService.decode(json)
+        XCTAssertEqual(result.contactId, "c1")
+        XCTAssertEqual(result.suggestedTasks, [SuggestedCallTask(title: "Call Walter", type: "CALL", dueInDays: 3)])
+    }
+
+    func testOlderServerWithoutSuggestionsStillDecodes() throws {
+        let json = Data(#"{"status":"ok","data":{"status":"ready","summary":"S"}}"#.utf8)
+        XCTAssertNil(try CallSummaryService.decode(json).suggestedTasks)
+    }
+
+    func testTaskBodyKeepsTheTypeWithAContactAndFallsBackToTodoWithout() {
+        let task = SuggestedCallTask(title: "Call Walter", type: "CALL", dueInDays: 2)
+        let withContact = SuggestedTaskService.body(for: task, contactId: "c1")
+        XCTAssertEqual(withContact["type"] as? String, "CALL")
+        XCTAssertEqual(withContact["contact_id"] as? String, "c1")
+        XCTAssertEqual(withContact["priority"] as? String, "MEDIUM")
+        let without = SuggestedTaskService.body(for: task, contactId: nil)
+        XCTAssertEqual(without["type"] as? String, "TODO")
+        XCTAssertNil(without["contact_id"])
+    }
+
+    func testDetailReadsNaturally() {
+        XCTAssertEqual(SuggestedCallTask(title: "x", type: "EMAIL", dueInDays: 1).detail, "Email - tomorrow")
+        XCTAssertEqual(SuggestedCallTask(title: "x", type: "TODO", dueInDays: 5).detail, "To-do - in 5 days")
+    }
+}

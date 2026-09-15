@@ -89,6 +89,14 @@ struct DialerView: View {
                 InCallView()
             }
         }
+        // BOREAL_DIALER_PRESENT_DISPOSITION_v224
+        .sheet(item: $voiceEngine.finishedCall) { finished in
+            CallDispositionSheet(
+                callRef: finished.callSid,
+                contactName: nil,
+                durationText: nil
+            ) { _ in voiceEngine.finishedCall = nil }
+        }
     }
 
     private func applyPendingDeepLink() {

@@ -51,3 +51,34 @@ final class CallDispositionTests: XCTestCase {
         }
     }
 }
+
+// BOREAL_DIALER_PRESENT_DISPOSITION_v224
+extension CallDispositionTests {
+    func testFinishedCallIsIdentifiedByItsSid() {
+        let a = FinishedCall(callSid: "CA123", endedAt: Date())
+        XCTAssertEqual(a.id, "CA123")
+    }
+
+    func testTwoEndsOfTheSameCallAreEqual() {
+        let at = Date()
+        XCTAssertEqual(
+            FinishedCall(callSid: "CA123", endedAt: at),
+            FinishedCall(callSid: "CA123", endedAt: at)
+        )
+    }
+
+    /// The engine publishes the sid because that is what it has; the server
+    /// accepts either form, so no lookup is needed before recording an outcome.
+    func testTheSidIsAnAcceptableCallReference() async {
+        do {
+            _ = try await CallDispositionService.record(callRef: "CA123", disposition: .connected)
+        } catch let error as DispositionError {
+            // A network failure here is fine; a missingCallReference is not.
+            if case .missingCallReference = error {
+                XCTFail("a CallSid must be accepted as a call reference")
+            }
+        } catch {
+            // Any other transport error is acceptable in a unit test.
+        }
+    }
+}

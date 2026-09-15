@@ -140,7 +140,8 @@ final class AppLockPolicyTests: XCTestCase {
 final class CallSummaryServiceTests: XCTestCase {
     func testDecodesTheServerEnvelope() throws {
         let json = Data(#"{"status":"ok","data":{"status":"ready","summary":"- Walter sends statements Friday","contactId":"c1"}}"#.utf8)
-        XCTAssertEqual(try CallSummaryService.decode(json), CallSummaryResult(status: "ready", summary: "- Walter sends statements Friday"))
+        // BOREAL_DIALER_SUMMARY_DECODE_TEST_v257 - v254 decodes contactId too.
+        XCTAssertEqual(try CallSummaryService.decode(json), CallSummaryResult(status: "ready", summary: "- Walter sends statements Friday", contactId: "c1"))
     }
 
     func testKeepsPollingOnlyWhilePendingAndWithinTheLimit() {

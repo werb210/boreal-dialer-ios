@@ -69,6 +69,8 @@ targets:
           - audio
           - remote-notification
         NSMicrophoneUsageDescription: Boreal Dialer needs the microphone to place and receive calls.
+        NSUserActivityTypes:
+          - INStartCallIntent
         NSFaceIDUsageDescription: Boreal Dialer uses Face ID to unlock your signed-in session.
         ITSAppUsesNonExemptEncryption: false
         NSSupportsLiveActivities: true

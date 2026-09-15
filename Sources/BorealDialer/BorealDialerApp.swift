@@ -2,6 +2,7 @@ import Foundation
 import AVFoundation
 import SwiftUI
 import UIKit
+import Intents
 import LocalAuthentication
 #if canImport(Sentry)
 import Sentry
@@ -56,6 +57,12 @@ struct BorealDialerApp: App {
             }
             .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
             .onOpenURL { _ = DeepLinkCoordinator.shared.receive($0) }
+            // BOREAL_DIALER_START_CALL_ACTIVITY_v248 - Recents, contact card, CarPlay.
+            .onContinueUserActivity("INStartCallIntent") { activity in
+                if let url = StartCallActivity.dialURL(handle: StartCallActivity.handle(from: activity)) {
+                    DeepLinkCoordinator.shared.receive(url)
+                }
+            }
             .onReceive(NotificationCenter.default.publisher(
                 for: UIApplication.willEnterForegroundNotification
             )) { _ in
@@ -223,5 +230,35 @@ struct AppLockView: View {
             }
             .padding(24)
         }
+    }
+}
+
+// BOREAL_DIALER_START_CALL_ACTIVITY_v248
+enum StartCallActivity {
+    static func handle(from activity: NSUserActivity) -> String? {
+        guard let intent = activity.interaction?.intent as? INStartCallIntent else { return nil }
+        return intent.contacts?.first?.personHandle?.value
+    }
+
+    /// Dials through the existing deep-link path, which only acts when signed in and idle.
+    static func dialURL(handle: String?) -> URL? {
+        guard let raw = handle?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
+        var phone = String(raw.filter { $0.isNumber || $0 == "+" })
+        let digits = phone.filter { $0.isNumber }
+        guard digits.count >= 7 else { return nil }
+        // Contact cards often hold national numbers; the dial parser requires E.164.
+        if !phone.hasPrefix("+") {
+            if digits.count == 10 { phone = "+1" + digits }
+            else if digits.count == 11, digits.hasPrefix("1") { phone = "+" + digits }
+            else { return nil }
+        }
+        var components = URLComponents()
+        components.scheme = "borealdialer"
+        components.host = "call"
+        components.queryItems = [
+            URLQueryItem(name: "phone", value: phone),
+            URLQueryItem(name: "start", value: "true")
+        ]
+        return components.url
     }
 }

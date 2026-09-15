@@ -70,6 +70,9 @@ struct BorealDialerApp: App {
             .onChange(of: scenePhase) { phase in
                 if phase == .active {
                     WidgetSnapshotStore.refreshStoredSnapshot()
+                    // BOREAL_DIALER_WATCH_SNAPSHOT_WRITER_v210 - nothing has ever written the
+                    // keys the watch complication reads. This is that writer.
+                    Task { await WatchSnapshotSync.refresh() }
                     Task {
                         await OfflineQueue.shared.flush()
                         await CallDirectoryManager.shared.refresh()

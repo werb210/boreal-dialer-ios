@@ -8,6 +8,8 @@ struct BorealWatchEntry: TimelineEntry {
     let date: Date
     let status: String
     let missedCalls: Int
+    // BOREAL_DIALER_WATCH_SNAPSHOT_WRITER_v210
+    let tasksDue: Int
 }
 
 struct BorealWatchProvider: TimelineProvider {
@@ -18,12 +20,13 @@ struct BorealWatchProvider: TimelineProvider {
         return BorealWatchEntry(
             date: Date(),
             status: defaults?.string(forKey: "presence.status") ?? "away",
-            missedCalls: defaults?.integer(forKey: "calls.missed") ?? 0
+            missedCalls: defaults?.integer(forKey: "calls.missed") ?? 0,
+            tasksDue: defaults?.integer(forKey: "tasks.due") ?? 0
         )
     }
 
     func placeholder(in context: Context) -> BorealWatchEntry {
-        BorealWatchEntry(date: Date(), status: "available", missedCalls: 0)
+        BorealWatchEntry(date: Date(), status: "available", missedCalls: 0, tasksDue: 0)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (BorealWatchEntry) -> Void) {
@@ -61,6 +64,10 @@ struct BorealWatchWidgetView: View {
                     Text(entry.status.replacingOccurrences(of: "_", with: " ")).font(.headline)
                     if entry.missedCalls > 0 {
                         Text("\(entry.missedCalls) missed").font(.caption).foregroundStyle(.secondary)
+                    }
+                    // BOREAL_DIALER_WATCH_SNAPSHOT_WRITER_v210
+                    if entry.tasksDue > 0 {
+                        Text("\(entry.tasksDue) due").font(.caption).foregroundStyle(.secondary)
                     }
                 }
             }

@@ -16,6 +16,12 @@ struct CallDispositionSheet: View {
     // BOREAL_DIALER_CALL_SUMMARY_v246
     @State private var summary: String?
     @State private var summaryUnavailable = false
+    // BOREAL_DIALER_SUGGESTED_TASKS_v254
+    @State private var suggestions: [SuggestedCallTask] = []
+    @State private var suggestionContactId: String?
+    @State private var addedSuggestions: Set<String> = []
+    @State private var addingSuggestion: String?
+    @State private var suggestionError: String?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -50,6 +56,37 @@ struct CallDispositionSheet: View {
                             Text("Summary will appear once the transcript is ready. It is also saved to the contact.")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                // BOREAL_DIALER_SUGGESTED_TASKS_v254
+                if !suggestions.isEmpty {
+                    Section("Suggested follow-ups") {
+                        ForEach(suggestions) { task in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(task.title)
+                                    Text(task.detail)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if addedSuggestions.contains(task.id) {
+                                    Label("Added", systemImage: "checkmark.circle.fill")
+                                        .labelStyle(.iconOnly)
+                                        .foregroundStyle(.green)
+                                } else if addingSuggestion == task.id {
+                                    ProgressView()
+                                } else {
+                                    Button("Add") { Task { await addSuggestion(task) } }
+                                        .buttonStyle(.bordered)
+                                        .disabled(addingSuggestion != nil)
+                                }
+                            }
+                        }
+                        if let suggestionError {
+                            Text(suggestionError).font(.footnote).foregroundStyle(.red)
                         }
                     }
                 }
@@ -111,6 +148,8 @@ struct CallDispositionSheet: View {
             latest = try? await CallSummaryService.fetch(callSid: callRef)
             if let text = latest?.summary, latest?.status == "ready", !text.isEmpty {
                 summary = text
+                suggestions = latest?.suggestedTasks ?? [] // BOREAL_DIALER_SUGGESTED_TASKS_v254
+                suggestionContactId = latest?.contactId
                 return
             }
             if latest?.status == "none" {
@@ -124,6 +163,19 @@ struct CallDispositionSheet: View {
             }
         }
         summaryUnavailable = true
+    }
+
+    // BOREAL_DIALER_SUGGESTED_TASKS_v254
+    private func addSuggestion(_ task: SuggestedCallTask) async {
+        addingSuggestion = task.id
+        suggestionError = nil
+        do {
+            try await SuggestedTaskService.add(task, contactId: suggestionContactId)
+            addedSuggestions.insert(task.id)
+        } catch {
+            suggestionError = "Could not add that task. Try again."
+        }
+        addingSuggestion = nil
     }
 
     private func save(_ option: CallDisposition) async {

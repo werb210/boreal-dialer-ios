@@ -2,6 +2,7 @@ import Foundation
 import AVFoundation
 import SwiftUI
 import UIKit
+import LocalAuthentication
 #if canImport(Sentry)
 import Sentry
 #endif
@@ -11,6 +12,7 @@ struct BorealDialerApp: App {
     @UIApplicationDelegateAdaptor(DialerAppDelegate.self) private var appDelegate
     @StateObject var auth = AuthService.shared
     @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var appLock = AppLockController.shared // BOREAL_DIALER_FACE_ID_v244
 
     init() {
         PushManager.shared.register()
@@ -47,6 +49,7 @@ struct BorealDialerApp: App {
                 .preferredColorScheme(.dark)
                 .tint(Theme.green)
                 .background(Theme.bg.ignoresSafeArea())
+                .overlay { if appLock.isLocked { AppLockView(lock: appLock) } } // BOREAL_DIALER_FACE_ID_v244
                 } else {
                     LoginView()
                 }
@@ -68,6 +71,9 @@ struct BorealDialerApp: App {
                 }
             }
             .onChange(of: scenePhase) { phase in
+                // BOREAL_DIALER_FACE_ID_v244 - re-lock a signed-in session on return.
+                if phase == .active { appLock.didBecomeActive(authenticated: auth.isAuthenticated) }
+                if phase == .background { appLock.didEnterBackground() }
                 if phase == .active {
                     WidgetSnapshotStore.refreshStoredSnapshot()
                     // BOREAL_DIALER_WATCH_SNAPSHOT_WRITER_v210 - nothing has ever written the
@@ -108,6 +114,114 @@ final class DialerAppDelegate: NSObject, UIApplicationDelegate {
                      didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         Task { @MainActor in
             StandardNotificationCoordinator.shared.didReceiveStandardPushToken(deviceToken)
+        }
+    }
+}
+
+// BOREAL_DIALER_FACE_ID_v244
+// Face ID / Touch ID (passcode fallback) to re-enter an already signed-in
+// session. Never locks during a call, so answering from CallKit is untouched.
+enum AppLockPolicy {
+    static let lockAfter: TimeInterval = 60
+
+    static func shouldLock(authenticated: Bool, biometryAvailable: Bool, inCall: Bool,
+                           coldStart: Bool, backgroundedAt: Date?, now: Date) -> Bool {
+        guard authenticated, biometryAvailable, !inCall else { return false }
+        if coldStart { return true }
+        guard let backgroundedAt else { return false }
+        return now.timeIntervalSince(backgroundedAt) >= lockAfter
+    }
+}
+
+@MainActor
+final class AppLockController: ObservableObject {
+    static let shared = AppLockController()
+    @Published private(set) var isLocked = false
+    @Published private(set) var errorMessage: String?
+    private var backgroundedAt: Date?
+    private var hasBecomeActive = false
+    private var authenticating = false
+
+    func didEnterBackground() {
+        if !isLocked { backgroundedAt = Date() }
+    }
+
+    func didBecomeActive(authenticated: Bool) {
+        let coldStart = !hasBecomeActive
+        hasBecomeActive = true
+        let lock = AppLockPolicy.shouldLock(
+            authenticated: authenticated,
+            biometryAvailable: Self.biometryAvailable(),
+            inCall: Self.inCall(),
+            coldStart: coldStart,
+            backgroundedAt: backgroundedAt,
+            now: Date()
+        )
+        backgroundedAt = nil
+        if lock {
+            isLocked = true
+            unlock()
+        }
+    }
+
+    func unlock() {
+        guard !authenticating else { return }
+        authenticating = true
+        errorMessage = nil
+        LAContext().evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Unlock Boreal Dialer") { success, _ in
+            Task { @MainActor in
+                AppLockController.shared.finishUnlock(success: success)
+            }
+        }
+    }
+
+    private func finishUnlock(success: Bool) {
+        authenticating = false
+        if success { isLocked = false } else { errorMessage = "Not recognised. Try again." }
+    }
+
+    func signOutInstead() {
+        isLocked = false
+        Task { await AuthService.shared.logout() }
+    }
+
+    private static func biometryAvailable() -> Bool {
+        var error: NSError?
+        return LAContext().canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+    }
+
+    private static func inCall() -> Bool {
+        switch VoiceEngine.shared.state {
+        case .ringing, .dialing, .active: return true
+        default: return false
+        }
+    }
+}
+
+struct AppLockView: View {
+    @ObservedObject var lock: AppLockController
+
+    var body: some View {
+        ZStack {
+            Theme.bg.ignoresSafeArea()
+            VStack(spacing: 16) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 40))
+                    .foregroundStyle(Theme.green)
+                Text("Boreal Dialer is locked")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.white)
+                Button("Unlock") { lock.unlock() }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Theme.green)
+                if let message = lock.errorMessage {
+                    Text(message).font(.footnote).foregroundStyle(.red)
+                }
+                Button("Sign out") { lock.signOutInstead() }
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(24)
         }
     }
 }

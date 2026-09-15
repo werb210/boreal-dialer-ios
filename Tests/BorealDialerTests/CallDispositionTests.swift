@@ -109,3 +109,29 @@ final class MissedCallNotificationTests: XCTestCase {
         XCTAssertNil(MissedCallNotification.callBackURL(userInfo: ["type": "client_message"]))
     }
 }
+
+// BOREAL_DIALER_FACE_ID_v244
+final class AppLockPolicyTests: XCTestCase {
+    private let now = Date(timeIntervalSince1970: 1_000_000)
+
+    func testLocksSignedInSessionOnColdStart() {
+        XCTAssertTrue(AppLockPolicy.shouldLock(authenticated: true, biometryAvailable: true, inCall: false,
+                                               coldStart: true, backgroundedAt: nil, now: now))
+    }
+
+    func testLocksAfterAMinuteButNotAQuickSwitch() {
+        XCTAssertTrue(AppLockPolicy.shouldLock(authenticated: true, biometryAvailable: true, inCall: false,
+                                               coldStart: false, backgroundedAt: now.addingTimeInterval(-60), now: now))
+        XCTAssertFalse(AppLockPolicy.shouldLock(authenticated: true, biometryAvailable: true, inCall: false,
+                                                coldStart: false, backgroundedAt: now.addingTimeInterval(-5), now: now))
+    }
+
+    func testNeverLocksDuringACallSignedOutOrWithoutBiometry() {
+        XCTAssertFalse(AppLockPolicy.shouldLock(authenticated: true, biometryAvailable: true, inCall: true,
+                                                coldStart: true, backgroundedAt: nil, now: now))
+        XCTAssertFalse(AppLockPolicy.shouldLock(authenticated: false, biometryAvailable: true, inCall: false,
+                                                coldStart: true, backgroundedAt: nil, now: now))
+        XCTAssertFalse(AppLockPolicy.shouldLock(authenticated: true, biometryAvailable: false, inCall: false,
+                                                coldStart: true, backgroundedAt: nil, now: now))
+    }
+}

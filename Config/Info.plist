@@ -38,6 +38,8 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<false/>
 	</dict>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Boreal Dialer uses Face ID to unlock your signed-in session.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Boreal Dialer needs the microphone to place and receive calls.</string>
 	<key>NSSupportsLiveActivities</key>

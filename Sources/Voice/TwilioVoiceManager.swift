@@ -301,10 +301,12 @@ extension TwilioVoiceManager: @preconcurrency NotificationDelegate {
     func cancelledCallInviteReceived(cancelledCallInvite: CancelledCallInvite, error: any Error) {
         guard pendingCallInvite?.callSid == cancelledCallInvite.callSid else { return }
         let uuid = pendingCallInvite?.uuid
+        let missedHandle = pendingCallInvite?.from // BOREAL_DIALER_MISSED_CALL_ACTIONS_v239
         pendingCallInvite = nil
         inviteLedger.finish(cancelledCallInvite.callSid)
         Telemetry.event("call_invite_cancelled")
         if let uuid { VoiceEngine.shared.endReportedCall(uuid: uuid, reason: .unanswered) }
+        if let missedHandle { MissedCallNotification.post(handle: missedHandle) }
         CallStateManager.shared.transition(to: .ended)
         CallStateManager.shared.reset()
     }

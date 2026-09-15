@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(AppIntents)
+import AppIntents
+#endif
 import Combine
 
 enum DialerDeepLink: Equatable {
@@ -167,3 +170,88 @@ final class DeepLinkCoordinator: ObservableObject {
         return pending
     }
 }
+
+// BOREAL_DIALER_APP_INTENTS_v247
+// Siri, Spotlight and the Shortcuts app. Answers come from the same snapshot
+// the Watch complication reads, so they work without opening the app.
+enum BorealIntentText {
+    static func nextMeeting(_ meeting: (title: String, startsAt: Date)?, now: Date,
+                            calendar: Calendar = .current, locale: Locale = .current) -> String {
+        guard let meeting, meeting.startsAt > now else {
+            return "You have no upcoming meetings in Boreal."
+        }
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.timeStyle = .short
+        formatter.dateStyle = calendar.isDate(meeting.startsAt, inSameDayAs: now) ? .none : .medium
+        return "Your next meeting is \(meeting.title) at \(formatter.string(from: meeting.startsAt))."
+    }
+
+    static func due(missedCalls: Int, tasksDue: Int) -> String {
+        if missedCalls <= 0 && tasksDue <= 0 {
+            return "Nothing is due in Boreal right now."
+        }
+        var parts: [String] = []
+        if missedCalls > 0 { parts.append("\(missedCalls) missed call\(missedCalls == 1 ? "" : "s")") }
+        if tasksDue > 0 { parts.append("\(tasksDue) task\(tasksDue == 1 ? "" : "s") due") }
+        return "You have " + parts.joined(separator: " and ") + "."
+    }
+}
+
+#if canImport(AppIntents)
+@available(iOS 16.0, *)
+struct NewBorealCallIntent: AppIntent {
+    static var title: LocalizedStringResource = "New Boreal Call"
+    static var description = IntentDescription("Opens the Boreal Dialer keypad.")
+    static var openAppWhenRun: Bool = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        if let url = URL(string: "borealdialer://new-call") {
+            DeepLinkCoordinator.shared.receive(url)
+        }
+        return .result()
+    }
+}
+
+@available(iOS 16.0, *)
+struct NextBorealMeetingIntent: AppIntent {
+    static var title: LocalizedStringResource = "Next Boreal Meeting"
+    static var description = IntentDescription("Tells you your next meeting.")
+
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let text = BorealIntentText.nextMeeting(WatchSnapshotSync.nextMeeting(), now: Date())
+        return .result(dialog: "\(text)")
+    }
+}
+
+@available(iOS 16.0, *)
+struct BorealDueIntent: AppIntent {
+    static var title: LocalizedStringResource = "What's Due in Boreal"
+    static var description = IntentDescription("Tells you your missed calls and tasks due.")
+
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let snapshot = WatchSnapshotSync.lastPublished()
+        let text = BorealIntentText.due(missedCalls: snapshot.missedCalls, tasksDue: snapshot.tasksDue)
+        return .result(dialog: "\(text)")
+    }
+}
+
+@available(iOS 16.0, *)
+struct BorealAppShortcuts: AppShortcutsProvider {
+    static var appShortcuts: [AppShortcut] {
+        AppShortcut(intent: NewBorealCallIntent(), phrases: [
+            "New call in \(.applicationName)",
+            "Start a \(.applicationName) call"
+        ])
+        AppShortcut(intent: NextBorealMeetingIntent(), phrases: [
+            "What is my next meeting in \(.applicationName)",
+            "Next \(.applicationName) meeting"
+        ])
+        AppShortcut(intent: BorealDueIntent(), phrases: [
+            "What is due in \(.applicationName)",
+            "Show my \(.applicationName) callbacks"
+        ])
+    }
+}
+#endif

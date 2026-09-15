@@ -39,6 +39,9 @@ jobs:
           find . -name '*.swift' -not -path './.git/*' -print0 \
             | xargs -0 python3 ./scripts/check-if-modifiers.py
 
+      - name: Sources/Shared is extension-safe
+        run: python3 scripts/check-extension-safety.py
+
       - name: Check Watch authentication crash paths
         run: ./scripts/check-watch-auth-crash-paths.sh
 

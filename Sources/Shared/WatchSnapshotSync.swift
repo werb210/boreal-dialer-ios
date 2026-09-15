@@ -50,20 +50,12 @@ enum WatchSnapshotSync {
     private static let meetingTitleKey = "meeting.next.title"
     private static let meetingAtKey = "meeting.next.at"
 
-    /// Pulls the snapshot and publishes it. Never throws: a failed refresh must
-    /// leave the last good values in place rather than blanking the face.
-    @discardableResult
-    static func refresh() async -> WatchSnapshot? {
-        do {
-            let request = try APIClient.shared.makeRequest(path: "/watch/snapshot", method: "GET")
-            let data = try await APIClient.shared.makeAuthorizedRequest(request)
-            let snapshot = try JSONDecoder().decode(WatchSnapshot.self, from: data)
-            publish(snapshot)
-            return snapshot
-        } catch {
-            return nil
-        }
-    }
+    // BOREAL_DIALER_WATCH_SNAPSHOT_TARGET_SPLIT_v217
+    // refresh() lived here and called the app's networking client. This file is
+    // compiled into BorealDialerLiveActivity too, where Sources/Networking and
+    // that client do not exist. The fetch now lives in
+    // Sources/Networking/WatchSnapshotFetch.swift, which only the app target
+    // compiles. Everything below is pure UserDefaults and is safe everywhere.
 
     static func publish(_ snapshot: WatchSnapshot) {
         guard let defaults = UserDefaults(suiteName: WidgetSnapshotStore.appGroup) else { return }

@@ -54,3 +54,41 @@ final class WatchSnapshotSyncTests: XCTestCase {
         XCTAssertEqual(read.tasksDue, 1)
     }
 }
+
+// BOREAL_DIALER_WATCH_NEXT_MEETING_v211
+extension WatchSnapshotSyncTests {
+    func testPublishesAFutureMeeting() {
+        let at = Date().addingTimeInterval(3600)
+        WatchSnapshotSync.publishNextMeeting(title: "ABC Manufacturing", startsAt: at)
+        let read = WatchSnapshotSync.nextMeeting()
+        XCTAssertEqual(read?.title, "ABC Manufacturing")
+        XCTAssertEqual(read?.startsAt.timeIntervalSince1970 ?? 0, at.timeIntervalSince1970, accuracy: 1)
+    }
+
+    /// A meeting that has already started must never sit on a watch face - it
+    /// reads as the next thing due.
+    func testRefusesToPublishAMeetingInThePast() {
+        WatchSnapshotSync.publishNextMeeting(title: "Old", startsAt: Date().addingTimeInterval(-60))
+        XCTAssertNil(WatchSnapshotSync.nextMeeting())
+    }
+
+    func testExpiresOnReadAsWellAsOnWrite() {
+        // The face can render long after the phone last published.
+        let defaults = UserDefaults(suiteName: WidgetSnapshotStore.appGroup)
+        defaults?.set("Stale", forKey: "meeting.next.title")
+        defaults?.set(Date().addingTimeInterval(-300).timeIntervalSince1970, forKey: "meeting.next.at")
+        XCTAssertNil(WatchSnapshotSync.nextMeeting())
+    }
+
+    func testClearsWhenThereIsNoMeeting() {
+        WatchSnapshotSync.publishNextMeeting(title: "Something", startsAt: Date().addingTimeInterval(600))
+        XCTAssertNotNil(WatchSnapshotSync.nextMeeting())
+        WatchSnapshotSync.publishNextMeeting(title: nil, startsAt: nil)
+        XCTAssertNil(WatchSnapshotSync.nextMeeting())
+    }
+
+    func testIgnoresABlankTitle() {
+        WatchSnapshotSync.publishNextMeeting(title: "   ", startsAt: Date().addingTimeInterval(600))
+        XCTAssertNil(WatchSnapshotSync.nextMeeting())
+    }
+}

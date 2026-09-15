@@ -13,6 +13,9 @@ struct CallDispositionSheet: View {
 
     @State private var saving: CallDisposition?
     @State private var failure: String?
+    // BOREAL_DIALER_CALL_SUMMARY_v246
+    @State private var summary: String?
+    @State private var summaryUnavailable = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -29,6 +32,26 @@ struct CallDispositionSheet: View {
                         }
                     }
                     .padding(.vertical, 4)
+                }
+
+                // BOREAL_DIALER_CALL_SUMMARY_v246
+                Section("Summary") {
+                    if let summary {
+                        Text(summary)
+                            .font(.subheadline)
+                            .textSelection(.enabled)
+                    } else if summaryUnavailable {
+                        Text("No summary for this call.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                            Text("Summary will appear once the transcript is ready. It is also saved to the contact.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
 
                 Section("How did it go?") {
@@ -64,6 +87,7 @@ struct CallDispositionSheet: View {
                     }
                 }
             }
+            .task { await pollSummary() } // BOREAL_DIALER_CALL_SUMMARY_v246
             .navigationTitle("Call outcome")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -76,6 +100,30 @@ struct CallDispositionSheet: View {
                 }
             }
         }
+    }
+
+    // BOREAL_DIALER_CALL_SUMMARY_v246 - cancelled automatically when the sheet closes.
+    private func pollSummary() async {
+        var attempt = 0
+        var latest: CallSummaryResult?
+        while CallSummaryService.shouldKeepPolling(latest, attempt: attempt) {
+            attempt += 1
+            latest = try? await CallSummaryService.fetch(callSid: callRef)
+            if let text = latest?.summary, latest?.status == "ready", !text.isEmpty {
+                summary = text
+                return
+            }
+            if latest?.status == "none" {
+                summaryUnavailable = true
+                return
+            }
+            do {
+                try await Task.sleep(nanoseconds: CallSummaryService.pollIntervalNanoseconds)
+            } catch {
+                return
+            }
+        }
+        summaryUnavailable = true
     }
 
     private func save(_ option: CallDisposition) async {

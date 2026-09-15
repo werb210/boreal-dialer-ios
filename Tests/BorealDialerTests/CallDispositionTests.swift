@@ -135,3 +135,19 @@ final class AppLockPolicyTests: XCTestCase {
                                                 coldStart: true, backgroundedAt: nil, now: now))
     }
 }
+
+// BOREAL_DIALER_CALL_SUMMARY_v246
+final class CallSummaryServiceTests: XCTestCase {
+    func testDecodesTheServerEnvelope() throws {
+        let json = Data(#"{"status":"ok","data":{"status":"ready","summary":"- Walter sends statements Friday","contactId":"c1"}}"#.utf8)
+        XCTAssertEqual(try CallSummaryService.decode(json), CallSummaryResult(status: "ready", summary: "- Walter sends statements Friday"))
+    }
+
+    func testKeepsPollingOnlyWhilePendingAndWithinTheLimit() {
+        XCTAssertTrue(CallSummaryService.shouldKeepPolling(nil, attempt: 0))
+        XCTAssertTrue(CallSummaryService.shouldKeepPolling(CallSummaryResult(status: "pending", summary: nil), attempt: 3))
+        XCTAssertFalse(CallSummaryService.shouldKeepPolling(CallSummaryResult(status: "ready", summary: "S"), attempt: 3))
+        XCTAssertFalse(CallSummaryService.shouldKeepPolling(CallSummaryResult(status: "none", summary: nil), attempt: 3))
+        XCTAssertFalse(CallSummaryService.shouldKeepPolling(nil, attempt: CallSummaryService.maxAttempts))
+    }
+}

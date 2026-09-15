@@ -108,3 +108,45 @@ enum DispositionError: LocalizedError {
         }
     }
 }
+
+// BOREAL_DIALER_CALL_SUMMARY_v246
+// BF-Server v245 writes an AI summary once Twilio finishes the transcript,
+// usually a few minutes after hang-up. The sheet polls while it is open; the
+// summary also lands on the contact timeline, so closing the sheet loses nothing.
+struct CallSummaryResult: Decodable, Sendable, Equatable {
+    let status: String
+    let summary: String?
+}
+
+private struct CallSummaryEnvelope: Decodable {
+    let status: String?
+    let data: CallSummaryResult?
+}
+
+enum CallSummaryService {
+    static let pollIntervalNanoseconds: UInt64 = 20_000_000_000
+    static let maxAttempts = 15
+
+    static func decode(_ data: Data) throws -> CallSummaryResult {
+        let envelope = try JSONDecoder().decode(CallSummaryEnvelope.self, from: data)
+        guard let result = envelope.data else { throw URLError(.cannotParseResponse) }
+        return result
+    }
+
+    static func shouldKeepPolling(_ result: CallSummaryResult?, attempt: Int) -> Bool {
+        guard attempt < maxAttempts else { return false }
+        guard let result else { return true }
+        return result.status == "pending"
+    }
+
+    static func fetch(callSid: String) async throws -> CallSummaryResult {
+        let trimmed = callSid.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else {
+            throw URLError(.badURL)
+        }
+        let request = try APIClient.shared.makeRequest(path: "/calls/summary?callSid=\(encoded)", method: "GET")
+        let data = try await APIClient.shared.makeAuthorizedRequest(request)
+        return try decode(data)
+    }
+}

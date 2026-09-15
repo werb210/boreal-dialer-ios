@@ -17,6 +17,21 @@ struct BorealWatchEntry: TimelineEntry {
 struct BorealWatchProvider: TimelineProvider {
     private let appGroup = "group.financial.boreal.dialer"
 
+    // BOREAL_DIALER_WIDGET_SELF_CONTAINED_v226
+    // Read straight from the app group because this target compiles only
+    // WatchWidget/. The keys are the contract with the publishing app target.
+    private static func nextMeeting(from defaults: UserDefaults?) -> (title: String, startsAt: Date)? {
+        guard let defaults,
+              let title = defaults.string(forKey: "meeting.next.title") else { return nil }
+        let at = defaults.double(forKey: "meeting.next.at")
+        guard at > 0 else { return nil }
+        let date = Date(timeIntervalSince1970: at)
+        // Expire on read because the face can render long after the phone last
+        // published, and a meeting in the past is no longer the next thing due.
+        guard date > Date() else { return nil }
+        return (title, date)
+    }
+
     private func snapshotEntry() -> BorealWatchEntry {
         let defaults = UserDefaults(suiteName: appGroup)
         return BorealWatchEntry(
@@ -24,7 +39,7 @@ struct BorealWatchProvider: TimelineProvider {
             status: defaults?.string(forKey: "presence.status") ?? "away",
             missedCalls: defaults?.integer(forKey: "calls.missed") ?? 0,
             tasksDue: defaults?.integer(forKey: "tasks.due") ?? 0,
-            meeting: WatchSnapshotSync.nextMeeting()
+            meeting: Self.nextMeeting(from: defaults)
         )
     }
 

@@ -30,6 +30,52 @@ def app_only_symbols() -> set[str]:
     return found
 
 
+# BOREAL_DIALER_WIDGET_SELF_CONTAINED_v226
+# project.yml gives these targets a single source directory and nothing else, so
+# anything they reference must be defined inside it. v211 called a Sources/Shared
+# type from WatchWidget and the error only surfaced 90 seconds into the watch
+# build.
+ISOLATED_TARGETS = {
+    "WatchWidget": ["Sources/Shared", "Sources/Networking", "Sources/Voice", "UI"],
+}
+# UI also defines a model named TimelineEntry, but the widget's TimelineEntry is
+# the WidgetKit protocol. Exclude that intentional SDK-name collision.
+ISOLATED_TARGET_ALLOWLIST = {
+    "WatchWidget": {"TimelineEntry"},
+}
+
+
+def symbols_defined_in(root: str) -> set[str]:
+    found = set()
+    for f in pathlib.Path(root).rglob("*.swift"):
+        for m in re.finditer(
+            r'^(?:public |internal |final |)*(?:class|struct|enum|actor)\s+(\w+)',
+            f.read_text(), re.M,
+        ):
+            found.add(m.group(1))
+    return found
+
+
+def check_isolated_targets() -> list[str]:
+    problems = []
+    for target_dir, forbidden_roots in ISOLATED_TARGETS.items():
+        if not pathlib.Path(target_dir).exists():
+            continue
+        forbidden = set()
+        for root in forbidden_roots:
+            if pathlib.Path(root).exists():
+                forbidden |= symbols_defined_in(root)
+        own = symbols_defined_in(target_dir)
+        forbidden -= own
+        forbidden -= ISOLATED_TARGET_ALLOWLIST.get(target_dir, set())
+        for f in pathlib.Path(target_dir).rglob("*.swift"):
+            text = f.read_text()
+            for sym in forbidden:
+                if re.search(rf'\b{re.escape(sym)}\b', text):
+                    problems.append(f"  {f} -> {sym} (not compiled into this target)")
+    return problems
+
+
 def main() -> int:
     if not SHARED.exists():
         return 0
@@ -40,6 +86,17 @@ def main() -> int:
         for sym in symbols:
             if re.search(rf'\b{re.escape(sym)}\b', text):
                 bad.append((str(f), sym))
+    isolated = check_isolated_targets()
+    if isolated:
+        print("Isolated targets referencing code they do not compile:\n")
+        for line in isolated:
+            print(line)
+        print(
+            "\nThese targets have one source directory in project.yml. Duplicate the\n"
+            "value you need (an app-group key, a literal) rather than importing the type."
+        )
+        return 1
+
     if bad:
         print("Files in Sources/Shared referencing app-only symbols:\n")
         for path, sym in bad:

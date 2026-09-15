@@ -160,10 +160,29 @@ final class CalendarViewModel: ObservableObject {
             // The server also returns an empty list when O365 is not connected,
             // so an empty agenda cannot be read as "nothing scheduled".
             eventsUnavailable = decoded.isEmpty
+            publishNextMeetingToWatch()
         } catch {
             events = []
             eventsUnavailable = true
+            // Do not clear the published meeting here. A failed refresh is not
+            // evidence the meeting was cancelled, and O365 tokens expire often
+            // enough that clearing on error would blank the face routinely.
         }
+    }
+
+    // BOREAL_DIALER_WATCH_NEXT_MEETING_v211
+    private func publishNextMeetingToWatch() {
+        // Only today's agenda is loaded, and only when the user is looking at
+        // today - publishing while they browse next Tuesday would put next
+        // Tuesday's meeting on the watch face.
+        guard Calendar.current.isDateInToday(selectedDate) else { return }
+        let now = Date()
+        // events is already sorted ascending by startDate in loadEvents().
+        let upcoming = events.first { ($0.startDate ?? .distantPast) > now }
+        WatchSnapshotSync.publishNextMeeting(
+            title: upcoming?.title,
+            startsAt: upcoming?.startDate
+        )
     }
 
     func loadTasks() async {

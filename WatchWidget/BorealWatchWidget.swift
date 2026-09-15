@@ -10,6 +10,8 @@ struct BorealWatchEntry: TimelineEntry {
     let missedCalls: Int
     // BOREAL_DIALER_WATCH_SNAPSHOT_WRITER_v210
     let tasksDue: Int
+    // BOREAL_DIALER_WATCH_NEXT_MEETING_v211
+    let meeting: (title: String, startsAt: Date)?
 }
 
 struct BorealWatchProvider: TimelineProvider {
@@ -21,12 +23,13 @@ struct BorealWatchProvider: TimelineProvider {
             date: Date(),
             status: defaults?.string(forKey: "presence.status") ?? "away",
             missedCalls: defaults?.integer(forKey: "calls.missed") ?? 0,
-            tasksDue: defaults?.integer(forKey: "tasks.due") ?? 0
+            tasksDue: defaults?.integer(forKey: "tasks.due") ?? 0,
+            meeting: WatchSnapshotSync.nextMeeting()
         )
     }
 
     func placeholder(in context: Context) -> BorealWatchEntry {
-        BorealWatchEntry(date: Date(), status: "available", missedCalls: 0, tasksDue: 0)
+        BorealWatchEntry(date: Date(), status: "available", missedCalls: 0, tasksDue: 0, meeting: nil)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (BorealWatchEntry) -> Void) {
@@ -40,6 +43,14 @@ struct BorealWatchProvider: TimelineProvider {
 }
 
 struct BorealWatchWidgetView: View {
+    // BOREAL_DIALER_WATCH_NEXT_MEETING_v211 - one formatter, not one per render.
+    static let clock: DateFormatter = {
+        let f = DateFormatter()
+        f.timeStyle = .short
+        f.dateStyle = .none
+        return f
+    }()
+
     @Environment(\.widgetFamily) private var family
     let entry: BorealWatchEntry
 
@@ -64,6 +75,13 @@ struct BorealWatchWidgetView: View {
                     Text(entry.status.replacingOccurrences(of: "_", with: " ")).font(.headline)
                     if entry.missedCalls > 0 {
                         Text("\(entry.missedCalls) missed").font(.caption).foregroundStyle(.secondary)
+                    }
+                    // BOREAL_DIALER_WATCH_NEXT_MEETING_v211 - the next thing on
+                    // the clock outranks a count of things with no time attached.
+                    if let meeting = entry.meeting {
+                        Text("\(Self.clock.string(from: meeting.startsAt))  \(meeting.title)")
+                            .font(.caption)
+                            .lineLimit(1)
                     }
                     // BOREAL_DIALER_WATCH_SNAPSHOT_WRITER_v210
                     if entry.tasksDue > 0 {

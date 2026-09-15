@@ -46,6 +46,9 @@ enum WatchSnapshotSync {
     private static let statusKey = "presence.status"
     private static let missedKey = "calls.missed"
     private static let tasksKey = "tasks.due"
+    // BOREAL_DIALER_WATCH_NEXT_MEETING_v211
+    private static let meetingTitleKey = "meeting.next.title"
+    private static let meetingAtKey = "meeting.next.at"
 
     /// Pulls the snapshot and publishes it. Never throws: a failed refresh must
     /// leave the last good values in place rather than blanking the face.
@@ -70,6 +73,42 @@ enum WatchSnapshotSync {
 #if canImport(WidgetKit)
         WidgetCenter.shared.reloadTimelines(ofKind: "BorealWatchWidget")
 #endif
+    }
+
+    // BOREAL_DIALER_WATCH_NEXT_MEETING_v211
+    // Calendar events are proxied from Microsoft Graph per request, so there is
+    // no meetings table the /watch/snapshot query could read. Rather than put a
+    // Graph round trip - and an O365 token that can expire - behind a watch face,
+    // the phone publishes the next meeting when it already has the agenda in hand.
+    //
+    // Publishing nil clears the keys. A stale meeting on a watch face is worse
+    // than an empty one: it is read as the next thing due.
+    static func publishNextMeeting(title: String?, startsAt: Date?) {
+        guard let defaults = UserDefaults(suiteName: WidgetSnapshotStore.appGroup) else { return }
+        let trimmed = title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let trimmed, !trimmed.isEmpty, let startsAt, startsAt > Date() {
+            defaults.set(trimmed, forKey: meetingTitleKey)
+            defaults.set(startsAt.timeIntervalSince1970, forKey: meetingAtKey)
+        } else {
+            defaults.removeObject(forKey: meetingTitleKey)
+            defaults.removeObject(forKey: meetingAtKey)
+        }
+#if canImport(WidgetKit)
+        WidgetCenter.shared.reloadTimelines(ofKind: "BorealWatchWidget")
+#endif
+    }
+
+    /// The published meeting, or nil once it has started or if none was set.
+    static func nextMeeting() -> (title: String, startsAt: Date)? {
+        guard let defaults = UserDefaults(suiteName: WidgetSnapshotStore.appGroup),
+              let title = defaults.string(forKey: meetingTitleKey) else { return nil }
+        let at = defaults.double(forKey: meetingAtKey)
+        guard at > 0 else { return nil }
+        let date = Date(timeIntervalSince1970: at)
+        // Expire on read as well as on write: the face can render long after the
+        // phone last published, and a meeting in the past must not be shown.
+        guard date > Date() else { return nil }
+        return (title, date)
     }
 
     /// What the complication currently shows, for anything that needs to render

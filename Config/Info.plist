@@ -40,6 +40,10 @@
 	</dict>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Boreal Dialer uses Face ID to unlock your signed-in session.</string>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>INStartCallIntent</string>
+	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Boreal Dialer needs the microphone to place and receive calls.</string>
 	<key>NSSupportsLiveActivities</key>

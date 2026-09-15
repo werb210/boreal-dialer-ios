@@ -173,3 +173,23 @@ final class BorealIntentTextTests: XCTestCase {
         XCTAssertEqual(BorealIntentText.due(missedCalls: 2, tasksDue: 3), "You have 2 missed calls and 3 tasks due.")
     }
 }
+
+// BOREAL_DIALER_START_CALL_ACTIVITY_v248
+final class StartCallActivityTests: XCTestCase {
+    func testBuildsADialLinkTheExistingParserAccepts() throws {
+        let url = try XCTUnwrap(StartCallActivity.dialURL(handle: "+1 (587) 555-0100"))
+        XCTAssertEqual(DialerDeepLinkParser.parse(url), .phone("+15875550100", start: true))
+    }
+
+    func testNationalNumbersFromContactCardsBecomeE164() throws {
+        let url = try XCTUnwrap(StartCallActivity.dialURL(handle: "(587) 555-0100"))
+        XCTAssertEqual(DialerDeepLinkParser.parse(url), .phone("+15875550100", start: true))
+        XCTAssertNil(StartCallActivity.dialURL(handle: "44 20 7946 0958"))
+    }
+
+    func testIgnoresHandlesThatAreNotPhoneNumbers() {
+        XCTAssertNil(StartCallActivity.dialURL(handle: nil))
+        XCTAssertNil(StartCallActivity.dialURL(handle: "  "))
+        XCTAssertNil(StartCallActivity.dialURL(handle: "client:staff-42"))
+    }
+}

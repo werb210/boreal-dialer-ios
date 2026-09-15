@@ -1,5 +1,6 @@
 // BOREAL_DIALER_POST_CALL_DISPOSITION_v201
 import XCTest
+import UserNotifications
 @testable import BorealDialer
 
 final class CallDispositionTests: XCTestCase {
@@ -80,5 +81,31 @@ extension CallDispositionTests {
         } catch {
             // Any other transport error is acceptable in a unit test.
         }
+    }
+}
+
+// BOREAL_DIALER_MISSED_CALL_ACTIONS_v239
+final class MissedCallNotificationTests: XCTestCase {
+    func testCategoryOffersCallBack() {
+        let category = MissedCallNotification.category()
+        XCTAssertEqual(category.identifier, "MISSED_CALL")
+        XCTAssertEqual(category.actions.map(\.identifier), ["CALL_BACK"])
+    }
+
+    func testContentCarriesCategoryAndDialableNumber() throws {
+        let content = try XCTUnwrap(MissedCallNotification.content(handle: "+1 (587) 555-0100"))
+        XCTAssertEqual(content.categoryIdentifier, "MISSED_CALL")
+        XCTAssertEqual(content.userInfo["phone"] as? String, "+15875550100")
+    }
+
+    func testNoNotificationForClientIdentitiesOrUnknown() {
+        XCTAssertNil(MissedCallNotification.content(handle: "client:staff-42"))
+        XCTAssertNil(MissedCallNotification.content(handle: "Unknown"))
+    }
+
+    func testCallBackURLParsesThroughTheExistingDeepLinkParser() throws {
+        let url = try XCTUnwrap(MissedCallNotification.callBackURL(userInfo: ["type": "missed_call", "phone": "+15875550100"]))
+        XCTAssertNotNil(DialerDeepLinkParser.parse(url))
+        XCTAssertNil(MissedCallNotification.callBackURL(userInfo: ["type": "client_message"]))
     }
 }

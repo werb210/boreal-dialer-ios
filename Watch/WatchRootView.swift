@@ -22,6 +22,9 @@ struct WatchRootView: View {
                 NavigationLink("Call by Voice", destination: WatchVoiceCallView())
                 NavigationLink("Contacts", destination: WatchContactsView())
                 NavigationLink("Favorites", destination: WatchFavoritesView())
+                // BOREAL_DIALER_WATCH_CALLBACKS_v219 - what you owe outranks
+                // what already happened, so it sits above Recent Calls.
+                NavigationLink("Calls Due", destination: WatchCallbacksView())
                 NavigationLink("Recent Calls", destination: WatchRecentsView())
                 NavigationLink("Quick Text", destination: WatchQuickTextRecipientsView())
                 NavigationLink("Log Outcome", destination: WatchDispositionView())
@@ -181,6 +184,64 @@ struct WatchRecentsView: View {
             catch { unavailable = true }
         }
     }
+}
+
+// BOREAL_DIALER_WATCH_CALLBACKS_v219
+struct WatchCallbacksView: View {
+    @State private var callbacks: [WatchCallback] = []
+    @State private var unavailable = false
+    @State private var loaded = false
+    @State private var line: BorealLine = .BF
+    private let service: any WatchCallbacksService = DirectWatchCallbacksService()
+
+    var body: some View {
+        List {
+            if BorealLine.enabled.count > 1 {
+                Picker("Line", selection: $line) { ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) } }
+            }
+            if unavailable {
+                Text("Calls due unavailable").font(.caption)
+            } else if loaded && callbacks.isEmpty {
+                // An empty list and a failed fetch must not look the same.
+                Text("Nothing due").font(.caption).foregroundStyle(.secondary)
+            }
+            ForEach(callbacks) { callback in
+                // Opens the dial screen rather than dialling on tap. A misplaced
+                // tap on a wrist should not ring a client.
+                NavigationLink(destination: PrefilledDialView(number: callback.number)) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(callback.contactName ?? callback.number)
+                        Text(callback.title)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        if callback.overdue {
+                            Text("Overdue").font(.caption2).foregroundStyle(.orange)
+                        } else if let due = callback.dueAt {
+                            Text(Self.clock.string(from: due)).font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("Calls Due")
+        .task(id: line) {
+            do {
+                unavailable = false
+                callbacks = try await service.fetch(line: line, limit: 20)
+            } catch {
+                unavailable = true
+            }
+            loaded = true
+        }
+    }
+
+    private static let clock: DateFormatter = {
+        let f = DateFormatter()
+        f.timeStyle = .short
+        f.dateStyle = .none
+        return f
+    }()
 }
 
 struct WatchQuickTextRecipientsView: View {

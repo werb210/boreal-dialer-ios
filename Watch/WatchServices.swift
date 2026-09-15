@@ -189,6 +189,84 @@ struct WatchAPIClient: @unchecked Sendable {
     }
 }
 
+// BOREAL_DIALER_WATCH_CALLBACKS_v219
+// The calls this person owes today. Served by GET /api/watch/callbacks
+// (BF_SERVER_WATCH_CALLBACKS_v216), which only returns tasks that have a contact
+// with a phone number - so every row here is dialable, which is the whole point
+// of putting it on a wrist.
+struct WatchCallback: Codable, Identifiable, Equatable, Sendable {
+    let id: String
+    let title: String
+    let dueAt: Date?
+    let overdue: Bool
+    let contactId: String?
+    let contactName: String?
+    let number: String
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, dueAt, overdue, contactId, contactName, number
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        title = (try? c.decode(String.self, forKey: .title)) ?? "Call"
+        overdue = (try? c.decode(Bool.self, forKey: .overdue)) ?? false
+        contactId = try? c.decode(String.self, forKey: .contactId)
+        contactName = try? c.decode(String.self, forKey: .contactName)
+        number = (try? c.decode(String.self, forKey: .number)) ?? ""
+        // The server sends an ISO timestamp; a row with an unparseable date is
+        // still worth showing - it just loses its time label.
+        if let raw = try? c.decode(String.self, forKey: .dueAt) {
+            dueAt = ISO8601DateFormatter().date(from: raw)
+                ?? ISO8601DateFormatter.withFractionalSeconds.date(from: raw)
+        } else {
+            dueAt = nil
+        }
+    }
+}
+
+extension ISO8601DateFormatter {
+    static let withFractionalSeconds: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+}
+
+private struct WatchCallbacksEnvelope: Decodable {
+    let items: [WatchCallback]
+    let count: Int
+}
+
+protocol WatchCallbacksService {
+    func fetch(line: BorealLine, limit: Int) async throws -> [WatchCallback]
+}
+
+struct DirectWatchCallbacksService: WatchCallbacksService {
+    private let client: WatchAPIClient?
+    private let makeClient: () throws -> WatchAPIClient
+
+    init(client: WatchAPIClient? = nil,
+         makeClient: @escaping () throws -> WatchAPIClient = { try WatchAPIClient() }) {
+        self.client = client
+        self.makeClient = makeClient
+    }
+
+    func fetch(line: BorealLine, limit: Int = 20) async throws -> [WatchCallback] {
+        let api = try client ?? makeClient()
+        let data = try await api.request(
+            path: "/watch/callbacks",
+            line: line,
+            query: [
+                .init(name: "line", value: line.rawValue),
+                .init(name: "limit", value: String(limit))
+            ]
+        )
+        return try JSONDecoder().decode(WatchCallbacksEnvelope.self, from: data).items
+    }
+}
+
 protocol WatchDirectoryService { func search(_ query: String, line: BorealLine, limit: Int) async throws -> [ContactSummary] }
 extension WatchDirectoryService { func search(_ query: String, limit: Int) async throws -> [ContactSummary] { try await search(query, line: .BF, limit: limit) } }
 struct DirectWatchDirectoryService: WatchDirectoryService {

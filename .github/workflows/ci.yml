@@ -131,8 +131,17 @@ jobs:
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
 
       - name: Run watch unit tests
+        # BOREAL_DIALER_WATCH_TEST_GUARD_v218 - do not run with an empty udid.
+        # Without this the step fires even when watch-sim was skipped, passes an
+        # id-less destination, and reports "Watch tests never started" over the
+        # top of whatever actually broke.
+        if: steps.watch-build.outputs.watch_built == 'true' && steps.watch-sim.outputs.udid != ''
         run: |
           set -o pipefail
+          if [ -z "${{ steps.watch-sim.outputs.udid }}" ]; then
+            echo "No watch simulator udid resolved; refusing to run tests against an empty destination." >&2
+            exit 1
+          fi
           xcodebuild \
             -project BorealDialer.xcodeproj \
             -scheme BorealDialerWatch \
@@ -147,7 +156,13 @@ jobs:
           echo "## Watch test failures" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           # BOREAL_DIALER_CI_TRUTHFUL_v1 - report the failure that happened.
-          if grep -qE "error: " /tmp/xcodebuild-watch.log 2>/dev/null; then
+          # BOREAL_DIALER_WATCH_TEST_GUARD_v218 - the app build runs before the
+          # watch build, so its failure is the most common reason nothing watch
+          # related ran at all. Name it first.
+          if [ ! -f /tmp/xcodebuild-watch.log ]; then
+            echo "### The watch build never started" >> "$GITHUB_STEP_SUMMARY"
+            echo "The app target failed first - see the Build errors section above." >> "$GITHUB_STEP_SUMMARY"
+          elif grep -qE "error: " /tmp/xcodebuild-watch.log 2>/dev/null; then
             echo "### Watch app did not compile" >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
             grep -E "error: " /tmp/xcodebuild-watch.log | head -20 >> "$GITHUB_STEP_SUMMARY"

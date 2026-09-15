@@ -239,6 +239,11 @@ extension TwilioVoiceManager: @preconcurrency CallDelegate {
     func callDidDisconnect(call: Call, error: Error?) {
         appendCallLog()
 
+        // BOREAL_DIALER_PRESENT_DISPOSITION_v224
+        // Publish the ended call rather than presenting from the voice layer;
+        // CallKit and Watch paths also drive this engine without a view hierarchy.
+        VoiceEngine.shared.publishFinishedCall(callSid: call.sid)
+
         if error == nil {
             VoiceEngine.shared.handleDisconnect()
         } else {

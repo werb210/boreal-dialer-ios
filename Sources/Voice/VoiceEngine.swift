@@ -6,6 +6,11 @@ import AVFoundation
 @MainActor
 final class VoiceEngine: NSObject, ObservableObject {
 
+    // BOREAL_DIALER_PRESENT_DISPOSITION_v224
+    /// The most recently ended call, for the outcome sheet. Cleared once the
+    /// sheet is dismissed so returning to the dialer does not re-present it.
+    @Published var finishedCall: FinishedCall?
+
     static let shared = VoiceEngine()
 
     enum State: CustomStringConvertible {
@@ -311,6 +316,13 @@ final class VoiceEngine: NSObject, ObservableObject {
     func handleDisconnect() {
         Telemetry.event("call_end", metadata: ["duration": "\(callDuration)"])
         finishCall(status: .ended)
+    }
+
+    // BOREAL_DIALER_PRESENT_DISPOSITION_v224
+    // VoiceEngine owns call state but not the Twilio Call instance. The SDK
+    // delegate publishes its stable CallSid through this UI-neutral hook.
+    func publishFinishedCall(callSid: String?) {
+        finishedCall = callSid.map { FinishedCall(callSid: $0, endedAt: Date()) }
     }
 
     func endReportedCall(uuid: UUID, reason: CXCallEndedReason = .remoteEnded) {

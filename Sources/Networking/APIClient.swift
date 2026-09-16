@@ -81,7 +81,17 @@ final class APIClient {
         }
 
         let req = authorizedRequest(request)
-        return try await execute(req)
+        // BOREAL_DIALER_OFFLINE_v303 - remember good reads; with no signal, return the last copy.
+        do {
+            let data = try await execute(req)
+            ResponseCache.store(data, for: req)
+            return data
+        } catch {
+            if OfflineQueue.isOffline(error), let cached = ResponseCache.load(for: req) {
+                return cached
+            }
+            throw error
+        }
     }
 
     func execute(_ request: URLRequest) async throws -> Data {

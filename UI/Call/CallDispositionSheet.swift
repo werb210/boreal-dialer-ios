@@ -173,7 +173,14 @@ struct CallDispositionSheet: View {
             try await SuggestedTaskService.add(task, contactId: suggestionContactId)
             addedSuggestions.insert(task.id)
         } catch {
-            suggestionError = "Could not add that task. Try again."
+            // BOREAL_DIALER_OFFLINE_v303
+            if OfflineQueue.isOffline(error),
+               let data = try? JSONSerialization.data(withJSONObject: SuggestedTaskService.body(for: task, contactId: suggestionContactId)) {
+                OfflineQueue.shared.enqueue(label: "Task", path: "/tasks", body: data)
+                addedSuggestions.insert(task.id)
+            } else {
+                suggestionError = "Could not add that task. Try again."
+            }
         }
         addingSuggestion = nil
     }
@@ -186,6 +193,13 @@ struct CallDispositionSheet: View {
             onFinished(option)
             dismiss()
         } catch {
+            // BOREAL_DIALER_OFFLINE_v303 - no signal: keep the outcome on the phone and move on.
+            if OfflineQueue.isOffline(error) {
+                CallDispositionService.queueOffline(callRef: callRef, disposition: option)
+                onFinished(option)
+                dismiss()
+                return
+            }
             // Stay on the sheet. Losing the outcome because the network blipped
             // is the failure staff would actually notice.
             failure = error.localizedDescription

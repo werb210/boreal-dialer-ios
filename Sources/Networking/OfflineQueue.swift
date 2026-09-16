@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 struct QueuedAction: Codable {
     let id: UUID
@@ -20,53 +21,113 @@ struct EndCallPayload: Codable {
     let uuid: String
 }
 
-final class OfflineQueue {
+// BOREAL_DIALER_OFFLINE_v303
+// The old queue was never written to: nothing called enqueue, so a call outcome
+// or task saved with no signal was simply lost. This keeps the exact request
+// (path, body, silo) and replays it when the connection returns.
+struct QueuedRequest: Codable, Equatable {
+    let id: UUID
+    let label: String
+    let path: String
+    let method: String
+    let body: Data?
+    let silo: String
+    let createdAt: Date
+    var attempts: Int
+}
+
+final class OfflineQueue: ObservableObject {
 
     static let shared = OfflineQueue()
+    static let maxAttempts = 10
 
-    private let storageKey = "offline_queue"
+    private let legacyKey = "offline_queue"
+    private let storageKey = "offline_requests_v303"
+    private let lock = NSLock()
+    private var flushing = false
 
-    private init() {}
+    @Published private(set) var pendingCount: Int = 0
 
-    private var queue: [QueuedAction] {
-        get {
-            guard let data = UserDefaults.standard.data(forKey: storageKey),
-                  let decoded = try? JSONDecoder().decode([QueuedAction].self, from: data)
-            else { return [] }
-            return decoded
-        }
-        set {
-            let encoded = try? JSONEncoder().encode(newValue)
-            UserDefaults.standard.set(encoded, forKey: storageKey)
+    private init() {
+        UserDefaults.standard.removeObject(forKey: legacyKey)
+        pendingCount = load().count
+    }
+
+    /// True for the errors URLSession raises when there is no usable connection.
+    static func isOffline(_ error: Error) -> Bool {
+        guard let urlError = error as? URLError else { return false }
+        switch urlError.code {
+        case .notConnectedToInternet, .networkConnectionLost, .timedOut, .cannotConnectToHost,
+             .cannotFindHost, .dnsLookupFailed, .dataNotAllowed, .internationalRoamingOff:
+            return true
+        default:
+            return false
         }
     }
 
-    func enqueue(type: String, payload: Data) {
-        var current = queue
-        current.append(
-            QueuedAction(
-                id: UUID(),
-                type: type,
-                payload: payload,
-                createdAt: Date()
-            )
-        )
-        queue = current
+    func load() -> [QueuedRequest] {
+        guard let data = UserDefaults.standard.data(forKey: storageKey),
+              let decoded = try? JSONDecoder().decode([QueuedRequest].self, from: data) else { return [] }
+        return decoded
     }
 
+    private func save(_ items: [QueuedRequest]) {
+        let encoded = try? JSONEncoder().encode(items)
+        UserDefaults.standard.set(encoded, forKey: storageKey)
+        let count = items.count
+        DispatchQueue.main.async { self.pendingCount = count }
+    }
+
+    func enqueue(label: String, path: String, method: String = "POST", body: Data?) {
+        lock.lock()
+        defer { lock.unlock() }
+        var items = load()
+        items.append(QueuedRequest(
+            id: UUID(),
+            label: label,
+            path: path,
+            method: method,
+            body: body,
+            silo: APIConfig.siloHeader(for: APIConfig.activeSilo),
+            createdAt: Date(),
+            attempts: 0
+        ))
+        save(items)
+    }
+
+    /// Replays everything saved while offline, oldest first. Stops while still offline
+    /// or signed out; a request the server keeps refusing is dropped after maxAttempts.
     func flush() async {
-        guard NetworkMonitor.shared.isConnected else { return }
+        guard NetworkMonitor.shared.isConnected, TokenStorage.shared.getToken() != nil else { return }
+        if flushing { return }
+        flushing = true
+        defer { flushing = false }
 
-        var remaining: [QueuedAction] = []
-
-        for action in queue {
+        var items = load()
+        var index = 0
+        while index < items.count {
+            let item = items[index]
             do {
-                try await API.executeQueuedAction(action)
+                var request = try APIClient.shared.makeRequest(path: item.path, method: item.method, body: item.body)
+                request.setValue(item.silo, forHTTPHeaderField: "X-Silo")
+                _ = try await APIClient.shared.makeAuthorizedRequest(request)
+                items.remove(at: index)
+                save(items)
             } catch {
-                remaining.append(action)
+                if Self.isOffline(error) { break }
+                if let apiError = error as? APIError, case .unauthorized = apiError { break }
+                items[index].attempts += 1
+                if items[index].attempts >= Self.maxAttempts {
+                    items.remove(at: index)
+                } else {
+                    index += 1
+                }
+                save(items)
             }
         }
+    }
 
-        queue = remaining
+    func clear() {
+        save([])
     }
 }

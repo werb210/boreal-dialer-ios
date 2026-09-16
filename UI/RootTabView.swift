@@ -17,6 +17,7 @@ struct RootTabView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            OfflineStatusBar() // BOREAL_DIALER_OFFLINE_v303
             // BOREAL_DIALER_ACCOUNT_SHEET_v42 - sign out lives here; there was
             // previously no way to leave the app.
             HStack {

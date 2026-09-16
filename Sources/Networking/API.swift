@@ -62,6 +62,20 @@ enum API {
         _ = try await AuthService.shared.performAuthorizedRequest(request)
     }
 
+    // BOREAL_DIALER_OFFLINE_v303 - the same call-events body logCall sends, saved for later.
+    static func queueCallLog(duration: Int, status: String, number: String?, callSid: String?) {
+        guard let number, !number.isEmpty else { return }
+        var payload: [String: Any] = [
+            "event_type": "call_completed",
+            "to_number": number,
+            "duration_seconds": duration,
+            "payload": ["status": status],
+        ]
+        if let callSid { payload["twilio_call_sid"] = callSid }
+        guard let body = try? JSONSerialization.data(withJSONObject: payload) else { return }
+        OfflineQueue.shared.enqueue(label: "Call log", path: "/communications/call-events", body: body)
+    }
+
     static func executeQueuedAction(_ action: QueuedAction) async throws {
 
         switch action.type {

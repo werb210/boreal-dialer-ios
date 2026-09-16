@@ -349,12 +349,19 @@ final class VoiceEngine: NSObject, ObservableObject {
         let sid = activeCallSid
         let seconds = callDuration
         Task {
-            try? await API.logCall(
-                duration: seconds,
-                status: "\(status)",
-                number: number,
-                callSid: sid
-            )
+            // BOREAL_DIALER_OFFLINE_v303 - a call that ends with no signal is logged when it returns.
+            do {
+                try await API.logCall(
+                    duration: seconds,
+                    status: "\(status)",
+                    number: number,
+                    callSid: sid
+                )
+            } catch {
+                if OfflineQueue.isOffline(error) {
+                    API.queueCallLog(duration: seconds, status: "\(status)", number: number, callSid: sid)
+                }
+            }
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {

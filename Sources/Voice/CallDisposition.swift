@@ -92,6 +92,16 @@ enum CallDispositionService {
     }
 }
 
+// BOREAL_DIALER_OFFLINE_v303 - no signal: keep the outcome and send it when back online.
+extension CallDispositionService {
+    static func queueOffline(callRef: String, disposition: CallDisposition) {
+        let trimmed = callRef.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let body = try? JSONSerialization.data(withJSONObject: ["disposition": disposition.rawValue]) else { return }
+        OfflineQueue.shared.enqueue(label: "Call outcome", path: "/telephony/calls/\(trimmed)/disposition", body: body)
+    }
+}
+
 enum DispositionError: LocalizedError {
     case missingCallReference
     case rejected(String)

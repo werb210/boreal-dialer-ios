@@ -34,6 +34,7 @@ struct QueuedRequest: Codable, Equatable {
     let silo: String
     let createdAt: Date
     var attempts: Int
+    var handedAt: Date? = nil // BOREAL_DIALER_BACKGROUND_SEND_v309 - the phone is sending it
 }
 
 final class OfflineQueue: ObservableObject {
@@ -107,6 +108,7 @@ final class OfflineQueue: ObservableObject {
         var index = 0
         while index < items.count {
             let item = items[index]
+            if item.handedAt != nil { index += 1; continue } // v309: the phone is already sending it
             do {
                 var request = try APIClient.shared.makeRequest(path: item.path, method: item.method, body: item.body)
                 request.setValue(item.silo, forHTTPHeaderField: "X-Silo")
@@ -129,5 +131,49 @@ final class OfflineQueue: ObservableObject {
 
     func clear() {
         save([])
+        BackgroundSender.shared.cancelAll() // BOREAL_DIALER_BACKGROUND_SEND_v309
+    }
+
+    // BOREAL_DIALER_BACKGROUND_SEND_v309 - leaving the app hands saved changes to iOS.
+    func handOffToBackground() {
+        guard let token = TokenStorage.shared.getToken(), !token.isEmpty else { return }
+        lock.lock()
+        defer { lock.unlock() }
+        var items = load()
+        var changed = false
+        for index in items.indices where items[index].handedAt == nil {
+            let item = items[index]
+            guard var request = try? APIClient.shared.makeRequest(path: item.path, method: item.method, body: nil) else { continue }
+            request.setValue(item.silo, forHTTPHeaderField: "X-Silo")
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            do {
+                try BackgroundSender.shared.enqueue(id: item.id.uuidString, request: request, body: item.body ?? Data())
+                items[index].handedAt = Date()
+                changed = true
+            } catch {
+                continue
+            }
+        }
+        if changed { save(items) }
+    }
+
+    /// Reads back what iOS sent while the app was closed.
+    func reconcileBackground() {
+        let results = BackgroundSender.shared.results()
+        guard !results.isEmpty else { return }
+        lock.lock()
+        defer { lock.unlock() }
+        var items = load()
+        for (id, status) in results {
+            guard let index = items.firstIndex(where: { $0.id.uuidString == id }) else { continue }
+            switch BackgroundSender.outcome(for: status) {
+            case .sent, .refused:
+                items.remove(at: index)
+            case .retry:
+                items[index].handedAt = nil
+            }
+        }
+        save(items)
+        BackgroundSender.shared.acknowledge(Array(results.keys))
     }
 }

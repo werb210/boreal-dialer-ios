@@ -87,13 +87,17 @@ struct BorealDialerApp: App {
             .onChange(of: scenePhase) { phase in
                 // BOREAL_DIALER_FACE_ID_v244 - re-lock a signed-in session on return.
                 if phase == .active { appLock.didBecomeActive(authenticated: auth.isAuthenticated) }
-                if phase == .background { appLock.didEnterBackground() }
+                if phase == .background {
+                    appLock.didEnterBackground()
+                    OfflineQueue.shared.handOffToBackground() // BOREAL_DIALER_BACKGROUND_SEND_v309
+                }
                 if phase == .active {
                     WidgetSnapshotStore.refreshStoredSnapshot()
                     // BOREAL_DIALER_WATCH_SNAPSHOT_WRITER_v210 - nothing has ever written the
                     // keys the watch complication reads. This is that writer.
                     Task { await WatchSnapshotSync.refresh() }
                     Task {
+                        OfflineQueue.shared.reconcileBackground() // BOREAL_DIALER_BACKGROUND_SEND_v309
                         await OfflineQueue.shared.flush()
                         await CallDirectoryManager.shared.refresh()
                         CallDirectoryManager.shared.updateEnabledStatus()
@@ -119,6 +123,17 @@ struct BorealDialerApp: App {
 }
 
 final class DialerAppDelegate: NSObject, UIApplicationDelegate {
+    // BOREAL_DIALER_BACKGROUND_SEND_v309 - iOS relaunches the app to report finished background sends.
+    func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String,
+                     completionHandler: @escaping () -> Void) {
+        if identifier == BackgroundSender.sessionIdentifier {
+            BackgroundSender.shared.systemCompletion = completionHandler
+            _ = BackgroundSender.shared.session
+        } else {
+            completionHandler()
+        }
+    }
+
     func application(_ app: UIApplication, open url: URL,
                      options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
         DeepLinkCoordinator.shared.receive(url)

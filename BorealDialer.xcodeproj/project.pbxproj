@@ -110,6 +110,9 @@
 		CF6DF95D69A7ED5D3353E978 /* CallLogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4C54EEB773BC6680C83F9D1 /* CallLogStore.swift */; };
 		D013B9DEDD425C1CE40A79AB /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C9014FB34BEE2CF9CCAC39E /* RootTabView.swift */; };
 		D550E936DAC774400F70B063 /* OfflineQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5B06688BAA084CFAA85889C /* OfflineQueue.swift */; };
+		A30300000000000000000001 /* ResponseCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30300000000000000000011 /* ResponseCache.swift */; };
+		A30300000000000000000002 /* OfflineStatusBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30300000000000000000012 /* OfflineStatusBar.swift */; };
+		A30300000000000000000003 /* OfflineModeV303Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30300000000000000000013 /* OfflineModeV303Tests.swift */; };
 		E007D92F77E9F85B38496439 /* LineManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E7F91F32F09206D52AF40DC /* LineManager.swift */; };
 		E312CBEF84A6B6A9933A6C54 /* NetworkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 532F02892698BBB85884C799 /* NetworkManager.swift */; };
 		E574D4A5D39FF5C77CC91D11 /* NotificationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C6000EC1F1C4B1E8F90B5E1 /* NotificationsView.swift */; };
@@ -258,6 +261,9 @@
 		B353FC3A142C341BAA8AC78E /* CallStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallStateManager.swift; sourceTree = "<group>"; };
 		B4D564B483F228FF80BA8FDF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		B5B06688BAA084CFAA85889C /* OfflineQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineQueue.swift; sourceTree = "<group>"; };
+		A30300000000000000000011 /* ResponseCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseCache.swift; sourceTree = "<group>"; };
+		A30300000000000000000012 /* OfflineStatusBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineStatusBar.swift; sourceTree = "<group>"; };
+		A30300000000000000000013 /* OfflineModeV303Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineModeV303Tests.swift; sourceTree = "<group>"; };
 		B97478ADE6A82B9C17F2BD1B /* API.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = API.swift; sourceTree = "<group>"; };
 		B9826E0220780F20648FABF7 /* BorealDialerTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BorealDialerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C1AAC6E8E84ACE84B91EF7F2 /* Notifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
@@ -373,6 +379,7 @@
 			isa = PBXGroup;
 			children = (
 				5C9014FB34BEE2CF9CCAC39E /* RootTabView.swift */,
+				A30300000000000000000012 /* OfflineStatusBar.swift */,
 				1EAC926DE48A6FA5186FA614 /* Auth */,
 				13F8A48659BAACD05C56BB97 /* Calendar */,
 				B03226C8D93866D49001AA89 /* Calls */,
@@ -478,6 +485,7 @@
 				28CF8056CCD965B4524A3F11 /* ConferenceStartTests.swift */,
 				06639C6209522E474612E26A /* DecodingTests.swift */,
 				3A08AF97A1E401652259BF4D /* ProductionSafetyTests.swift */,
+				A30300000000000000000013 /* OfflineModeV303Tests.swift */,
 				3DFB9D60AC6395C0ADE6B301 /* TeamRosterTests.swift */,
 				0825C71E25D0B74979A50E99 /* VoiceIdentityTests.swift */,
 				5F6DB8DF2811C833976312C6 /* WatchMessageTests.swift */,
@@ -511,6 +519,7 @@
 				532F02892698BBB85884C799 /* NetworkManager.swift */,
 				A22F30B3ED700ECDE1C38553 /* NetworkMonitor.swift */,
 				B5B06688BAA084CFAA85889C /* OfflineQueue.swift */,
+				A30300000000000000000011 /* ResponseCache.swift */,
 				972EB94F633F81200950C4B0 /* ReachabilityManager.swift */,
 				C96ED262FC118D1A7D247F53 /* ReconnectionController.swift */,
 			);
@@ -972,6 +981,7 @@
 				63E00D6713CB65310C28BFDD /* ConferenceStartTests.swift in Sources */,
 				FBD774C82D22782458518AE5 /* DecodingTests.swift in Sources */,
 				CC6A9D4458C456C9EF876374 /* ProductionSafetyTests.swift in Sources */,
+				A30300000000000000000003 /* OfflineModeV303Tests.swift in Sources */,
 				62196631D89BCA3B547B30EF /* TeamRosterTests.swift in Sources */,
 				CA07D233B9ACBF87C71FBE38 /* VoiceIdentityTests.swift in Sources */,
 				8544D36D6EC8FB3905F79DC5 /* WatchMessageTests.swift in Sources */,
@@ -1045,6 +1055,8 @@
 				E574D4A5D39FF5C77CC91D11 /* NotificationsView.swift in Sources */,
 				68263DEC692EDE956F30339F /* OTPService.swift in Sources */,
 				D550E936DAC774400F70B063 /* OfflineQueue.swift in Sources */,
+				A30300000000000000000001 /* ResponseCache.swift in Sources */,
+				A30300000000000000000002 /* OfflineStatusBar.swift in Sources */,
 				62C7E43094EAF84E86D496AD /* PersistenceController.swift in Sources */,
 				EDBB880909625190F3F3342A /* PresenceHeartbeat.swift in Sources */,
 				EDBB880909625190F3F3342B /* WatchEnrollment.swift in Sources */,

@@ -127,6 +127,8 @@ final class AuthService: ObservableObject {
         await VoiceManager.shared.logout()
         await PresenceHeartbeat.shared.goOffline()
         await FaceIDSignIn.shared.revokeAndClear() // BOREAL_DIALER_FACE_ID_SIGN_IN_v299
+        ResponseCache.clear() // BOREAL_DIALER_OFFLINE_v303 - nothing from this account stays on the phone
+        OfflineQueue.shared.clear()
         TokenStorage.shared.clear()
         await MainActor.run { isAuthenticated = false }
     }

@@ -6,6 +6,8 @@ final class AuthService: ObservableObject {
     static let shared = AuthService()
 
     @Published var isAuthenticated = false
+    // BOREAL_DIALER_FACE_ID_SIGN_IN_v299 - set once after a text-code sign-in to offer Face ID.
+    @Published var offerFaceID = false
 
     private init() {
         if TokenStorage.shared.getToken() != nil {
@@ -23,12 +25,37 @@ final class AuthService: ObservableObject {
 
         await MainActor.run {
             self.isAuthenticated = true
+            // BOREAL_DIALER_FACE_ID_SIGN_IN_v299
+            let faceID = FaceIDSignIn.shared
+            if faceID.biometryAvailable && !faceID.isEnrolled && !faceID.hasBeenOffered {
+                faceID.markOffered()
+                self.offerFaceID = true
+            }
         }
 
         Task { await CallDirectoryManager.shared.refresh() }
 
         if shouldInitializeVoice(from: token) {
             // BOREAL_DIALER_SDK_AND_ISOLATION_v5 - PushManager is main-actor.
+            await MainActor.run { PushManager.shared.register() }
+            Task {
+                await VoiceManager.shared.initialize()
+            }
+        }
+    }
+
+    // BOREAL_DIALER_FACE_ID_SIGN_IN_v299 - same post-sign-in steps as the text code.
+    func loginWithFaceID() async throws {
+        let token = try await FaceIDSignIn.shared.signIn()
+        TokenStorage.shared.save(token: token)
+
+        await MainActor.run {
+            self.isAuthenticated = true
+        }
+
+        Task { await CallDirectoryManager.shared.refresh() }
+
+        if shouldInitializeVoice(from: token) {
             await MainActor.run { PushManager.shared.register() }
             Task {
                 await VoiceManager.shared.initialize()
@@ -99,6 +126,7 @@ final class AuthService: ObservableObject {
     func logout() async {
         await VoiceManager.shared.logout()
         await PresenceHeartbeat.shared.goOffline()
+        await FaceIDSignIn.shared.revokeAndClear() // BOREAL_DIALER_FACE_ID_SIGN_IN_v299
         TokenStorage.shared.clear()
         await MainActor.run { isAuthenticated = false }
     }

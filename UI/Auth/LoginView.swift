@@ -8,6 +8,8 @@ struct LoginView: View {
     // BOREAL_DIALER_UI_COMPILES_v6
     @State private var errorMessage: String?
     @State private var busy = false
+    // BOREAL_DIALER_FACE_ID_SIGN_IN_v299
+    @State private var faceIDReady = false
     @ObservedObject var auth = AuthService.shared
     // BOREAL_DIALER_KEYPAD_ICON_PLIST_v22
     private enum Field { case phone, code }
@@ -54,6 +56,39 @@ struct LoginView: View {
                 Text("Sign in with your work number")
                     .font(.subheadline)
                     .foregroundColor(.white.opacity(0.6))
+
+                if faceIDReady {
+                    Button {
+                        Task {
+                            busy = true
+                            errorMessage = nil
+                            do {
+                                try await auth.loginWithFaceID()
+                            } catch FaceIDSignInError.cancelled {
+                                errorMessage = nil
+                            } catch FaceIDSignInError.rejected {
+                                faceIDReady = false
+                                errorMessage = "Face ID sign-in has expired. Sign in with a text code to turn it back on."
+                            } catch {
+                                errorMessage = "Face ID sign-in didn't work. Use a text code instead."
+                            }
+                            busy = false
+                        }
+                    } label: {
+                        Label("Sign in with Face ID", systemImage: "faceid")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 15)
+                            .background(gold)
+                            .foregroundColor(navy)
+                            .cornerRadius(12)
+                    }
+                    .disabled(busy)
+
+                    Text("or get a text code")
+                        .font(.footnote)
+                        .foregroundColor(.white.opacity(0.6))
+                }
 
                 VStack(spacing: 14) {
                     fieldStyle(
@@ -125,7 +160,10 @@ struct LoginView: View {
             }
             .padding(.horizontal, 28)
         }
-        .onAppear { focused = .phone }
+        .onAppear {
+            faceIDReady = FaceIDSignIn.shared.isEnrolled && FaceIDSignIn.shared.biometryAvailable
+            if !faceIDReady { focused = .phone }
+        }
         // Six digits is the whole code - no reason to make anyone tap Login.
         .onChange(of: otp) { value in
             if value.count == 6, otpRequested, !busy {

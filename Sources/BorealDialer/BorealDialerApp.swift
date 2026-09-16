@@ -55,6 +55,13 @@ struct BorealDialerApp: App {
                     LoginView()
                 }
             }
+            // BOREAL_DIALER_FACE_ID_SIGN_IN_v299 - offered once, right after a text-code sign-in.
+            .alert("Use Face ID to sign in?", isPresented: $auth.offerFaceID) {
+                Button("Turn on") { Task { _ = await FaceIDSignIn.shared.enroll() } }
+                Button("Not now", role: .cancel) {}
+            } message: {
+                Text("Next time you can sign in with Face ID instead of a text code.")
+            }
             .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
             .onOpenURL { _ = DeepLinkCoordinator.shared.receive($0) }
             // BOREAL_DIALER_START_CALL_ACTIVITY_v248 - Recents, contact card, CarPlay.

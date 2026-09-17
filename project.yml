@@ -78,6 +78,22 @@ targets:
           - CFBundleURLName: financial.boreal.dialer
             CFBundleURLSchemes:
               - borealdialer
+        # BOREAL_DIALER_SHARE_TO_BOREAL_v319 - appear in the share sheet for client documents.
+        LSSupportsOpeningDocumentsInPlace: false
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Client document
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - com.adobe.pdf
+              - public.image
+              - public.comma-separated-values-text
+              - org.openxmlformats.wordprocessingml.document
+              - org.openxmlformats.spreadsheetml.sheet
+              - com.microsoft.word.doc
+              - com.microsoft.excel.xls
+              - com.apple.iwork.numbers.sffnumbers
+              - com.apple.iwork.numbers.numbers
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: false
         SentryDSN: ""

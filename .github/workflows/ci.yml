@@ -142,13 +142,32 @@ jobs:
             echo "No watch simulator udid resolved; refusing to run tests against an empty destination." >&2
             exit 1
           fi
-          xcodebuild \
-            -project BorealDialer.xcodeproj \
-            -scheme BorealDialerWatch \
-            -destination "platform=watchOS Simulator,id=${{ steps.watch-sim.outputs.udid }}" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            test 2>&1 | tee /tmp/xcodebuild-watch-test.log
+          # BOREAL_DIALER_WATCH_TEST_RETRY_v317 - the watch simulator sometimes refuses
+          # to launch the test host ("Application has termination assertions")
+          # even though everything compiled. Boot it cleanly first, and if the
+          # runner could not be launched, erase the simulator and try once more.
+          # Real test or build failures are never retried.
+          UDID="${{ steps.watch-sim.outputs.udid }}"
+          run_watch_tests() {
+            xcrun simctl boot "$UDID" >/dev/null 2>&1 || true
+            xcrun simctl bootstatus "$UDID" -b >/dev/null 2>&1 || true
+            xcodebuild \
+              -project BorealDialer.xcodeproj \
+              -scheme BorealDialerWatch \
+              -destination "platform=watchOS Simulator,id=$UDID" \
+              CODE_SIGNING_ALLOWED=NO \
+              CODE_SIGNING_REQUIRED=NO \
+              test 2>&1 | tee /tmp/xcodebuild-watch-test.log
+          }
+          if run_watch_tests; then exit 0; fi
+          if grep -qE "Failed to install or launch the test runner|termination assertions|failed to launch" /tmp/xcodebuild-watch-test.log; then
+            echo "Watch simulator could not launch the test runner; erasing it and retrying once." >&2
+            xcrun simctl shutdown "$UDID" >/dev/null 2>&1 || true
+            xcrun simctl erase "$UDID" >/dev/null 2>&1 || true
+            run_watch_tests
+          else
+            exit 1
+          fi
 
       - name: Surface watch test failures
         if: failure()

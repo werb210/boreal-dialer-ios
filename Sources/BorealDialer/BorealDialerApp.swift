@@ -12,6 +12,7 @@ import Sentry
 struct BorealDialerApp: App {
     @UIApplicationDelegateAdaptor(DialerAppDelegate.self) private var appDelegate
     @StateObject var auth = AuthService.shared
+    @StateObject private var shareInbox = SharedDocumentInbox.shared // BOREAL_DIALER_SHARE_TO_BOREAL_v319
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var appLock = AppLockController.shared // BOREAL_DIALER_FACE_ID_v244
 
@@ -63,7 +64,21 @@ struct BorealDialerApp: App {
                 Text("Next time you can sign in with Face ID instead of a text code.")
             }
             .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
-            .onOpenURL { _ = DeepLinkCoordinator.shared.receive($0) }
+            // BOREAL_DIALER_SHARE_TO_BOREAL_v319 - a shared file opens the attach sheet; links still dial.
+            .onOpenURL { url in
+                if SharedDocumentInbox.shared.receive(url) { return }
+                _ = DeepLinkCoordinator.shared.receive(url)
+            }
+            .sheet(item: $shareInbox.pending) { file in
+                if auth.isAuthenticated {
+                    AttachDocumentSheet(file: file) { shareInbox.finish() }
+                } else {
+                    VStack(spacing: 12) {
+                        Text("Sign in to add this document to an application.").multilineTextAlignment(.center)
+                        Button("OK") { shareInbox.finish() }
+                    }.padding()
+                }
+            }
             // BOREAL_DIALER_START_CALL_ACTIVITY_v248 - Recents, contact card, CarPlay.
             .onContinueUserActivity("INStartCallIntent") { activity in
                 if let url = StartCallActivity.dialURL(handle: StartCallActivity.handle(from: activity)) {

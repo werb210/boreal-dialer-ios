@@ -147,6 +147,7 @@ struct WatchDialView: View {
 struct WatchContactsView: View {
     @State private var query = ""; @State private var results: [ContactSummary] = []; @State private var message: String?
     @State private var line: BorealLine = .BF
+    @State private var searching = false // BOREAL_DIALER_WATCH_CONTACT_SEARCH_v331
     private let service: any WatchDirectoryService = DirectWatchDirectoryService()
     var body: some View {
         List {
@@ -156,7 +157,8 @@ struct WatchContactsView: View {
             if BorealLine.enabled.count > 1 {
                 Picker("Line", selection: $line) { ForEach(BorealLine.enabled, id: \.self) { Text($0.rawValue).tag($0) } }
             }
-            Button("Search") { search() }.disabled(query.trimmingCharacters(in: .whitespaces).count < 2)
+            Button("Search") { search() }.disabled(searching || query.trimmingCharacters(in: .whitespaces).count < 2)
+            if searching { Text("Searching…").font(.caption2).foregroundStyle(.secondary) }
             if let message { Text(message).font(.caption2).foregroundStyle(.secondary) }
             ForEach(results) { contact in
                 NavigationLink(destination: ContactDetailView(contact: contact)) {
@@ -165,8 +167,37 @@ struct WatchContactsView: View {
             }
         }.navigationTitle("Contacts")
     }
-    private func search() { Task { do { results = try await service.search(query, line: line, limit: 10) }
-        catch { message = "Search unavailable" } } }
+    // BOREAL_DIALER_WATCH_CONTACT_SEARCH_v331
+    // Two faults, which together made the screen look like it was echoing back
+    // whatever was typed. The results were assigned from a Task that is not
+    // MainActor-isolated, so the @State write happened off the main actor and
+    // the list was never redrawn - WatchVoiceCallView's search already hops to
+    // the main actor for exactly this reason. And there was no empty or busy
+    // state, so a search that returned nothing left the screen showing only the
+    // text field, still holding the query.
+    @MainActor
+    private func search() {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard q.count >= 2 else { return }
+        searching = true
+        message = nil
+        results = []
+        Task {
+            do {
+                let items = try await service.search(q, line: line, limit: 10)
+                await MainActor.run {
+                    results = items
+                    searching = false
+                    if items.isEmpty { message = "No match for \(q)" }
+                }
+            } catch {
+                await MainActor.run {
+                    searching = false
+                    message = "Search unavailable"
+                }
+            }
+        }
+    }
 }
 
 struct ContactDetailView: View {
@@ -443,9 +474,33 @@ struct DispositionPickerView: View {
     }
 }
 
+// BOREAL_DIALER_WATCH_NOTIFICATIONS_v331 - the screen was a bare List over
+// store.events keyed on callId, so with nothing delivered it rendered an empty
+// list with no text of any kind, and with several non-call events delivered the
+// colliding ids collapsed them. Say what the screen is for when it is empty, and
+// give every event its own row and its own time.
 struct WatchNotificationsView: View {
     @EnvironmentObject private var store: WatchEventStore
-    var body: some View { List(store.events, id: \.callId) { event in VStack(alignment: .leading) { Text(event.subtitle); Text(event.title).font(.caption2).foregroundStyle(.secondary) } }.navigationTitle("Notifications") }
+    var body: some View {
+        List {
+            if store.events.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Nothing yet")
+                    Text("Calls, messages, tasks and meetings show up here once your iPhone sends one.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                ForEach(store.events, id: \.rowId) { event in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(event.subtitle)
+                        Text(event.title).font(.caption2).foregroundStyle(.secondary)
+                        Text(event.occurredAt, style: .relative).font(.caption2).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }.navigationTitle("Notifications")
+    }
 }
 
 struct CompanionCallView: View {

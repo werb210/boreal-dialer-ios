@@ -57,6 +57,16 @@ public struct WatchEvent: Codable, Sendable, Equatable {
     public var subtitle: String {
         displayName.isEmpty ? handle : displayName
     }
+
+    // BOREAL_DIALER_WATCH_NOTIFICATIONS_v331
+    // The Notifications list was keyed on callId alone. Only a call has one; a
+    // task, meeting or message arrives with callId "", so every one of them
+    // collided on the same identity and SwiftUI drew a single row - or, with the
+    // list otherwise empty, nothing at all. That is the blank screen. Key on the
+    // kind and the arrival time as well, so each event is its own row.
+    public var rowId: String {
+        "\(kind.rawValue)|\(callId)|\(occurredAt.timeIntervalSince1970)"
+    }
 }
 
 public enum BorealLine: String, Codable, CaseIterable, Sendable {

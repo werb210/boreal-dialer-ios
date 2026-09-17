@@ -47,6 +47,15 @@ public final class WatchBridge: NSObject {
     // suppressed for four minutes while the code itself expired in five. The
     // wrist could therefore never link. Reporting delivery lets the caller only
     // arm that limit when something actually went out.
+    // BOREAL_DIALER_WATCH_LINK_TRUTH_v340
+    // This reported success as soon as the session was activated. But
+    // transferUserInfo is a silent no-op unless the phone also believes a watch
+    // is PAIRED and that the Boreal watch app is INSTALLED on it - and a watch
+    // app side-loaded from Xcode frequently is not registered as the companion
+    // of the installed phone app, so isWatchAppInstalled reads false on a watch
+    // you are looking at. The code went nowhere, the caller was told it had
+    // been delivered, and the wrist sat on "Waiting for iPhone…" forever with
+    // nothing on either device explaining why.
     @discardableResult
     public func sendEnrollment(_ code: String) -> Bool {
         guard let session else { return false }
@@ -56,6 +65,7 @@ public final class WatchBridge: NSObject {
             activate()
             return false
         }
+        guard session.isPaired, session.isWatchAppInstalled else { return false }
         let payload = WatchPayload.encode(WatchEnrollMessage(oneTimeCode: code), under: WatchPayload.enrollKey)
         guard !payload.isEmpty else { return false }
         // transferUserInfo queues, so an asleep or out-of-range watch still gets
@@ -63,12 +73,24 @@ public final class WatchBridge: NSObject {
         session.transferUserInfo(payload)
         return true
     }
+
+    // BOREAL_DIALER_WATCH_LINK_TRUTH_v340 - what the phone actually believes, in
+    // words, so a failed link names its own cause instead of being guessed at.
+    public func linkDiagnostics() -> String {
+        guard let session else { return "This iPhone does not support Apple Watch connectivity." }
+        if session.activationState != .activated { return "Still connecting to your Apple Watch. Try again in a moment." }
+        if !session.isPaired { return "No Apple Watch is paired with this iPhone." }
+        if !session.isWatchAppInstalled { return "Boreal Dialer is not installed on your Apple Watch as a companion app. Enter the code below on the Watch instead." }
+        return "Sent to your Apple Watch."
+    }
 #else
     public func activate() {}
     public func send(_ event: WatchEvent) {}
     // BOREAL_DIALER_WATCH_ENROLL_DELIVERY_v173 - signature matches the real one.
     @discardableResult
     public func sendEnrollment(_ code: String) -> Bool { false }
+    // BOREAL_DIALER_WATCH_LINK_TRUTH_v340
+    public func linkDiagnostics() -> String { "Apple Watch connectivity is unavailable on this device." }
 #endif
 }
 

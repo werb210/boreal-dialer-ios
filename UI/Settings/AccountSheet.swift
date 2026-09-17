@@ -17,6 +17,7 @@ struct AccountSheet: View {
     @State private var watchEnrollmentError: String?
     @State private var generatingWatchCode = false
     @State private var watchLinkSent = false // BOREAL_DIALER_WATCH_AUTOLINK_v1
+    @State private var watchStatus = "" // BOREAL_DIALER_WATCH_LINK_TRUTH_v340
 
     private struct WatchEnrollment: Decodable {
         let oneTimeCode: String
@@ -103,16 +104,29 @@ struct AccountSheet: View {
                     SectionLabel(text: "Line")
                 }
 
+                // BOREAL_DIALER_WATCH_LINK_TRUTH_v340
+                // This claimed "links automatically" the moment a code was
+                // minted, because it threw away the Bool sendEnrollment returns.
+                // When the transfer went nowhere the phone still said it had
+                // worked, and the Watch's own fallback - "Enter code manually" -
+                // was useless because the code was never shown anywhere. Show
+                // the code always, and say what actually happened to it.
                 Section {
-                    if watchLinkSent {
-                        Text("Your Apple Watch links automatically. Just open the Boreal app on your Watch.").rowSubtitle()
-                    } else {
-                        Button(generatingWatchCode ? "Linking…" : "Link Apple Watch") { generateWatchEnrollment() }
-                            .disabled(generatingWatchCode)
+                    Button(generatingWatchCode ? "Linking…" : (watchEnrollment == nil ? "Link Apple Watch" : "Get a new code"))
+                        { generateWatchEnrollment() }
+                        .disabled(generatingWatchCode)
+                    if let watchEnrollment {
+                        Text(watchStatus).rowSubtitle()
+                        Text(watchEnrollment.oneTimeCode)
+                            .font(.system(.title2, design: .monospaced))
+                            .textSelection(.enabled)
+                            .accessibilityLabel(Text(watchEnrollment.oneTimeCode.map { String($0) }.joined(separator: " ")))
+                        Text("On the Watch: Account → Enter code manually. The code expires \(watchEnrollment.expiresAt, style: .relative) from now.")
+                            .rowSubtitle()
                     }
                     if let watchEnrollmentError { Text(watchEnrollmentError).foregroundStyle(.red).font(.caption) }
                 } header: { SectionLabel(text: "Apple Watch") }
-                .onAppear { if !watchLinkSent { generateWatchEnrollment() } }
+                .onAppear { if watchEnrollment == nil { generateWatchEnrollment() } }
 
                 Section {
                     Button(role: .destructive) {
@@ -160,7 +174,14 @@ struct AccountSheet: View {
             let data = try await APIClient.shared.execute(request)
             let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
             let enrollment = try decoder.decode(WatchEnrollment.self, from: data)
-            await MainActor.run { WatchBridge.shared.sendEnrollment(enrollment.oneTimeCode); watchLinkSent = true; generatingWatchCode = false }
+            // BOREAL_DIALER_WATCH_LINK_TRUTH_v340 - the Bool is the whole point.
+            await MainActor.run {
+                let delivered = WatchBridge.shared.sendEnrollment(enrollment.oneTimeCode)
+                watchLinkSent = delivered
+                watchStatus = delivered ? "Sent to your Apple Watch. Open Boreal on the Watch." : WatchBridge.shared.linkDiagnostics()
+                watchEnrollment = enrollment
+                generatingWatchCode = false
+            }
         } catch { await MainActor.run { watchEnrollmentError = "Could not generate a Watch code."; generatingWatchCode = false } }
         }
     }

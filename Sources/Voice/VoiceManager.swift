@@ -50,6 +50,7 @@ final class VoiceManager: NSObject, ObservableObject {
         configureIdentityIfNeeded(from: token) { [weak self] in
             guard let self else { return }
             await self.logout()
+            SessionGuard.recordReason("Signed out because the calling identity changed. Please sign in again.") // v314
             await AuthService.shared.invalidateSessionAfterIdentityMismatch()
         }
         PushManager.shared.registerDeviceTokenWithTwilio()

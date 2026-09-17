@@ -45,43 +45,61 @@ struct WatchDialView: View {
     private let transport: any WatchCallTransport = ServerBridgeWatchCallTransport()
     private let keys: [[String]] = [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"], ["*", "0", "#"]]
     init(initialNumber: String = "") { _number = State(initialValue: initialNumber) }
+    /// BOREAL_DIALER_WATCH_DIALPAD_FIT_v314 - six rows (display, 4 key rows, actions)
+    /// inside the usable height, clamped so small and large watches stay tappable.
+    static func keyHeight(forScreenHeight height: CGFloat) -> CGFloat {
+        max(22, min(34, (height - 78) / 6))
+    }
+    private var keyHeight: CGFloat { Self.keyHeight(forScreenHeight: WKInterfaceDevice.current().screenBounds.height) }
     var body: some View {
         ScrollView {
             VStack(spacing: 4) {
                 Text(number.isEmpty ? "Enter number" : number)
-                    .font(.title3).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
+                    .font(.headline).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
                     .foregroundStyle(number.isEmpty ? .secondary : .primary)
                     .frame(maxWidth: .infinity)
+                // BOREAL_DIALER_WATCH_DIALPAD_FIT_v314 - compact plain keys sized from the
+                // screen: display + four key rows + action row fit without scrolling.
                 ForEach(keys, id: \.self) { row in
-                    HStack(spacing: 4) {
+                    HStack(spacing: 3) {
                         ForEach(row, id: \.self) { key in
                             Button {
                                 number.append(key)
                                 WKInterfaceDevice.current().play(.click)
                             } label: {
-                                // BOREAL_DIALER_WATCH_DIAL_FIT_v173 - 38pt rows put
-                                // four rows plus the display, action row and picker
-                                // well past the ~160pt usable height of a 41mm
-                                // watch, so 1-9 sat off-screen above and the pad
-                                // could not be used without scrolling first.
-                                Text(key).font(.body).frame(maxWidth: .infinity, minHeight: 30)
-                            }.buttonStyle(.bordered)
+                                Text(key)
+                                    .font(.system(size: keyHeight * 0.55, weight: .medium))
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: keyHeight)
+                                    .background(RoundedRectangle(cornerRadius: keyHeight * 0.35).fill(Color.gray.opacity(0.28)))
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
-                HStack(spacing: 4) {
+                HStack(spacing: 3) {
                     Button {
                         if !number.isEmpty { number.removeLast(); WKInterfaceDevice.current().play(.click) }
                     } label: {
-                        Image(systemName: "delete.left").frame(maxWidth: .infinity, minHeight: 30)
+                        Image(systemName: "delete.left")
+                            .frame(maxWidth: .infinity)
+                            .frame(height: keyHeight)
+                            .background(RoundedRectangle(cornerRadius: keyHeight * 0.35).fill(Color.gray.opacity(0.28)))
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.plain)
                     .disabled(number.isEmpty)
                     .onLongPressGesture { number = ""; WKInterfaceDevice.current().play(.click) }
                     Button { start() } label: {
-                        Image(systemName: "phone.fill").frame(maxWidth: .infinity, minHeight: 30)
+                        Image(systemName: "phone.fill")
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: keyHeight)
+                            .background(RoundedRectangle(cornerRadius: keyHeight * 0.35).fill(Color.green))
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.borderedProminent).tint(.green)
+                    .buttonStyle(.plain)
                     .disabled(number.isEmpty || status == .requesting)
                 }
                 // BOREAL_DIALER_WATCH_DIAL_FIT_v173 - the default inline style

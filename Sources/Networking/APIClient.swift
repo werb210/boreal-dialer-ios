@@ -116,8 +116,10 @@ final class APIClient {
             // enrollment code is minted by this same authenticated client.
             // Flipping isAuthenticated returns the app to the login gate that
             // BorealDialerApp already renders.
-            TokenStorage.shared.clear()
-            Task { await AuthService.shared.invalidateSessionAfterIdentityMismatch() }
+            // BOREAL_DIALER_SESSION_GUARD_v314 - one refused request is not proof the
+            // session is gone; SessionGuard asks BF-Server before signing out.
+            let refusedURL = request.url
+            Task { await SessionGuard.shared.confirm(after: refusedURL) }
             throw APIError.unauthorized
         }
 

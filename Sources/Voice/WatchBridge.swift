@@ -65,12 +65,14 @@ public final class WatchBridge: NSObject {
             activate()
             return false
         }
-        guard session.isPaired, session.isWatchAppInstalled else { return false }
         let payload = WatchPayload.encode(WatchEnrollMessage(oneTimeCode: code), under: WatchPayload.enrollKey)
         guard !payload.isEmpty else { return false }
-        // transferUserInfo queues, so an asleep or out-of-range watch still gets
-        // the code when it wakes.
-        session.transferUserInfo(payload)
+        // BOREAL_DIALER_WATCH_AUTOLINK_v341 - persist the latest code until the
+        // Watch app becomes available, while retaining immediate delivery.
+        var context = payload
+        context["boreal.watch.enroll.at"] = Date().timeIntervalSince1970
+        try? session.updateApplicationContext(context)
+        if session.isPaired, session.isWatchAppInstalled { session.transferUserInfo(payload) }
         return true
     }
 
@@ -80,8 +82,7 @@ public final class WatchBridge: NSObject {
         guard let session else { return "This iPhone does not support Apple Watch connectivity." }
         if session.activationState != .activated { return "Still connecting to your Apple Watch. Try again in a moment." }
         if !session.isPaired { return "No Apple Watch is paired with this iPhone." }
-        if !session.isWatchAppInstalled { return "Boreal Dialer is not installed on your Apple Watch as a companion app. Enter the code below on the Watch instead." }
-        return "Sent to your Apple Watch."
+        return "Ready. Open Boreal on your Watch and it will link itself."
     }
 #else
     public func activate() {}
@@ -113,6 +114,23 @@ extension WatchBridge: WCSessionDelegate {
 
     nonisolated public func sessionDidDeactivate(_ session: WCSession) {
         session.activate()
+    }
+
+    // BOREAL_DIALER_WATCH_AUTOLINK_v341 - mint and return a code on demand.
+    nonisolated public func session(_ session: WCSession,
+                                    didReceiveMessage message: [String: Any],
+                                    replyHandler: @escaping ([String: Any]) -> Void) {
+        guard message[WatchPayload.enrollRequestKey] != nil else {
+            self.session(session, didReceiveMessage: message)
+            replyHandler([:])
+            return
+        }
+        Task { @MainActor in
+            do {
+                let code = try await WatchEnrollment.shared.mintCode()
+                replyHandler(WatchPayload.encode(WatchEnrollMessage(oneTimeCode: code), under: WatchPayload.enrollKey))
+            } catch { replyHandler([:]) }
+        }
     }
 
     nonisolated public func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {

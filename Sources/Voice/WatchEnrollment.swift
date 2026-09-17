@@ -75,30 +75,27 @@ public final class WatchEnrollment {
         defer { inFlight = false }
 
         do {
-            let request = try APIClient.shared.authorizedRequest(
-                APIClient.shared.makeRequest(path: "/watch/auth/enrollment", method: "POST") // BOREAL_DIALER_WATCH_LINK_PATH_v314 - was /api/api/...
-            )
-            let (data, response) = try await URLSession.shared.data(for: request)
-            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            guard (200..<300).contains(status) else {
-                if status == 403 { throw WatchEnrollError.notStaff }
-                throw WatchEnrollError.requestFailed(status)
-            }
-            let code = try WatchEnrollment.parse(data)
-            // BOREAL_DIALER_WATCH_ENROLL_DELIVERY_v173
-            // Only arm the re-mint limit when the code actually reached the
-            // bridge. Previously this ran unconditionally, so a code dropped
-            // because WCSession had not finished activating still suppressed
-            // the next four minutes of attempts - and the code expired in five.
-            // Returning false here means the next foreground tries again.
+            let code = try await mintCode()
             let delivered = WatchBridge.shared.sendEnrollment(code)
             guard delivered else { return false }
             lastMintedAt = Date()
             return true
         } catch {
-            // Pairing is best-effort. A failure here must never block app start;
-            // the next foreground retries.
             return false
         }
+    }
+
+    // BOREAL_DIALER_WATCH_AUTOLINK_v341 - network half exposed for a Watch pull.
+    func mintCode() async throws -> String {
+        let request = try APIClient.shared.authorizedRequest(
+                APIClient.shared.makeRequest(path: "/watch/auth/enrollment", method: "POST") // BOREAL_DIALER_WATCH_LINK_PATH_v314 - was /api/api/...
+        )
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else {
+            if status == 403 { throw WatchEnrollError.notStaff }
+            throw WatchEnrollError.requestFailed(status)
+        }
+        return try WatchEnrollment.parse(data)
     }
 }

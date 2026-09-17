@@ -190,6 +190,8 @@ public enum WatchPayload {
     public static let eventKey = "boreal.watch.event"
     public static let actionKey = "boreal.watch.action"
     public static let enrollKey = "boreal.watch.enroll" // BOREAL_DIALER_WATCH_AUTOLINK_v1
+    // BOREAL_DIALER_WATCH_AUTOLINK_v341 - the Watch asking the phone for a code.
+    public static let enrollRequestKey = "boreal.watch.enroll.request"
     public static let inCallKey = "boreal.watch.incall" // BOREAL_DIALER_WATCH_INCALL_v1
 
     public static func encode<T: Encodable>(_ value: T, under key: String) -> [String: Any] {

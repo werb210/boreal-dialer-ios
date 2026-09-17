@@ -17,6 +17,8 @@ final class WatchEventStore: NSObject, ObservableObject {
 #if canImport(WatchConnectivity)
         guard WCSession.isSupported() else { return }
         WCSession.default.delegate = self; WCSession.default.activate()
+        // BOREAL_DIALER_WATCH_AUTOLINK_v341 - consume any durable code already waiting.
+        handle(WCSession.default.receivedApplicationContext)
 #endif
     }
     func ingest(_ event: WatchEvent) {
@@ -61,9 +63,22 @@ final class WatchEventStore: NSObject, ObservableObject {
 
 #if canImport(WatchConnectivity)
 extension WatchEventStore: WCSessionDelegate {
-    nonisolated func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState, error: Error?) {}
+    // BOREAL_DIALER_WATCH_AUTOLINK_v341 - pull a code when the session comes alive.
+    nonisolated func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState, error: Error?) {
+        guard error == nil, state == .activated else { return }
+        handle(session.receivedApplicationContext)
+        Task { @MainActor in
+            guard await WatchAuthService.shared.token == nil else { return }
+            guard session.isReachable || session.isCompanionAppInstalled else { return }
+            session.sendMessage([WatchPayload.enrollRequestKey: true]) { reply in
+                WatchEventStore.shared.handleFromPhone(reply)
+            } errorHandler: { _ in }
+        }
+    }
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) { handle(message) }
     nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) { handle(userInfo) }
+    nonisolated func session(_ session: WCSession, didReceiveApplicationContext context: [String: Any]) { handle(context) }
+    nonisolated func handleFromPhone(_ message: [String: Any]) { handle(message) }
     nonisolated private func handle(_ message: [String: Any]) {
         // BOREAL_DIALER_WATCH_AUTOLINK_v1 - phone pushed an enrollment code; link silently.
         if let enroll = WatchPayload.decode(WatchEnrollMessage.self, from: message, key: WatchPayload.enrollKey) {

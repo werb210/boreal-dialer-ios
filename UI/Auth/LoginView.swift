@@ -161,6 +161,8 @@ struct LoginView: View {
             .padding(.horizontal, 28)
         }
         .onAppear {
+            // BOREAL_DIALER_SESSION_GUARD_v314 - say why the session ended.
+            if let reason = SessionGuard.takeLastReason() { errorMessage = reason }
             faceIDReady = FaceIDSignIn.shared.isEnrolled && FaceIDSignIn.shared.biometryAvailable
             if !faceIDReady { focused = .phone }
         }

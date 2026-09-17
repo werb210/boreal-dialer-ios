@@ -76,7 +76,7 @@ public final class WatchEnrollment {
 
         do {
             let request = try APIClient.shared.authorizedRequest(
-                APIClient.shared.makeRequest(path: "/api/watch/auth/enrollment", method: "POST")
+                APIClient.shared.makeRequest(path: "/watch/auth/enrollment", method: "POST") // BOREAL_DIALER_WATCH_LINK_PATH_v314 - was /api/api/...
             )
             let (data, response) = try await URLSession.shared.data(for: request)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0

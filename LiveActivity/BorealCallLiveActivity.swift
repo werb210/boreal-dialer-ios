@@ -37,5 +37,10 @@ struct BorealDialerWidgetsBundle: WidgetBundle {
     var body: some Widget {
         if #available(iOS 16.1, *) { BorealCallLiveActivity() }
         BorealDialerWidget()
+        // BOREAL_DIALER_CONTROLS_v321 - Control Center / Action Button (iOS 18+).
+        if #available(iOS 18.0, *) {
+            BorealNewCallControl()
+            BorealQuickCallControl()
+        }
     }
 }

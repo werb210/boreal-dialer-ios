@@ -240,6 +240,11 @@ struct BorealDueIntent: AppIntent {
 @available(iOS 16.0, *)
 struct BorealAppShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
+        // BOREAL_DIALER_SIRI_CALL_CLIENT_v320
+        AppShortcut(intent: CallBorealClientIntent(), phrases: [
+            "Call a client with \(.applicationName)",
+            "Call someone in \(.applicationName)"
+        ])
         AppShortcut(intent: NewBorealCallIntent(), phrases: [
             "New call in \(.applicationName)",
             "Start a \(.applicationName) call"

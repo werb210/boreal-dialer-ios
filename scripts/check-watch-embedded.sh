@@ -13,3 +13,15 @@ if not m or "- target: BorealDialerWatch\n" not in m.group(1):
     sys.exit(1)
 print("OK: iPhone app embeds the Watch app")
 PY
+
+# BOREAL_DIALER_CI_NO_SDK_OVERRIDE_v377 - the iPhone build must not force an SDK,
+# or the embedded Watch targets get compiled for iOS and the build fails.
+python3 - <<'PY'
+import re, sys
+ci = open(".github/workflows/ci.yml", encoding="utf-8").read()
+for block in re.findall(r"xcodebuild \\\n(?:.*\\\n)*?.*(?:build|test)[^\n]*", ci):
+    if "-scheme BorealDialer \\" in block and "-sdk " in block:
+        print("::error::the BorealDialer xcodebuild passes -sdk; embedded Watch targets would build for iOS")
+        sys.exit(1)
+print("OK: iPhone build lets each embedded target use its own SDK")
+PY

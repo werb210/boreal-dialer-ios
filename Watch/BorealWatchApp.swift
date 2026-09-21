@@ -89,7 +89,22 @@ final class WatchPushTokenStore {
 struct BorealWatchApp: App {
     @WKApplicationDelegateAdaptor(WatchAppDelegate.self) private var appDelegate
     @StateObject private var store = WatchEventStore.shared
+    @Environment(\.scenePhase) private var scenePhase
     var body: some Scene {
-        WindowGroup { WatchRootView().environmentObject(store) }
+        WindowGroup {
+            WatchRootView()
+                .environmentObject(store)
+                // BOREAL_DIALER_WATCH_FACE_v371
+                .onOpenURL { url in store.complicationTarget = WatchComplicationLink.target(for: url) }
+                .onChange(of: scenePhase) { phase in
+                    guard phase == .active else { return }
+                    Task { await WatchFaceSync.refresh() }
+                    WatchFaceSync.scheduleNext()
+                }
+        }
+        .backgroundTask(.appRefresh(WatchFaceSync.refreshTaskID)) {
+            await WatchFaceSync.refresh()
+            await MainActor.run { WatchFaceSync.scheduleNext() }
+        }
     }
 }

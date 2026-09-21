@@ -3,6 +3,10 @@ import WatchKit
 
 struct WatchRootView: View {
     @EnvironmentObject private var store: WatchEventStore
+    private func complicationBinding(_ target: String) -> Binding<Bool> {
+        Binding(get: { store.complicationTarget == target },
+                set: { if !$0 { store.complicationTarget = nil } })
+    }
     var body: some View {
         NavigationStack {
             List {
@@ -31,6 +35,9 @@ struct WatchRootView: View {
                 NavigationLink("Notifications", destination: WatchNotificationsView())
                 NavigationLink("Account", destination: WatchAccountView())
             }.navigationTitle("Boreal")
+            // BOREAL_DIALER_WATCH_FACE_v371 - complication taps land on the screen they name.
+            .navigationDestination(isPresented: complicationBinding("dial")) { WatchDialView() }
+            .navigationDestination(isPresented: complicationBinding("recents")) { WatchRecentsView() }
         }.onAppear { store.startCompanionOptimization() }
     }
 }

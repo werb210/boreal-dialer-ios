@@ -63,13 +63,18 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
       # BOREAL_DIALER_BUILD_ERROR_SURFACING_v12
+      # BOREAL_DIALER_CI_NO_SDK_OVERRIDE_v377 - no -sdk here. Since v375 the iPhone
+      # app embeds the Watch app, and a command-line -sdk iphonesimulator is
+      # applied to EVERY target in the build, so the Watch app and its widget were
+      # compiled against the iOS SDK (containerBackground "iOS 17 only",
+      # accessoryCorner "unavailable in iOS"). -destination alone lets Xcode build
+      # each embedded target for its own platform (watchsimulator for the Watch).
       - name: Build iOS app
         run: |
           set -o pipefail
           xcodebuild \
             -project BorealDialer.xcodeproj \
             -scheme BorealDialer \
-            -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \

@@ -114,6 +114,13 @@ targets:
         product: Sentry
       - target: BorealDialerLiveActivity
       - target: BorealDialerCallDirectory
+      # BOREAL_DIALER_EMBED_WATCH_v375 - the Watch app ships inside the iPhone app.
+      # Side-loaded separately, iOS never registered it as this app's companion:
+      # WCSession.isWatchAppInstalled read false on a Watch running Boreal, the
+      # one-shot link transfer was skipped, and TestFlight/App Store builds would
+      # carry no Watch app at all. XcodeGen embeds a watchOS app dependency in
+      # the iPhone app's Watch folder ("Embed Watch Content").
+      - target: BorealDialerWatch
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer

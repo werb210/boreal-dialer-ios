@@ -45,6 +45,10 @@ jobs:
       - name: Check Watch authentication crash paths
         run: ./scripts/check-watch-auth-crash-paths.sh
 
+      # BOREAL_DIALER_EMBED_WATCH_v375
+      - name: Check the Watch app is embedded
+        run: ./scripts/check-watch-embedded.sh
+
       # BOREAL_DIALER_WATCH_FACE_v371
       - name: Check Watch face wiring
         run: ./scripts/check-watch-face.sh

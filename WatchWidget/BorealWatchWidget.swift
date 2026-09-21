@@ -73,6 +73,7 @@ struct BorealWatchWidgetView: View {
         switch entry.status {
         case "available": return "phone.circle.fill"
         case "on_call": return "phone.connection.fill"
+        case "busy": return "phone.down.fill" // BOREAL_DIALER_WATCH_FACE_v371 - server status set is available|busy|offline
         default: return "moon.zzz.fill"
         }
     }
@@ -108,14 +109,92 @@ struct BorealWatchWidgetView: View {
     }
 }
 
-@main
 struct BorealWatchWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "BorealWatchWidget", provider: BorealWatchProvider()) { entry in
-            BorealWatchWidgetView(entry: entry)
+            BorealWatchWidgetView(entry: entry).borealWidgetBackground()
         }
         .configurationDisplayName("Boreal")
         .description("Your availability and missed calls.")
         .supportedFamilies([.accessoryCircular, .accessoryInline, .accessoryRectangular])
+    }
+}
+
+// BOREAL_DIALER_WATCH_COMPLICATIONS_v371
+// watchOS 10 shows a "please adopt containerBackground" notice instead of a widget
+// that does not declare one; every Boreal widget goes through this helper.
+extension View {
+    func borealWidgetBackground() -> some View {
+        containerBackground(for: .widget) { Color.clear }
+    }
+}
+
+/// One tap from the watch face to the dial pad.
+struct BorealDialWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "BorealDialWidget", provider: BorealWatchProvider()) { _ in
+            BorealDialWidgetView()
+                .widgetURL(URL(string: "borealwatch://dial"))
+                .borealWidgetBackground()
+        }
+        .configurationDisplayName("Boreal Dial")
+        .description("Open the Boreal dial pad.")
+        .supportedFamilies([.accessoryCircular, .accessoryCorner])
+    }
+}
+
+struct BorealDialWidgetView: View {
+    @Environment(\.widgetFamily) private var family
+    var body: some View {
+        switch family {
+        case .accessoryCorner:
+            Image(systemName: "phone.fill").font(.title3).widgetLabel("Dial")
+        default:
+            ZStack { AccessoryWidgetBackground(); Image(systemName: "phone.fill").font(.title3) }
+        }
+    }
+}
+
+/// Today's missed calls; tap opens Recent Calls.
+struct BorealMissedWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "BorealMissedWidget", provider: BorealWatchProvider()) { entry in
+            BorealMissedWidgetView(entry: entry)
+                .widgetURL(URL(string: "borealwatch://recents"))
+                .borealWidgetBackground()
+        }
+        .configurationDisplayName("Boreal Missed Calls")
+        .description("Missed calls today.")
+        .supportedFamilies([.accessoryCircular, .accessoryCorner, .accessoryInline])
+    }
+}
+
+struct BorealMissedWidgetView: View {
+    @Environment(\.widgetFamily) private var family
+    let entry: BorealWatchEntry
+    var body: some View {
+        switch family {
+        case .accessoryCorner:
+            Image(systemName: "phone.arrow.down.left").font(.title3).widgetLabel("\(entry.missedCalls) missed")
+        case .accessoryInline:
+            Label("\(entry.missedCalls) missed", systemImage: "phone.arrow.down.left")
+        default:
+            ZStack {
+                AccessoryWidgetBackground()
+                VStack(spacing: 0) {
+                    Image(systemName: "phone.arrow.down.left").font(.caption2)
+                    Text("\(entry.missedCalls)").font(.title3.bold())
+                }
+            }
+        }
+    }
+}
+
+@main
+struct BorealWatchWidgets: WidgetBundle {
+    var body: some Widget {
+        BorealWatchWidget()
+        BorealDialWidget()
+        BorealMissedWidget()
     }
 }

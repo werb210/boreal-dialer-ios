@@ -77,7 +77,7 @@ struct BorealDialerWidgetView: View {
                 }
                 Spacer(minLength: 0)
             }
-            .padding()
+            .legacyWidgetPadding()
         }
     }
 
@@ -96,9 +96,32 @@ struct BorealDialerWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: BorealDialerProvider()) { entry in
             BorealDialerWidgetView(entry: entry)
+                .dialerWidgetBackground()
         }
         .configurationDisplayName("Boreal Dialer")
         .description("Start a new call or call a recent contact.")
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular])
+    }
+}
+
+// BOREAL_DIALER_v532 - iOS 17+ requires every widget to declare its background.
+extension View {
+    @ViewBuilder
+    func dialerWidgetBackground() -> some View {
+        if #available(iOSApplicationExtension 17.0, *) {
+            containerBackground(.background, for: .widget)
+        } else {
+            self
+        }
+    }
+
+    /// iOS 17+ adds content margins itself; before that the widget pads its own content.
+    @ViewBuilder
+    func legacyWidgetPadding() -> some View {
+        if #available(iOSApplicationExtension 17.0, *) {
+            self
+        } else {
+            padding()
+        }
     }
 }

@@ -69,6 +69,14 @@ struct ThreadMessage: Identifiable, Decodable {
     let direction: String?
     let message: String?
     let createdAt: String?
+    // BOREAL_DIALER_BLOCK_v510_MESSAGES_READ_RECEIPTS - BF-Server v507 returns when
+    // the client opened a staff message (portal v508 shows the same).
+    let readAt: String?
+
+    var readLabel: String {
+        guard let readAt, let date = CalendarFormatters.parse(readAt) else { return "Delivered" }
+        return "Read " + CalendarFormatters.time.string(from: date)
+    }
 
     // "in" from the client, "out" from staff, "system" for anything generated.
     var isOutbound: Bool { (direction ?? "") == "out" }
@@ -362,6 +370,12 @@ private struct ThreadBubble: View {
                     Text(message.timeLabel)
                         .font(.system(size: 12))
                         .foregroundColor(Theme.faint)
+                    // BOREAL_DIALER_BLOCK_v510_MESSAGES_READ_RECEIPTS
+                    if message.isOutbound {
+                        Text(message.readLabel)
+                            .font(.system(size: 12))
+                            .foregroundColor(message.readAt == nil ? Theme.faint : Theme.green)
+                    }
                 }
 
                 if !message.isOutbound { Spacer(minLength: 40) }

@@ -10,6 +10,9 @@
 //   POST /communications/sms                -> send one message
 //   POST /communications/messages/mark-read -> clear the unread badge
 import SwiftUI
+import PhotosUI
+import UIKit
+import UniformTypeIdentifiers
 
 struct SMSThread: Identifiable, Decodable {
     let threadKey: String?
@@ -56,6 +59,9 @@ struct SMSMessage: Identifiable, Decodable {
     let body: String?
     let mediaUrl: String?
     let createdAt: String?
+    // BOREAL_DIALER_BLOCK_v501_SMS_PARITY - BF-Server v499 delivery result
+    let deliveryStatus: String?
+    let deliveryError: String?
 
     enum CodingKeys: String, CodingKey {
         case id, direction, body
@@ -64,6 +70,8 @@ struct SMSMessage: Identifiable, Decodable {
         case toNumber = "to_number"
         case mediaUrl = "media_url"
         case createdAt = "created_at"
+        case deliveryStatus = "delivery_status"
+        case deliveryError = "delivery_error"
     }
 
     var isOutbound: Bool { (direction ?? "").lowercased() == "outbound" }
@@ -212,6 +220,12 @@ struct SMSThreadView: View {
     @State private var sending = false
     @State private var loading = true
     @State private var error: String?
+    // BOREAL_DIALER_BLOCK_v501_SMS_PARITY - attach a picture or PDF
+    @State private var media: SMSMediaPayload?
+    @State private var photoItem: PhotosPickerItem?
+    @State private var showingPdfImporter = false
+
+    private var draftIsEmpty: Bool { draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -245,10 +259,46 @@ struct SMSThreadView: View {
             // BOREAL_DIALER_TEMPLATES_EVERYWHERE_v167 - supplying onTemplates
             // is what makes ComposerBar render the templates button; without it
             // the button is simply absent, which is why this thread had none.
+            // BOREAL_DIALER_BLOCK_v501_SMS_PARITY - attach + length/text counter (portal v498/v500)
+            HStack(spacing: 14) {
+                PhotosPicker(selection: $photoItem, matching: .images) {
+                    Label("Photo", systemImage: "photo")
+                }
+                Button {
+                    showingPdfImporter = true
+                } label: {
+                    Label("PDF", systemImage: "doc")
+                }
+                if let media {
+                    Text(media.name).lineLimit(1).foregroundColor(Theme.green)
+                    Button {
+                        self.media = nil
+                        photoItem = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                    }
+                    .accessibilityLabel("Remove attachment")
+                }
+                Spacer()
+                if !draftIsEmpty {
+                    Text(SmsSegments.label(draft))
+                        .foregroundColor(SmsSegments.count(draft).segments > 1 ? .orange : Theme.faint)
+                }
+            }
+            .font(.caption)
+            .padding(.horizontal)
+            .padding(.top, 6)
+            .onChange(of: photoItem) { item in
+                Task { await loadPhoto(item) }
+            }
+            .fileImporter(isPresented: $showingPdfImporter, allowedContentTypes: [UTType.pdf]) { result in
+                loadPdf(result)
+            }
+
             ComposerBar(
                 placeholder: "Text message…",
                 text: $draft,
-                disabled: sending || draft.trimmingCharacters(in: .whitespaces).isEmpty,
+                disabled: sending || (draftIsEmpty && media == nil),
                 onTemplates: { showingTemplates = true },
                 onSend: send
             )
@@ -327,9 +377,11 @@ struct SMSThreadView: View {
         Task {
             do {
                 try await API.sendSMS(
-                    SendSMSPayload(to: to, body: text, contactId: thread.contactId)
+                    SendSMSPayload(to: to, body: text, contactId: thread.contactId, media: media)
                 )
                 draft = ""
+                media = nil
+                photoItem = nil
                 await loadMessages()
                 onChange()
             } catch {
@@ -337,6 +389,51 @@ struct SMSThreadView: View {
             }
             sending = false
         }
+    }
+}
+
+// BOREAL_DIALER_BLOCK_v501_SMS_PARITY - photo and PDF loading, 5 MB MMS limit.
+extension SMSThreadView {
+    static let maxMediaBytes = 5 * 1024 * 1024
+
+    @MainActor func loadPhoto(_ item: PhotosPickerItem?) async {
+        guard let item else { return }
+        guard let data = try? await item.loadTransferable(type: Data.self),
+              let image = UIImage(data: data) else {
+            error = "Couldn't read that photo."
+            return
+        }
+        var jpeg = image.jpegData(compressionQuality: 0.7)
+        if let current = jpeg, current.count > Self.maxMediaBytes {
+            let scale = 2048.0 / max(image.size.width, image.size.height)
+            if scale < 1 {
+                let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+                let resized = UIGraphicsImageRenderer(size: size).image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
+                jpeg = resized.jpegData(compressionQuality: 0.6)
+            }
+        }
+        guard let final = jpeg, final.count <= Self.maxMediaBytes else {
+            error = "That photo is too large to text (5 MB limit)."
+            return
+        }
+        error = nil
+        media = SMSMediaPayload(name: "photo.jpg", contentType: "image/jpeg", dataUrl: "data:image/jpeg;base64," + final.base64EncodedString())
+    }
+
+    @MainActor func loadPdf(_ result: Result<URL, Error>) {
+        guard case .success(let url) = result else { return }
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url) else {
+            error = "Couldn't read that PDF."
+            return
+        }
+        guard data.count <= Self.maxMediaBytes else {
+            error = "Files sent by text must be 5 MB or smaller."
+            return
+        }
+        error = nil
+        media = SMSMediaPayload(name: url.lastPathComponent, contentType: "application/pdf", dataUrl: "data:application/pdf;base64," + data.base64EncodedString())
     }
 }
 
@@ -371,6 +468,14 @@ private struct SMSBubble: View {
                 Text(message.timeLabel)
                     .font(.system(size: 12))
                     .foregroundColor(Theme.faint)
+
+                // BOREAL_DIALER_BLOCK_v501_SMS_PARITY - delivery result (portal v500)
+                if message.isOutbound, let tag = SmsDelivery.tag(status: message.deliveryStatus, errorCode: message.deliveryError) {
+                    Text(tag.text)
+                        .font(.system(size: 12, weight: tag.tone == .error ? .semibold : .regular))
+                        .foregroundColor(tag.tone == .error ? Theme.red : (tag.tone == .success ? Theme.green : Theme.faint))
+                        .multilineTextAlignment(.trailing)
+                }
             }
 
             if !message.isOutbound { Spacer(minLength: 40) }

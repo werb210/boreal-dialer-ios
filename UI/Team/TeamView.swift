@@ -429,6 +429,8 @@ struct TeamChannelView: View {
                                     .background(mine ? Color.accentColor : Color(.systemGray5))
                                     .foregroundColor(mine ? .white : .primary)
                                     .clipShape(RoundedRectangle(cornerRadius: 12))
+                                // BOREAL_DIALER_BLOCK_v506_TEAM_LINK_PREVIEWS
+                                TeamLinkPreviewCard(text: message.body)
                             }
                             if !mine { Spacer() }
                         }

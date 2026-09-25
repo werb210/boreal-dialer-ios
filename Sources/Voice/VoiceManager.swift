@@ -194,19 +194,13 @@ final class VoiceManager: NSObject, ObservableObject {
 
         registrationState = .registering
 
-        let registerWithToken = {
-            TwilioVoiceSDK.register(accessToken: token, deviceToken: deviceToken) { [weak self] error in
-                guard let self else { return }
-                if let error {
-#if DEBUG
-                    print("Twilio push registration failed:", error)
-#endif
-                    self.registrationState = .failed
-                    return
+        // BOREAL_DIALER_v529 - Twilio calls back on its own queue; state is main-actor.
+        let registerWithToken: @Sendable () -> Void = {
+            TwilioVoiceSDK.register(accessToken: token, deviceToken: deviceToken) { error in
+                let failure = error.map { String(describing: $0) }
+                Task { @MainActor in
+                    VoiceManager.shared.finishRegistration(token: token, failure: failure)
                 }
-
-                self.registeredToken = token
-                self.registrationState = .registered
             }
         }
 
@@ -218,6 +212,19 @@ final class VoiceManager: NSObject, ObservableObject {
         TwilioVoiceSDK.unregister(accessToken: tokenToUnregister, deviceToken: deviceToken) { _ in
             registerWithToken()
         }
+    }
+
+    /// BOREAL_DIALER_v529 - result of TwilioVoiceSDK.register, applied on the main actor.
+    private func finishRegistration(token: String, failure: String?) {
+        if let failure {
+#if DEBUG
+            print("Twilio push registration failed:", failure)
+#endif
+            registrationState = .failed
+            return
+        }
+        registeredToken = token
+        registrationState = .registered
     }
 
     func invalidateDeviceToken(_ invalidatedToken: Data?) {

@@ -14,7 +14,8 @@ enum FaceIDSignInError: Error {
     case rejected
 }
 
-final class FaceIDSignIn {
+// BOREAL_DIALER_v529 - only immutable String state, so it is safe to share across threads.
+final class FaceIDSignIn: Sendable {
     static let shared = FaceIDSignIn()
 
     private let service = "com.boreal.dialer.faceid"

@@ -122,7 +122,6 @@
 		EDBB880909625190F3F3342A /* PresenceHeartbeat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 160CD8EA1BBA7000AFA4C13F /* PresenceHeartbeat.swift */; };
 		EDBB880909625190F3F3342B /* WatchEnrollment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 160CD8EA1BBA7000AFA4C14F /* WatchEnrollment.swift */; };
 		F28BE0A47C9C212EF26F6446 /* Telemetry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E0D823C0AC0AEC88C7AC1B4 /* Telemetry.swift */; };
-		F6030EADF0C9FE472ACD2D1D /* IncomingCallController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18137E25E1EAB72981DF6B12 /* IncomingCallController.swift */; };
 		FA0A50EA5FACD7320F28C91D /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2FBF5202AA9C55CA85BAFD7 /* APIConfig.swift */; };
 		FBD774C82D22782458518AE5 /* DecodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06639C6209522E474612E26A /* DecodingTests.swift */; };
 		FDDD537310C2908877FD81F3 /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25DCC19E7A4B9471EDB25FFD /* AuthManager.swift */; };
@@ -187,7 +186,6 @@
 		160CD8EA1BBA7000AFA4C14F /* WatchEnrollment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchEnrollment.swift; sourceTree = "<group>"; };
 		17484F626671516B5D96FECF /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
 		17A0A90095EB777D78038587 /* SMSNewMessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMSNewMessageView.swift; sourceTree = "<group>"; };
-		18137E25E1EAB72981DF6B12 /* IncomingCallController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncomingCallController.swift; sourceTree = "<group>"; };
 		192FBF1C1A135D31F7634A2D /* WidgetSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshot.swift; sourceTree = "<group>"; };
 		2429FCE056D96FB2645C879B /* MessageEntity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageEntity.swift; sourceTree = "<group>"; };
 		255E2EA6EC09F058B1C8FAED /* AvatarCircle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarCircle.swift; sourceTree = "<group>"; };
@@ -663,7 +661,6 @@
 			children = (
 				9136E73687B5877B68AD11E9 /* CallsView.swift */,
 				11AD0DBD3A1FB008EB6CC6D1 /* InCallView.swift */,
-				18137E25E1EAB72981DF6B12 /* IncomingCallController.swift */,
 				908636C846821A7F19CF1598 /* IncomingCallView.swift */,
 				DFEFB32CA9F29A8081E5C3AE /* QuickCallRow.swift */,
 			);
@@ -1038,7 +1035,6 @@
 				67C14811E4167C7040C27070 /* FlexibleInt.swift in Sources */,
 				A586A5D37FDCC8301E6DA6B8 /* IdentityManager.swift in Sources */,
 				AAF1A77CFE6B2C9A72F83D8C /* InCallView.swift in Sources */,
-				F6030EADF0C9FE472ACD2D1D /* IncomingCallController.swift in Sources */,
 				5225FA173E400B6EBDA2396E /* IncomingCallView.swift in Sources */,
 				62645CC630DEF49A204372F3 /* KeychainService.swift in Sources */,
 				1B6077CCC2EBB9B255D641DB /* Line.swift in Sources */,

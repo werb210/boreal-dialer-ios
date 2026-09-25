@@ -57,7 +57,7 @@ final class PushManager: NSObject {
 // express that callbacks arrive on the registry's queue. Keep the conformance
 // nonisolated for that legacy contract, then explicitly enter MainActor before
 // touching application state. The registry itself is configured on `.main`.
-extension PushManager: @preconcurrency PKPushRegistryDelegate {
+extension PushManager: PKPushRegistryDelegate { // BOREAL_DIALER_v529 - methods are nonisolated; @preconcurrency had no effect
     nonisolated func pushRegistry(
         _ registry: PKPushRegistry,
         didUpdate credentials: PKPushCredentials,

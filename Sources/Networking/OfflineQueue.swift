@@ -11,10 +11,19 @@ struct QueuedAction: Codable {
 // BOREAL_DIALER_CONTACTS_TAB_v7 - matches POST /api/communications/sms, which
 // takes the recipient and optionally the CRM contact so the message lands on
 // that contact's timeline. `lineId` is gone: the silo travels in X-Silo.
+// BOREAL_DIALER_BLOCK_v501_SMS_PARITY - one picture or PDF per text (MMS),
+// sent to the same POST /communications/sms the portal uses (BF-Server v497).
+struct SMSMediaPayload: Codable, Equatable {
+    let name: String
+    let contentType: String
+    let dataUrl: String
+}
+
 struct SendSMSPayload: Codable {
     let to: String
     let body: String
     let contactId: String?
+    var media: SMSMediaPayload? = nil
 }
 
 struct EndCallPayload: Codable {

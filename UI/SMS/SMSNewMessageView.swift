@@ -73,6 +73,8 @@ final class SMSNewMessageViewModel: ObservableObject {
     @Published var manualNumber = ""
     @Published var selected: CRMContact?
     @Published var messageBody = ""
+    // BOREAL_DIALER_BLOCK_v503_SMS_ATTACH_EVERYWHERE
+    @Published var media: SMSMediaPayload?
     @Published var sending = false
     @Published var error: String?
     @Published private(set) var templates: [SMSTemplate] = []
@@ -96,7 +98,7 @@ final class SMSNewMessageViewModel: ObservableObject {
     var canSend: Bool {
         !sending
         && resolvedNumber != nil
-        && !messageBody.trimmingCharacters(in: .whitespaces).isEmpty
+        && (!messageBody.trimmingCharacters(in: .whitespaces).isEmpty || media != nil)
     }
 
     func load() async {
@@ -146,7 +148,7 @@ final class SMSNewMessageViewModel: ObservableObject {
         error = nil
         do {
             try await API.sendSMS(
-                SendSMSPayload(to: to, body: messageBody, contactId: selected?.id)
+                SendSMSPayload(to: to, body: messageBody, contactId: selected?.id, media: media)
             )
             sending = false
             return true
@@ -240,6 +242,8 @@ struct SMSNewMessageView: View {
                         .padding(.horizontal, 16)
                         .padding(.bottom, 4)
                 }
+
+                SMSAttachBar(text: $viewModel.messageBody, media: $viewModel.media, error: $viewModel.error)
 
                 ComposerBar(
                     placeholder: "Text message…",

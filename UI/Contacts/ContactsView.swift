@@ -386,6 +386,8 @@ private struct SMSComposeSheet: View {
     @State private var messageBody = ""
     @State private var sending = false
     @State private var error: String?
+    // BOREAL_DIALER_BLOCK_v503_SMS_ATTACH_EVERYWHERE
+    @State private var media: SMSMediaPayload?
 
     var body: some View {
         NavigationStack {
@@ -402,6 +404,8 @@ private struct SMSComposeSheet: View {
                             .stroke(Color.secondary.opacity(0.3))
                     )
 
+                SMSAttachBar(text: $messageBody, media: $media, error: $error)
+
                 if let error {
                     Text(error).font(.footnote).foregroundColor(.red)
                 }
@@ -417,7 +421,7 @@ private struct SMSComposeSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Send") { send() }
-                        .disabled(sending || messageBody.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled(sending || (messageBody.trimmingCharacters(in: .whitespaces).isEmpty && media == nil))
                 }
             }
         }
@@ -433,7 +437,7 @@ private struct SMSComposeSheet: View {
         Task {
             do {
                 try await API.sendSMS(
-                    SendSMSPayload(to: phone, body: messageBody, contactId: contact.id)
+                    SendSMSPayload(to: phone, body: messageBody, contactId: contact.id, media: media)
                 )
                 sending = false
                 dismiss()

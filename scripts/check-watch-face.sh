@@ -3,7 +3,7 @@
 # same app-group keys, and every complication link has a route. Either side
 # changing alone silently blanks the watch face again.
 set -euo pipefail
-for key in presence.status calls.missed tasks.due; do
+for key in presence.status calls.missed tasks.due meeting.next.title meeting.next.at; do # meeting keys: v558
   grep -q "\"$key\"" Watch/WatchFaceSync.swift || { echo "::error::WatchFaceSync does not write $key"; exit 1; }
   grep -q "\"$key\"" WatchWidget/BorealWatchWidget.swift || { echo "::error::widget does not read $key"; exit 1; }
 done

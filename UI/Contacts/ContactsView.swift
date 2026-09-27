@@ -163,6 +163,7 @@ final class ContactsViewModel: ObservableObject {
                 contacts = try JSONDecoder().decode(ContactsListEnvelope.self, from: data).data
             }
             self.error = nil
+            if trimmed.isEmpty { ContactSpotlight.index(contacts) } // BOREAL_DIALER_v593_SPOTLIGHT
         } catch {
             self.error = "Could not load contacts."
         }

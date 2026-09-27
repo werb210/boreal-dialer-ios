@@ -245,6 +245,11 @@ struct BorealAppShortcuts: AppShortcutsProvider {
             "Call a client with \(.applicationName)",
             "Call someone in \(.applicationName)"
         ])
+        // BOREAL_DIALER_v593_SIRI_TEXT_CLIENT
+        AppShortcut(intent: TextBorealClientIntent(), phrases: [
+            "Text a client with \(.applicationName)",
+            "Send a \(.applicationName) text"
+        ])
         AppShortcut(intent: NewBorealCallIntent(), phrases: [
             "New call in \(.applicationName)",
             "Start a \(.applicationName) call"

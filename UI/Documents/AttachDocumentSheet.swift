@@ -20,6 +20,9 @@ struct AttachDocumentSheet: View {
     @State private var message: String?
     @State private var uploaded = false
     @State private var searchTask: Task<Void, Never>?
+    // BOREAL_DIALER_v593_TEXT_SHARED_FILE
+    @State private var textNote = ""
+    @State private var texted = false
 
     var body: some View {
         NavigationStack {
@@ -73,6 +76,12 @@ struct AttachDocumentSheet: View {
                             ForEach(SharedDocumentInbox.categories, id: \.self) { Text($0).tag($0) }
                         }
                     }
+                    // BOREAL_DIALER_v593_TEXT_SHARED_FILE
+                    Section("Or text it to \(contact.displayName)") {
+                        TextField("Add a message (optional)", text: $textNote, axis: .vertical)
+                        Button(texted ? "Texted" : "Text this file") { Task { await textFile(to: contact) } }
+                            .disabled(busy || texted)
+                    }
                 }
                 if let message {
                     Section { Text(message).foregroundColor(uploaded ? .green : .red) }
@@ -82,7 +91,7 @@ struct AttachDocumentSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(uploaded ? "Done" : "Cancel") { onDone() }
+                    Button(uploaded || texted ? "Done" : "Cancel") { onDone() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(busy ? "Uploading…" : "Upload") { Task { await upload() } }
@@ -127,6 +136,33 @@ struct AttachDocumentSheet: View {
         } catch {
             applications = []
             message = "Could not load this client's applications."
+        }
+    }
+
+    // BOREAL_DIALER_v593_TEXT_SHARED_FILE - sends the file as a picture/MMS message from the
+    // Boreal line (POST /communications/sms, the same route the SMS screen attaches through).
+    private func textFile(to contact: CRMContact) async {
+        guard let phone = BorealClientLookup.e164(contact.callablePhone) else {
+            message = "This client has no mobile number."
+            return
+        }
+        busy = true
+        message = nil
+        defer { busy = false }
+        do {
+            let fileData = try Data(contentsOf: file.url)
+            guard fileData.count <= 3_000_000 else {
+                message = "This file is over 3 MB, too big to text. Upload it to the application instead."
+                return
+            }
+            let media = SMSMediaPayload(name: file.name, contentType: file.mimeType,
+                                        dataUrl: "data:\(file.mimeType);base64,\(fileData.base64EncodedString())")
+            let note = textNote.trimmingCharacters(in: .whitespacesAndNewlines)
+            try await API.sendSMS(SendSMSPayload(to: phone, body: note, contactId: contact.id, media: media))
+            texted = true
+            message = "Texted \(file.name) to \(contact.displayName)."
+        } catch {
+            message = OfflineQueue.isOffline(error) ? "No signal. Try again when you're back online." : "The text didn't send. Please try again."
         }
     }
 

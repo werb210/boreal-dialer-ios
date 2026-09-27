@@ -26,6 +26,8 @@ jobs:
         run: ./scripts/check-empty-assets.sh
 
       # BOREAL_DIALER_LAST_DEAD_ROUTES_v43
+      - name: v593 feature wiring
+        run: bash scripts/check-v593-features.sh
       - name: Check server paths
         run: ./scripts/check-server-paths.sh
 

@@ -4,6 +4,7 @@ import SwiftUI
 import UIKit
 import Intents
 import LocalAuthentication
+import CoreSpotlight // BOREAL_DIALER_v593_SPOTLIGHT
 #if canImport(Sentry)
 import Sentry
 #endif
@@ -67,6 +68,13 @@ struct BorealDialerApp: App {
             // BOREAL_DIALER_SHARE_TO_BOREAL_v319 - a shared file opens the attach sheet; links still dial.
             .onOpenURL { url in
                 if SharedDocumentInbox.shared.receive(url) { return }
+                _ = DeepLinkCoordinator.shared.receive(url)
+            }
+            // BOREAL_DIALER_v593_SPOTLIGHT
+            .onContinueUserActivity(CSSearchableItemActionType) { activity in
+                guard let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
+                      let phone = ContactSpotlight.phone(fromIdentifier: id),
+                      let url = ContactSpotlight.callURL(phone: phone) else { return }
                 _ = DeepLinkCoordinator.shared.receive(url)
             }
             .sheet(item: $shareInbox.pending) { file in

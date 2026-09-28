@@ -388,13 +388,17 @@ struct TeamView: View {
 
 struct TeamChannelView: View {
     // BOREAL_DIALER_THREAD_SCROLL_v166
+    // BOREAL_DIALER_SCROLL_BOTTOM_v649 - jump to a fixed marker after the last message, and try
+    // again as rows and pictures finish laying out (one early jump often stopped part-way).
     private func scrollToLatest(_ proxy: ScrollViewProxy, animated: Bool) {
-        guard let last = store.messages.last else { return }
-        DispatchQueue.main.async {
-            if animated {
-                withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
-            } else {
-                proxy.scrollTo(last.id, anchor: .bottom)
+        guard !store.messages.isEmpty else { return }
+        for delay in [0.0, 0.15, 0.5] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                if animated && delay == 0 {
+                    withAnimation { proxy.scrollTo(ThreadBottom.id, anchor: .bottom) }
+                } else {
+                    proxy.scrollTo(ThreadBottom.id, anchor: .bottom)
+                }
             }
         }
     }
@@ -412,7 +416,7 @@ struct TeamChannelView: View {
             // open, not when a message arrived.
             ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 8) { // BOREAL_DIALER_SCROLL_BOTTOM_v649
                     ForEach(store.messages) { message in
                         let mine = message.sender_id == store.myId
                         HStack {
@@ -438,6 +442,7 @@ struct TeamChannelView: View {
                         // proxy.scrollTo has a row to target.
                         .id(message.id)
                     }
+                    ThreadBottom()
                 }
                 .padding()
             }
@@ -445,6 +450,7 @@ struct TeamChannelView: View {
             .onChange(of: store.messages.count) { _ in
                 scrollToLatest(proxy, animated: true)
             }
+            .onChange(of: store.messages.last?.id) { _ in scrollToLatest(proxy, animated: true) }
             }
             Divider()
             HStack {

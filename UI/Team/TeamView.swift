@@ -7,6 +7,9 @@ struct TeamMessage: Identifiable, Decodable, Equatable {
     let sender_id: String?
     let body: String
     let created_at: String?
+    // BOREAL_DIALER_TEAM_PHASE_B_v667 - replies are grouped under a root message.
+    let thread: TeamThreadSummary?
+    let thread_root_id: String?
 }
 
 struct TeamChannel: Identifiable, Decodable {
@@ -16,6 +19,12 @@ struct TeamChannel: Identifiable, Decodable {
     let member_ids: [String]
     let last_message: TeamMessage?
     let unread_count: Int
+    // BOREAL_DIALER_TEAM_PHASE_B_v667
+    let topic: String?
+    let is_private: Bool?
+    let archived_at: String?
+    let muted: Bool?
+    let has_mention: Bool?
 }
 
 struct TeamUser: Identifiable, Decodable {

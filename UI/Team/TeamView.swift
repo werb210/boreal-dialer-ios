@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit // BOREAL_DIALER_TEAM_PHASE_B_v667 - UIPasteboard for Copy
 
 struct TeamMessage: Identifiable, Decodable, Equatable {
     let id: String
@@ -127,7 +128,7 @@ final class TeamStore: ObservableObject {
 
     func label(_ channel: TeamChannel) -> String {
         if let name = channel.name, !name.isEmpty {
-            return channel.kind == "channel" ? "# \(name)" : name
+            return channel.kind == "channel" ? ((channel.is_private ?? false) ? "\u{1F512} " : "# ") + name : name
         }
 
         let others = channel.member_ids.filter { $0 != myId }.map { name(for: $0) }
@@ -191,10 +192,11 @@ final class TeamStore: ObservableObject {
         } catch { /* ignore */ }
     }
 
-    func createChannel(kind: String, name: String, memberIds: [String]) async -> String? {
+    func createChannel(kind: String, name: String, memberIds: [String], topic: String = "", isPrivate: Bool = false) async -> String? {
         do {
             var obj: [String: Any] = ["kind": kind, "member_ids": memberIds]
             if kind != "dm" { obj["name"] = name }
+            if kind == "channel" { obj["topic"] = topic; obj["is_private"] = isPrivate } // BOREAL_DIALER_TEAM_PHASE_B_v667
             let payload = try JSONSerialization.data(withJSONObject: obj)
             let req = try APIClient.shared.makeRequest(path: "/team/channels", method: "POST", body: payload)
             let data = try await APIClient.shared.makeAuthorizedRequest(req)
@@ -241,6 +243,9 @@ final class TeamStore: ObservableObject {
                 }
             } else if type == "channel" {
                 await loadChannels()
+            } else if type == "thread_message" || type == "status" {
+                TeamPhaseBStore.shared.handleSocket(obj)
+                if type == "thread_message", let channelId = obj["channel_id"] as? String, channelId == activeId { await open(channelId) }
             }
         }
     }
@@ -256,6 +261,21 @@ struct TeamView: View {
     @State private var showNew = false
     // BOREAL_DIALER_TEAM_ROSTER_v28
     @State private var search = ""
+    // BOREAL_DIALER_TEAM_PHASE_B_v667
+    @ObservedObject private var extras = TeamPhaseBStore.shared
+    @State private var showBrowse = false
+    @State private var showSearch = false
+    @State private var showStatus = false
+    @State private var openTarget: TeamOpenTarget?
+
+    private var myStatusLabel: String {
+        guard let me = store.myId, let line = extras.statusLine(for: me) else { return "Set status" }
+        return line
+    }
+
+    private func openLater(_ target: TeamOpenTarget) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { openTarget = target }
+    }
 
     private var roster: [(String, [TeamUser])] {
         let query = search.trimmingCharacters(in: .whitespaces).lowercased()
@@ -304,9 +324,12 @@ struct TeamView: View {
                                             .foregroundColor(Theme.muted)
                                             .lineLimit(1)
                                     }
+                                    if let line = extras.statusLine(for: user.id) {
+                                        Text(line).font(.system(size: 12)).foregroundColor(Theme.muted).lineLimit(1)
+                                    }
                                 }
                                 Spacer()
-                                Text(store.status(for: user.id).capitalized)
+                                Text(extras.isAway(user.id) && store.status(for: user.id) != "offline" ? "Away" : store.status(for: user.id).capitalized)
                                     .font(.system(size: 12))
                                     .foregroundColor(Theme.faint)
                                 if user.id != store.myId {
@@ -338,8 +361,9 @@ struct TeamView: View {
                             } label: {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(store.label(channel))
+                                        Text(store.label(channel) + (channel.archived_at == nil ? "" : " (archived)"))
                                             .font(.system(size: 15.5, weight: .semibold))
+                                            .opacity(channel.archived_at == nil ? 1 : 0.55)
                                         if let lastMessage = channel.last_message {
                                             Text(lastMessage.body)
                                                 .font(.system(size: 13))
@@ -348,10 +372,18 @@ struct TeamView: View {
                                         }
                                     }
                                     Spacer()
+                                    if channel.has_mention ?? false {
+                                        Text("@").font(.caption.bold()).foregroundColor(.white).padding(.horizontal, 5).background(Theme.green).clipShape(Capsule())
+                                    }
+                                    if channel.muted ?? false { Image(systemName: "bell.slash").foregroundColor(Theme.muted) }
                                     if channel.unread_count > 0 {
                                         CountBadge(count: channel.unread_count)
                                     }
                                 }
+                            }
+                            .swipeActions(edge: .trailing) {
+                                Button((channel.muted ?? false) ? "Unmute" : "Mute") { Task { await extras.setMuted(channel.id, muted: !(channel.muted ?? false)) } }
+                                    .tint(Theme.muted)
                             }
                             .listRowBackground(Color.clear)
                         }
@@ -363,12 +395,27 @@ struct TeamView: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .background(Theme.bg)
+            .background(
+                NavigationLink(isActive: Binding(get: { openTarget != nil }, set: { if !$0 { openTarget = nil } })) {
+                    if let target = openTarget { TeamChannelView(channelId: target.channelId, title: target.title, openThreadId: target.threadRootId) }
+                } label: { EmptyView() }
+            )
             .navigationTitle("Team")
-            .navigationBarItems(trailing: Button { showNew = true } label: { Image(systemName: "square.and.pencil") })
+            .navigationBarItems(
+                leading: Button { showStatus = true } label: { Text(myStatusLabel).font(.footnote).lineLimit(1) },
+                trailing: HStack(spacing: 16) {
+                    Button { showSearch = true } label: { Image(systemName: "magnifyingglass") }
+                    Button { showBrowse = true } label: { Image(systemName: "number") }
+                    Button { showNew = true } label: { Image(systemName: "square.and.pencil") }
+                }
+            )
+            .sheet(isPresented: $showBrowse) { TeamBrowseView { id, title in openLater(TeamOpenTarget(channelId: id, title: title, threadRootId: nil)) } }
+            .sheet(isPresented: $showSearch) { TeamSearchView { id, title, root in openLater(TeamOpenTarget(channelId: id, title: title, threadRootId: root)) } }
+            .sheet(isPresented: $showStatus) { TeamStatusView() }
             .sheet(isPresented: $showNew) {
-                NewTeamChatView { kind, name, ids in
+                NewTeamChatView { kind, name, ids, topic, isPrivate in
                     Task {
-                        if let id = await store.createChannel(kind: kind, name: name, memberIds: ids) {
+                        if let id = await store.createChannel(kind: kind, name: name, memberIds: ids, topic: topic, isPrivate: isPrivate) {
                             await store.loadChannels()
                             await store.open(id)
                         }
@@ -382,6 +429,8 @@ struct TeamView: View {
             await store.loadUsers()
             await store.loadChannels()
             store.connect()
+            await TeamPhaseBStore.shared.loadStatuses() // BOREAL_DIALER_TEAM_PHASE_B_v667
+            TeamPhaseBStore.shared.startIdleAway()
             // BOREAL_DIALER_TEAM_ROSTER_v28 - the server marks a staff member
             // offline five minutes after their last heartbeat, so a roster
             // fetched once at launch goes wrong quickly.
@@ -389,6 +438,7 @@ struct TeamView: View {
                 try? await Task.sleep(nanoseconds: 60_000_000_000)
                 guard !Task.isCancelled else { break }
                 await store.loadPresence()
+                await TeamPhaseBStore.shared.loadStatuses()
             }
         }
         .onDisappear { store.disconnect() }
@@ -414,11 +464,19 @@ struct TeamChannelView: View {
 
     let channelId: String
     let title: String
+    var openThreadId: String? = nil
+    @ObservedObject private var extras = TeamPhaseBStore.shared
+    @Environment(\.dismiss) private var dismiss
+    @State private var threadTarget: String?
+    @State private var showDetails = false
     @ObservedObject private var store = TeamStore.shared
     @State private var draft = ""
 
     var body: some View {
         VStack(spacing: 0) {
+            if let topic = channel?.topic, !topic.isEmpty {
+                Text(topic).font(.footnote).foregroundColor(.secondary).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal).padding(.vertical, 6)
+            }
             // BOREAL_DIALER_THREAD_SCROLL_v166
             // This channel view had no ScrollViewReader at all, so it never
             // scrolled to the newest message under any circumstance - not on
@@ -436,14 +494,22 @@ struct TeamChannelView: View {
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
                                 }
-                                Text(message.body)
+                                TeamFormattedText(text: message.body)
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
                                     .background(mine ? Color.accentColor : Color(.systemGray5))
                                     .foregroundColor(mine ? .white : .primary)
                                     .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .contextMenu {
+                                        Button { threadTarget = message.id } label: { Label("Reply in thread", systemImage: "bubble.left.and.bubble.right") }
+                                        Button { Task { await extras.markUnread(channelId, messageId: message.id) } } label: { Label("Mark unread from here", systemImage: "circle.fill") }
+                                        Button { UIPasteboard.general.string = message.body } label: { Label("Copy", systemImage: "doc.on.doc") }
+                                    }
                                 // BOREAL_DIALER_BLOCK_v506_TEAM_LINK_PREVIEWS
                                 TeamLinkPreviewCard(text: message.body)
+                                if let thread = message.thread, thread.reply_count > 0 {
+                                    Button { threadTarget = message.id } label: { Text("\u{1F4AC} \(thread.reply_count) \(thread.reply_count == 1 ? "reply" : "replies")").font(.caption.weight(.semibold)) }.buttonStyle(.borderless)
+                                }
                             }
                             if !mine { Spacer() }
                         }
@@ -463,8 +529,10 @@ struct TeamChannelView: View {
             }
             Divider()
             HStack {
-                TextField("Message…", text: $draft)
+                TextField(channel?.archived_at != nil ? "This channel is archived" : "Message", text: $draft, axis: .vertical)
+                    .lineLimit(1...6)
                     .textFieldStyle(.roundedBorder)
+                    .disabled(channel?.archived_at != nil)
                 Button {
                     let body = draft
                     draft = ""
@@ -478,16 +546,29 @@ struct TeamChannelView: View {
         }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
-        .task { await store.open(channelId) }
+        .navigationBarItems(trailing: Group {
+            if let channel, channel.kind != "dm" { Button { showDetails = true } label: { Image(systemName: "info.circle") } }
+        })
+        .sheet(isPresented: $showDetails) { if let channel { TeamChannelDetailsView(channel: channel, onLeft: { dismiss() }) } }
+        .background(
+            NavigationLink(isActive: Binding(get: { threadTarget != nil }, set: { if !$0 { threadTarget = nil } })) {
+                if let root = threadTarget { TeamThreadView(channelId: channelId, rootId: root, archived: channel?.archived_at != nil) }
+            } label: { EmptyView() }
+        )
+        .task { await store.open(channelId); if let openThreadId { threadTarget = openThreadId } }
     }
+
+    private var channel: TeamChannel? { store.channels.first { $0.id == channelId } }
 }
 
 struct NewTeamChatView: View {
-    let onCreate: (_ kind: String, _ name: String, _ memberIds: [String]) -> Void
+    let onCreate: (_ kind: String, _ name: String, _ memberIds: [String], _ topic: String, _ isPrivate: Bool) -> Void
     @ObservedObject private var store = TeamStore.shared
     @Environment(\.dismiss) private var dismiss
     @State private var mode = "dm"
     @State private var name = ""
+    @State private var topic = ""
+    @State private var isPrivate = false
     @State private var picked: Set<String> = []
 
     private var canCreate: Bool {
@@ -509,6 +590,10 @@ struct NewTeamChatView: View {
 
                 if mode != "dm" {
                     TextField(mode == "channel" ? "Channel name" : "Group name (optional)", text: $name)
+                }
+                if mode == "channel" {
+                    TextField("Topic (optional)", text: $topic)
+                    Toggle("Private (only people you add)", isOn: $isPrivate)
                 }
 
                 Section(mode == "dm" ? "Pick one person" : "Pick people") {
@@ -536,7 +621,7 @@ struct NewTeamChatView: View {
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarItems(
                 leading: Button("Cancel") { dismiss() },
-                trailing: Button("Create") { onCreate(mode, name, Array(picked)) }.disabled(!canCreate)
+                trailing: Button("Create") { onCreate(mode, name, Array(picked), topic, isPrivate) }.disabled(!canCreate)
             )
         }
         .navigationViewStyle(.stack)

@@ -229,14 +229,17 @@ private struct MessageThreadRow: View {
 
 struct MessageThreadView: View {
     // BOREAL_DIALER_THREAD_SCROLL_v166
+    // BOREAL_DIALER_SCROLL_BOTTOM_v649 - jump to a fixed marker after the last message, and try
+    // again as rows and pictures finish laying out (one early jump often stopped part-way).
     private func scrollToLatest(_ proxy: ScrollViewProxy, animated: Bool) {
-        guard let last = messages.last else { return }
-        // A first render needs a turn of the run loop before the rows exist.
-        DispatchQueue.main.async {
-            if animated {
-                withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
-            } else {
-                proxy.scrollTo(last.id, anchor: .bottom)
+        guard !messages.isEmpty else { return }
+        for delay in [0.0, 0.15, 0.5] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                if animated && delay == 0 {
+                    withAnimation { proxy.scrollTo(ThreadBottom.id, anchor: .bottom) }
+                } else {
+                    proxy.scrollTo(ThreadBottom.id, anchor: .bottom)
+                }
             }
         }
     }
@@ -263,10 +266,11 @@ struct MessageThreadView: View {
             } else {
                 ScrollViewReader { proxy in
                     ScrollView {
-                        LazyVStack(spacing: 8) {
+                        VStack(spacing: 8) { // BOREAL_DIALER_SCROLL_BOTTOM_v649 - all rows exist, so the jump lands
                             ForEach(messages) { message in
                                 ThreadBubble(message: message).id(message.id)
                             }
+                            ThreadBottom()
                         }
                         .padding(.horizontal)
                         .padding(.vertical, 12)
@@ -278,6 +282,7 @@ struct MessageThreadView: View {
                     .onChange(of: messages.count) { _ in
                         scrollToLatest(proxy, animated: true)
                     }
+                    .onChange(of: messages.last?.id) { _ in scrollToLatest(proxy, animated: true) }
                 }
             }
 
@@ -381,5 +386,15 @@ private struct ThreadBubble: View {
                 if !message.isOutbound { Spacer(minLength: 40) }
             }
         }
+    }
+}
+
+// BOREAL_DIALER_SCROLL_BOTTOM_v649
+// An invisible marker placed after the last message in every conversation (SMS, Messages, Team).
+// Screens scroll to it so the newest message is always in view.
+struct ThreadBottom: View {
+    static let id = "boreal-thread-bottom"
+    var body: some View {
+        Color.clear.frame(height: 1).id(ThreadBottom.id)
     }
 }

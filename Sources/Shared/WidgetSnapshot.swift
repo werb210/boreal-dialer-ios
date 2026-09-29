@@ -33,7 +33,11 @@ enum WidgetSnapshotStore {
     }
 
     static func save(_ contacts: [WidgetContact]) {
-        let snapshot = WidgetSnapshot(contacts: Array(contacts.prefix(3)), updatedAt: Date())
+        // BOREAL_DIALER_WIDGET_DEDUPE_v677 - one row per number: two calls with the same person
+        // showed them twice ("Lorne Benjamin" x2). Keeps the most recent, in order.
+        var seen = Set<String>()
+        let unique = contacts.filter { contact in seen.insert(contact.number.filter { $0.isNumber }).inserted }
+        let snapshot = WidgetSnapshot(contacts: Array(unique.prefix(3)), updatedAt: Date())
         guard let defaults = UserDefaults(suiteName: appGroup),
               let data = try? JSONEncoder().encode(snapshot) else { return }
         defaults.set(data, forKey: snapshotKey)

@@ -119,6 +119,7 @@ struct BorealDialerApp: App {
                     // BOREAL_DIALER_WATCH_SNAPSHOT_WRITER_v210 - nothing has ever written the
                     // keys the watch complication reads. This is that writer.
                     Task { await WatchSnapshotSync.refresh() }
+                    Task { await DialerDashboardStore.refresh() } // BOREAL_DIALER_LARGE_WIDGET_v685
                     Task {
                         OfflineQueue.shared.reconcileBackground() // BOREAL_DIALER_BACKGROUND_SEND_v309
                         await OfflineQueue.shared.flush()

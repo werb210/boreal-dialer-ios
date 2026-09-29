@@ -4,26 +4,28 @@ import WidgetKit
 struct BorealDialerEntry: TimelineEntry {
     let date: Date
     let contacts: [WidgetContact]
+    // BOREAL_DIALER_LARGE_WIDGET_v685 - missed calls, today's count, next tasks, next meeting.
+    var dashboard: DialerDashboard = .empty
+    var meetingTitle: String? = nil
+    var meetingAt: Date? = nil
 }
 
 struct BorealDialerProvider: TimelineProvider {
     func placeholder(in context: Context) -> BorealDialerEntry {
-        BorealDialerEntry(date: Date(), contacts: [
-            WidgetContact(name: "Recent contact", number: "+14035550123")
-        ])
+        BorealDialerEntry(date: Date(), contacts: [WidgetContact(name: "Recent contact", number: "+14035550123")])
     }
 
-    func getSnapshot(in context: Context, completion: @escaping (BorealDialerEntry) -> Void) {
-        completion(entry())
-    }
+    func getSnapshot(in context: Context, completion: @escaping (BorealDialerEntry) -> Void) { completion(entry()) }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<BorealDialerEntry>) -> Void) {
-        let current = entry()
-        completion(Timeline(entries: [current], policy: .after(Date().addingTimeInterval(15 * 60))))
+        completion(Timeline(entries: [entry()], policy: .after(Date().addingTimeInterval(15 * 60))))
     }
 
     private func entry() -> BorealDialerEntry {
-        BorealDialerEntry(date: Date(), contacts: WidgetSnapshotStore.load().contacts)
+        let meeting = WatchSnapshotSync.nextMeeting()
+        return BorealDialerEntry(date: Date(), contacts: WidgetSnapshotStore.load().contacts,
+                                 dashboard: DialerDashboardStore.load(),
+                                 meetingTitle: meeting?.title, meetingAt: meeting?.startsAt)
     }
 }
 
@@ -33,6 +35,8 @@ struct BorealDialerWidgetView: View {
 
     var body: some View {
         switch family {
+        case .systemLarge:
+            largeView
         case .accessoryCircular:
             Link(destination: URL(string: "borealdialer://new-call")!) {
                 VStack(spacing: 2) {
@@ -81,6 +85,60 @@ struct BorealDialerWidgetView: View {
         }
     }
 
+    // BOREAL_DIALER_LARGE_WIDGET_v685
+    private func sectionTitle(_ text: String) -> some View {
+        Text(text.uppercased()).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+    }
+
+    private var largeView: some View {
+        let d = entry.dashboard
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Link(destination: URL(string: "borealdialer://new-call")!) {
+                    Label("New call", systemImage: "phone.fill").font(.headline)
+                }
+                Spacer()
+                Text(d.callsToday == 1 ? "1 call today" : "\(d.callsToday) calls today")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            sectionTitle("Missed calls")
+            if d.missed.isEmpty { Text("None").font(.subheadline).foregroundStyle(.secondary) }
+            ForEach(Array(d.missed.enumerated()), id: \.offset) { _, item in
+                Link(destination: item.number.map { callURL($0) } ?? URL(string: "borealdialer://new-call")!) {
+                    HStack {
+                        Image(systemName: "phone.arrow.down.left").foregroundStyle(.red)
+                        Text(item.title).lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text(item.detail).font(.caption).foregroundStyle(.secondary)
+                    }.font(.subheadline)
+                }
+            }
+            sectionTitle("Next up")
+            if d.tasks.isEmpty { Text("No tasks due today").font(.subheadline).foregroundStyle(.secondary) }
+            ForEach(Array(d.tasks.enumerated()), id: \.offset) { _, item in
+                HStack {
+                    Image(systemName: "checklist")
+                    Text(item.title).lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text(item.detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }.font(.subheadline)
+            }
+            sectionTitle("Next meeting")
+            if let title = entry.meetingTitle, let at = entry.meetingAt {
+                HStack {
+                    Image(systemName: "calendar")
+                    Text(title).lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text(DialerDashboardStore.time(at)).font(.caption).foregroundStyle(.secondary)
+                }.font(.subheadline)
+            } else {
+                Text("Nothing scheduled").font(.subheadline).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .legacyWidgetPadding()
+    }
+
     private func callURL(_ number: String) -> URL {
         var components = URLComponents()
         components.scheme = "borealdialer"
@@ -95,12 +153,11 @@ struct BorealDialerWidget: Widget {
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: BorealDialerProvider()) { entry in
-            BorealDialerWidgetView(entry: entry)
-                .dialerWidgetBackground()
+            BorealDialerWidgetView(entry: entry).dialerWidgetBackground()
         }
         .configurationDisplayName("Boreal Dialer")
-        .description("Start a new call or call a recent contact.")
-        .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular])
+        .description("Start a call, call back a missed call, and see what is next.")
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .accessoryCircular, .accessoryRectangular]) // BOREAL_DIALER_LARGE_WIDGET_v685
     }
 }
 
@@ -108,20 +165,12 @@ struct BorealDialerWidget: Widget {
 extension View {
     @ViewBuilder
     func dialerWidgetBackground() -> some View {
-        if #available(iOSApplicationExtension 17.0, *) {
-            containerBackground(.background, for: .widget)
-        } else {
-            self
-        }
+        if #available(iOSApplicationExtension 17.0, *) { containerBackground(.background, for: .widget) } else { self }
     }
 
     /// iOS 17+ adds content margins itself; before that the widget pads its own content.
     @ViewBuilder
     func legacyWidgetPadding() -> some View {
-        if #available(iOSApplicationExtension 17.0, *) {
-            self
-        } else {
-            padding()
-        }
+        if #available(iOSApplicationExtension 17.0, *) { self } else { padding() }
     }
 }

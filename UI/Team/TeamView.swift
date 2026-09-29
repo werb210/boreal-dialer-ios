@@ -11,6 +11,7 @@ struct TeamMessage: Identifiable, Decodable, Equatable {
     // BOREAL_DIALER_TEAM_PHASE_B_v667 - replies are grouped under a root message.
     let thread: TeamThreadSummary?
     let thread_root_id: String?
+    let bot: String? // BOREAL_DIALER_TEAM_PHASE_C_v673 - Boreal or Maya when there is no human sender
 }
 
 struct TeamChannel: Identifiable, Decodable {
@@ -243,6 +244,8 @@ final class TeamStore: ObservableObject {
                 }
             } else if type == "channel" {
                 await loadChannels()
+            } else if type == "reminder" {
+                TeamPhaseCStore.shared.remind(body: obj["body"] as? String ?? "") // BOREAL_DIALER_TEAM_PHASE_C_v673
             } else if type == "thread_message" || type == "status" {
                 TeamPhaseBStore.shared.handleSocket(obj)
                 if type == "thread_message", let channelId = obj["channel_id"] as? String, channelId == activeId { await open(channelId) }
@@ -266,6 +269,7 @@ struct TeamView: View {
     @State private var showBrowse = false
     @State private var showSearch = false
     @State private var showStatus = false
+    @State private var showSaved = false // BOREAL_DIALER_TEAM_PHASE_C_v673
     @State private var openTarget: TeamOpenTarget?
 
     private var myStatusLabel: String {
@@ -404,6 +408,7 @@ struct TeamView: View {
             .navigationBarItems(
                 leading: Button { showStatus = true } label: { Text(myStatusLabel).font(.footnote).lineLimit(1) },
                 trailing: HStack(spacing: 16) {
+                    Button { showSaved = true } label: { Image(systemName: "bookmark") } // BOREAL_DIALER_TEAM_PHASE_C_v673
                     Button { showSearch = true } label: { Image(systemName: "magnifyingglass") }
                     Button { showBrowse = true } label: { Image(systemName: "number") }
                     Button { showNew = true } label: { Image(systemName: "square.and.pencil") }
@@ -411,6 +416,7 @@ struct TeamView: View {
             )
             .sheet(isPresented: $showBrowse) { TeamBrowseView { id, title in openLater(TeamOpenTarget(channelId: id, title: title, threadRootId: nil)) } }
             .sheet(isPresented: $showSearch) { TeamSearchView { id, title, root in openLater(TeamOpenTarget(channelId: id, title: title, threadRootId: root)) } }
+            .sheet(isPresented: $showSaved) { TeamSavedView { id, title, root in openLater(TeamOpenTarget(channelId: id, title: title, threadRootId: root)) } } // BOREAL_DIALER_TEAM_PHASE_C_v673
             .sheet(isPresented: $showStatus) { TeamStatusView() }
             .sheet(isPresented: $showNew) {
                 NewTeamChatView { kind, name, ids, topic, isPrivate in
@@ -465,6 +471,7 @@ struct TeamChannelView: View {
     let channelId: String
     let title: String
     var openThreadId: String? = nil
+    @ObservedObject private var phaseC = TeamPhaseCStore.shared // BOREAL_DIALER_TEAM_PHASE_C_v673
     @ObservedObject private var extras = TeamPhaseBStore.shared
     @Environment(\.dismiss) private var dismiss
     @State private var threadTarget: String?
@@ -490,7 +497,7 @@ struct TeamChannelView: View {
                             if mine { Spacer() }
                             VStack(alignment: mine ? .trailing : .leading, spacing: 2) {
                                 if !mine {
-                                    Text(store.name(for: message.sender_id))
+                                    Text(message.bot ?? store.name(for: message.sender_id))
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
                                 }
@@ -503,10 +510,14 @@ struct TeamChannelView: View {
                                     .contextMenu {
                                         Button { threadTarget = message.id } label: { Label("Reply in thread", systemImage: "bubble.left.and.bubble.right") }
                                         Button { Task { await extras.markUnread(channelId, messageId: message.id) } } label: { Label("Mark unread from here", systemImage: "circle.fill") }
+                                        Button { Task { await TeamPhaseCStore.shared.save(message.id, choice: "save") } } label: { Label("Save for later", systemImage: "bookmark") } // BOREAL_DIALER_TEAM_PHASE_C_v673
+                                        Button { Task { await TeamPhaseCStore.shared.save(message.id, choice: "1h") } } label: { Label("Remind me in 1 hour", systemImage: "alarm") }
+                                        Button { Task { await TeamPhaseCStore.shared.save(message.id, choice: "tomorrow") } } label: { Label("Remind me tomorrow at 9 am", systemImage: "alarm") }
                                         Button { UIPasteboard.general.string = message.body } label: { Label("Copy", systemImage: "doc.on.doc") }
                                     }
                                 // BOREAL_DIALER_BLOCK_v506_TEAM_LINK_PREVIEWS
                                 TeamLinkPreviewCard(text: message.body)
+                                TeamCardsView(text: message.body) // BOREAL_DIALER_TEAM_PHASE_C_v673
                                 if let thread = message.thread, thread.reply_count > 0 {
                                     Button { threadTarget = message.id } label: { Text("\u{1F4AC} \(thread.reply_count) \(thread.reply_count == 1 ? "reply" : "replies")").font(.caption.weight(.semibold)) }.buttonStyle(.borderless)
                                 }
@@ -529,7 +540,7 @@ struct TeamChannelView: View {
             }
             Divider()
             HStack {
-                TextField(channel?.archived_at != nil ? "This channel is archived" : "Message", text: $draft, axis: .vertical)
+                TextField(channel?.archived_at != nil ? "This channel is archived" : "Message or @Maya", text: $draft, axis: .vertical)
                     .lineLimit(1...6)
                     .textFieldStyle(.roundedBorder)
                     .disabled(channel?.archived_at != nil)
@@ -544,10 +555,24 @@ struct TeamChannelView: View {
             }
             .padding(8)
         }
+        .overlay(alignment: .bottom) {
+            if let toast = phaseC.toast {
+                Text(toast)
+                    .font(.footnote)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.thinMaterial)
+                    .clipShape(Capsule())
+                    .padding(.bottom, 70)
+            }
+        }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarItems(trailing: Group {
             if let channel, channel.kind != "dm" { Button { showDetails = true } label: { Image(systemName: "info.circle") } }
+            if let channel, channel.kind == "dm", let other = channel.member_ids.first(where: { $0 != store.myId }) { // BOREAL_DIALER_TEAM_PHASE_C_v673 - call the other person
+                Button { VoiceEngine.shared.startInternalCall(staffIdentity: other, displayName: store.name(for: other)) } label: { Image(systemName: "phone.fill") }
+            }
         })
         .sheet(isPresented: $showDetails) { if let channel { TeamChannelDetailsView(channel: channel, onLeft: { dismiss() }) } }
         .background(

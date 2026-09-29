@@ -15,10 +15,11 @@ struct TeamThreadView: View {
 
     func row(_ message: TeamMessage) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(message.sender_id == team.myId ? "You" : team.name(for: message.sender_id))
+            Text(message.sender_id == team.myId ? "You" : (message.bot ?? team.name(for: message.sender_id)))
                 .font(.caption)
                 .foregroundColor(.secondary)
             TeamFormattedText(text: message.body)
+            TeamCardsView(text: message.body) // BOREAL_DIALER_TEAM_PHASE_C_v673
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

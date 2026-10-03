@@ -56,12 +56,8 @@ struct CallsView: View {
 
             switch section {
             case .keypad:
-                // BOREAL_DIALER_QUICK_CALL_v16
-                VStack(spacing: 0) {
-                    QuickCallRow()
-                    Divider().padding(.top, 8)
-                    DialerView()
-                }
+                // BOREAL_DIALER_MOCKUP_LAYOUT_v60 - mockup order: number, Quick Call, keypad.
+                DialerView()
             case .recents: RecentCallsView()
             case .voicemail: VoicemailView()
             }

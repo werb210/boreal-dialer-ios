@@ -10,8 +10,12 @@ struct DialerView: View {
     @ObservedObject private var deepLinks = DeepLinkCoordinator.shared
     @State private var contactContext: String?
 
+    // BOREAL_DIALER_MOCKUP_LAYOUT_v60 - laid out like the concept mockup: number,
+    // Quick Call, keypad, then all three call actions. Scrolling prevents smaller
+    // iPhones from compressing the keys and call button.
     var body: some View {
-        VStack(spacing: 20) {
+        ScrollView(.vertical, showsIndicators: false) {
+        VStack(spacing: 0) {
 
             if recordingManager.isRecording {
                 Text("Call is being recorded")
@@ -21,15 +25,17 @@ struct DialerView: View {
                     .background(Color.red)
             }
 
-            // BOREAL_DIALER_CALLS_PRESENTATION_v23 - country chip and a
-            // formatted read-out above the grid.
-            HStack(spacing: 8) {
-                Text("+1")
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundColor(Theme.muted)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(Color.secondary.opacity(0.12)))
+            Text("ENTER A NUMBER")
+                .font(.system(size: 12, weight: .regular))
+                .kerning(1.5)
+                .foregroundColor(Theme.faint)
+                .padding(.top, 8)
+
+            Text("+1")
+                .font(.system(size: 34, weight: .semibold))
+                .foregroundColor(Theme.text)
+                .padding(.top, 2)
+                .padding(.bottom, 8)
 
                 // BOREAL_DIALER_TEAM_ROSTER_SELF_v50 - the placeholder used to
                 // read "+1…" while the chip immediately to its left already
@@ -37,16 +43,19 @@ struct DialerView: View {
                 // PhoneFormat.display returns the national format with no
                 // country code, so the chip is the thing carrying that
                 // information and the placeholder should not repeat it.
-                Text(number.isEmpty ? "Enter number" : PhoneFormat.display(number))
-                    .font(.system(size: 30, weight: .regular))
-                    .foregroundColor(number.isEmpty ? .secondary : .primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 4)
+            Text(number.isEmpty ? "Enter number" : PhoneFormat.display(number))
+                .font(.system(size: 18, weight: number.isEmpty ? .regular : .medium))
+                .foregroundColor(number.isEmpty ? Color(hex: 0x9AA2FF) : Color(hex: 0x0A0B0D))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(RoundedRectangle(cornerRadius: 13).fill(Color.white))
+                .padding(.horizontal, 18)
 
-            // BOREAL_DIALER_KEYPAD_ICON_PLIST_v22 - the actual keypad.
+            QuickCallRow()
+
             KeypadGrid(
                 onDigit: { digit in
                     number.append(digit)
@@ -57,30 +66,50 @@ struct DialerView: View {
                 },
                 onClear: { number = "" }
             )
+            .padding(.horizontal, 40)
+            .padding(.top, 18)
 
-            // BOREAL_DIALER_IN_CALL_SCREEN_v37
-            Button {
-                VoiceEngine.shared.startCall(to: number)
-            } label: {
-                Image(systemName: "phone.fill")
-                    .font(.system(size: 26))
-                    .foregroundColor(Theme.onGreen)
-                    .frame(width: 72, height: 72)
-                    .background(Circle().fill(
-                        (!reachability.isOnline || number.isEmpty || !isIdle)
-                            ? Theme.surface3 : Theme.green
-                    ))
+            HStack(spacing: 46) {
+                Button {
+                    if !number.isEmpty { number.removeLast() }
+                } label: {
+                    Text("Delete").font(.system(size: 14)).foregroundColor(Theme.muted).frame(width: 54)
+                }
+                .buttonStyle(.plain)
+                .simultaneousGesture(LongPressGesture().onEnded { _ in number = "" })
+
+                Button {
+                    VoiceEngine.shared.startCall(to: number)
+                } label: {
+                    Image(systemName: "phone.fill")
+                        .font(.system(size: 26))
+                        .foregroundColor(Theme.onGreen)
+                        .frame(width: 66, height: 66)
+                        .background(Circle().fill(
+                            (!reachability.isOnline || number.isEmpty || !isIdle)
+                                ? Theme.surface3 : Theme.green
+                        ))
+                        .shadow(color: Theme.green.opacity(number.isEmpty ? 0 : 0.55), radius: 14)
+                }
+                .buttonStyle(.plain)
+                .disabled(!reachability.isOnline || number.isEmpty || !isIdle)
+
+                Button { number = "" } label: {
+                    Text("Clear").font(.system(size: 14)).foregroundColor(Theme.muted).frame(width: 54)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
-            .disabled(!reachability.isOnline || number.isEmpty || !isIdle)
+            .padding(.top, 6)
+            .padding(.bottom, 8)
 
             if !reachability.isOnline {
                 Text("Offline: calling disabled")
                     .foregroundColor(.orange)
+                    .padding(.bottom, 8)
             }
 
         }
-        .padding()
+        }
         .onAppear { applyPendingDeepLink() }
         .onChange(of: deepLinks.pending) { _ in applyPendingDeepLink() }
         // BOREAL_DIALER_IN_CALL_SCREEN_v37 - a live call takes the screen.
@@ -367,16 +396,7 @@ struct KeypadGrid: View {
                 }
             }
 
-            HStack {
-                Spacer()
-                Button(action: onBackspace) {
-                    Image(systemName: "delete.left").font(.title2)
-                }
-                .buttonStyle(.plain)
-                .simultaneousGesture(LongPressGesture().onEnded { _ in onClear() })
-                .padding(.trailing, 34)
-            }
         }
-        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
     }
 }

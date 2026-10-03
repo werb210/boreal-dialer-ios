@@ -18,52 +18,39 @@ struct RootTabView: View {
     var body: some View {
         VStack(spacing: 0) {
             OfflineStatusBar() // BOREAL_DIALER_OFFLINE_v303
-            // BOREAL_DIALER_ACCOUNT_SHEET_v42 - sign out lives here; there was
-            // previously no way to leave the app.
-            HStack {
-                Spacer()
+            // BOREAL_DIALER_MOCKUP_LAYOUT_v60 - mockup tab strip: pills sized to their
+            // text, 8 pt apart, semibold; the account button sits at the row's end.
+            HStack(spacing: 8) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Tab.allCases, id: \.self) { t in
+                            Button {
+                                tab = t
+                            } label: {
+                                Text(t.rawValue)
+                                    .font(.system(size: 13.5, weight: .semibold))
+                                    .padding(.horizontal, 15)
+                                    .padding(.vertical, 9)
+                                    .background(Capsule().fill(tab == t ? Theme.green : Color.clear))
+                                    .overlay(Capsule().stroke(tab == t ? Color.clear : Theme.line2, lineWidth: 1))
+                                    .foregroundColor(tab == t ? Theme.onGreen : Theme.muted)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.leading, 16)
+                    .padding(.vertical, 10)
+                }
                 Button {
                     showAccount = true
                 } label: {
                     Image(systemName: "person.crop.circle")
-                        .font(.system(size: 20))
+                        .font(.system(size: 22))
                         .foregroundColor(Theme.muted)
                 }
                 .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 0) {
-                    ForEach(Tab.allCases, id: \.self) { t in
-                        Button {
-                            tab = t
-                        } label: {
-                            VStack(spacing: 4) {
-                                // BOREAL_DIALER_THEME_v27
-                        Text(t.rawValue)
-                            .font(.system(size: 13.5, weight: .semibold))
-                            .padding(.horizontal, 15)
-                            .padding(.vertical, 9)
-                            .background(
-                                Capsule().fill(tab == t ? Theme.green : Color.clear)
-                            )
-                            .overlay(
-                                Capsule().stroke(tab == t ? Color.clear : Theme.line2, lineWidth: 1)
-                            )
-                            .foregroundColor(tab == t ? Theme.onGreen : Theme.muted)
-                                    .font(.footnote)
-                                    .fontWeight(tab == t ? .semibold : .regular)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 8)
-                        }
-                        .foregroundColor(tab == t ? .primary : .secondary)
-                        .buttonStyle(.plain)
-                        .frame(minWidth: 88)
-                    }
-                }
+                .padding(.trailing, 14)
+                .accessibilityLabel("Account")
             }
             Divider().overlay(Theme.line)
 

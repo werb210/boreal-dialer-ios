@@ -101,19 +101,25 @@ struct QuickCallRow: View {
     @StateObject private var viewModel = QuickCallViewModel()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        // BOREAL_DIALER_MOCKUP_LAYOUT_v60 - mockup Quick Call: small caps heading with a
+        // green Edit, 56 pt indigo avatars spread evenly across the row.
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Quick call")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.secondary)
+                Text("QUICK CALL")
+                    .font(.system(size: 12, weight: .bold))
+                    .kerning(0.6)
+                    .foregroundColor(Theme.faint)
                 Spacer()
                 Button(viewModel.editing ? "Done" : "Edit") {
                     viewModel.editing.toggle()
                 }
-                .font(.caption)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(Theme.greenBright)
             }
+            .padding(.horizontal, 22)
+            .padding(.top, 14)
 
-            HStack(spacing: 14) {
+            HStack(spacing: 0) {
                 ForEach(viewModel.pinned) { member in
                     Button {
                         if viewModel.editing {
@@ -125,14 +131,14 @@ struct QuickCallRow: View {
                         VStack(spacing: 4) {
                             ZStack(alignment: .bottomTrailing) {
                                 Circle()
-                                    .fill(Color.secondary.opacity(0.2))
-                                    .frame(width: 46, height: 46)
-                                    .overlay(Text(member.initials).font(.caption.weight(.semibold)))
+                                    .fill(LinearGradient(colors: [Theme.ind1, Theme.ind2], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                    .frame(width: 56, height: 56)
+                                    .overlay(Text(member.initials).font(.system(size: 18, weight: .bold)).foregroundColor(.white))
                                 if member.online == true {
                                     Circle()
-                                        .fill(Color.green)
-                                        .frame(width: 11, height: 11)
-                                        .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
+                                        .fill(Theme.online)
+                                        .frame(width: 13, height: 13)
+                                        .overlay(Circle().stroke(Theme.bg, lineWidth: 2.5))
                                 }
                                 if viewModel.editing {
                                     Image(systemName: "minus.circle.fill")
@@ -140,11 +146,13 @@ struct QuickCallRow: View {
                                 }
                             }
                             Text(member.displayName.split(separator: " ").first.map(String.init) ?? member.displayName)
-                                .font(.caption2)
+                                .font(.system(size: 12))
+                                .foregroundColor(Theme.muted)
                                 .lineLimit(1)
                         }
                     }
                     .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity)
                 }
 
                 if viewModel.pinned.count < 3 {
@@ -157,23 +165,21 @@ struct QuickCallRow: View {
                     } label: {
                         VStack(spacing: 4) {
                             Circle()
-                                .strokeBorder(Color.secondary.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [3]))
-                                .frame(width: 46, height: 46)
-                                .overlay(Image(systemName: "plus").foregroundColor(.secondary))
-                            Text("Add").font(.caption2).foregroundColor(.secondary)
+                                .strokeBorder(Theme.line2, style: StrokeStyle(lineWidth: 1.5, dash: [4]))
+                                .frame(width: 56, height: 56)
+                                .overlay(Image(systemName: "plus").font(.system(size: 22)).foregroundColor(Theme.muted))
+                            Text("Add").font(.system(size: 12)).foregroundColor(Theme.faint)
                         }
                     }
+                    .frame(maxWidth: .infinity)
                 }
-
-                Spacer()
             }
+            .padding(.horizontal, 14)
 
             if let error = viewModel.error {
                 Text(error).font(.caption2).foregroundColor(.red)
             }
         }
-        .padding(.horizontal)
-        .padding(.top, 8)
         .task { await viewModel.load() }
     }
 }

@@ -12,6 +12,15 @@ struct TeamMessage: Identifiable, Decodable, Equatable {
     let thread: TeamThreadSummary?
     let thread_root_id: String?
     let bot: String? // BOREAL_DIALER_TEAM_PHASE_C_v673 - Boreal or Maya when there is no human sender
+    // BOREAL_DIALER_READ_THIS_v687 - "Read this" messages (BF-Server v776): readers tap Mark as read,
+    // the sender sees who has read it. Same feature as the portal (BF-portal v760).
+    let read_this: Bool?
+    let read_by: [TeamReadReceipt]?
+}
+
+struct TeamReadReceipt: Decodable, Equatable {
+    let user_id: String
+    let read_at: String?
 }
 
 struct TeamChannel: Identifiable, Decodable {
@@ -45,6 +54,7 @@ final class TeamStore: ObservableObject {
     @Published var presence: [String: String] = [:]
     @Published var messages: [TeamMessage] = []
     @Published var activeId: String?
+    @Published var readThisNext = false // BOREAL_DIALER_READ_THIS_v687 - the next message is a Read this
 
     private var ws: URLSessionWebSocketTask?
 
@@ -100,6 +110,13 @@ final class TeamStore: ObservableObject {
     // context". It reads only its arguments and touches no actor state, so it
     // has no business being isolated. rosterSections still calls it from the
     // main actor, which nonisolated permits.
+    // BOREAL_DIALER_READ_THIS_v687 - who (besides the sender) has and has not read a Read this message.
+    nonisolated static func readThisSummary(readBy: [TeamReadReceipt]?, memberIds: [String], senderId: String?) -> (read: [String], waiting: [String]) {
+        let readIds = Set((readBy ?? []).map { $0.user_id })
+        let others = memberIds.filter { $0 != senderId }
+        return (others.filter { readIds.contains($0) }, others.filter { !readIds.contains($0) })
+    }
+
     nonisolated static func rosterMembers(users: [TeamUser], excluding myId: String?) -> [TeamUser] {
         users.filter { user in
             if let myId, user.id == myId { return false }
@@ -181,7 +198,10 @@ final class TeamStore: ObservableObject {
         guard !trimmed.isEmpty else { return }
 
         do {
-            let payload = try JSONSerialization.data(withJSONObject: ["body": trimmed])
+            var object: [String: Any] = ["body": trimmed]
+            if readThisNext { object["read_this"] = true } // BOREAL_DIALER_READ_THIS_v687
+            readThisNext = false
+            let payload = try JSONSerialization.data(withJSONObject: object)
             let req = try APIClient.shared.makeRequest(path: "/team/channels/\(id)/messages", method: "POST", body: payload)
             let data = try await APIClient.shared.makeAuthorizedRequest(req)
             struct Resp: Decodable { let message: TeamMessage }
@@ -191,6 +211,13 @@ final class TeamStore: ObservableObject {
             }
             await loadChannels()
         } catch { /* ignore */ }
+    }
+
+    // BOREAL_DIALER_READ_THIS_v687 - "Mark as read" on a Read this message, then refresh the conversation.
+    func markReadThis(_ messageId: String) async {
+        guard let req = try? APIClient.shared.makeRequest(path: "/team/messages/\(messageId)/read-receipt", method: "POST") else { return }
+        _ = try? await APIClient.shared.makeAuthorizedRequest(req)
+        if let id = activeId { await open(id) }
     }
 
     func createChannel(kind: String, name: String, memberIds: [String], topic: String = "", isPrivate: Bool = false) async -> String? {
@@ -242,6 +269,8 @@ final class TeamStore: ObservableObject {
                 if let channelId = obj["channel_id"] as? String, channelId == activeId {
                     await open(channelId)
                 }
+            } else if type == "read_this" { // BOREAL_DIALER_READ_THIS_v687 - someone marked a message read
+                if let channelId = obj["channel_id"] as? String, channelId == activeId { await open(channelId) }
             } else if type == "channel" {
                 await loadChannels()
             } else if type == "reminder" {
@@ -518,6 +547,9 @@ struct TeamChannelView: View {
                                 // BOREAL_DIALER_BLOCK_v506_TEAM_LINK_PREVIEWS
                                 TeamLinkPreviewCard(text: message.body)
                                 TeamCardsView(text: message.body) // BOREAL_DIALER_TEAM_PHASE_C_v673
+                                if message.read_this == true { // BOREAL_DIALER_READ_THIS_v687
+                                    TeamReadThisBar(message: message, mine: mine, memberIds: channel?.member_ids ?? [])
+                                }
                                 if let thread = message.thread, thread.reply_count > 0 {
                                     Button { threadTarget = message.id } label: { Text("\u{1F4AC} \(thread.reply_count) \(thread.reply_count == 1 ? "reply" : "replies")").font(.caption.weight(.semibold)) }.buttonStyle(.borderless)
                                 }
@@ -540,7 +572,12 @@ struct TeamChannelView: View {
             }
             Divider()
             HStack {
-                TextField(channel?.archived_at != nil ? "This channel is archived" : "Message or @Maya", text: $draft, axis: .vertical)
+                // BOREAL_DIALER_READ_THIS_v687 - pin = send the next message as Read this.
+                Button { store.readThisNext.toggle() } label: {
+                    Image(systemName: store.readThisNext ? "pin.fill" : "pin").foregroundColor(store.readThisNext ? .orange : .secondary)
+                }
+                .accessibilityLabel(store.readThisNext ? "Read this is on" : "Send as Read this")
+                TextField(channel?.archived_at != nil ? "This channel is archived" : (store.readThisNext ? "Read this: message" : "Message or @Maya"), text: $draft, axis: .vertical)
                     .lineLimit(1...6)
                     .textFieldStyle(.roundedBorder)
                     .disabled(channel?.archived_at != nil)
@@ -650,5 +687,43 @@ struct NewTeamChatView: View {
             )
         }
         .navigationViewStyle(.stack)
+    }
+}
+
+// BOREAL_DIALER_READ_THIS_v687 - under a Read this message: the sender sees who has read it,
+// everyone else gets Mark as read (or a tick once they have).
+struct TeamReadThisBar: View {
+    let message: TeamMessage
+    let mine: Bool
+    let memberIds: [String]
+    @ObservedObject private var store = TeamStore.shared
+    @State private var busy = false
+
+    var body: some View {
+        let summary = TeamStore.readThisSummary(readBy: message.read_by, memberIds: memberIds, senderId: message.sender_id)
+        let iRead = (message.read_by ?? []).contains { $0.user_id == store.myId }
+        HStack(spacing: 8) {
+            Text("\u{1F4CC} Read this").font(.caption.weight(.semibold))
+            if mine {
+                let readNames = summary.read.map { store.name(for: $0) }.joined(separator: ", ")
+                let waitNames = summary.waiting.map { store.name(for: $0) }.joined(separator: ", ")
+                Text((readNames.isEmpty ? "Nobody has read it yet" : "Read by " + readNames) + (waitNames.isEmpty ? " \u{00B7} Everyone has read it" : " \u{00B7} Waiting: " + waitNames))
+                    .font(.caption)
+            } else if iRead {
+                Text("\u{2713} You read this").font(.caption.weight(.semibold)).foregroundColor(.green)
+            } else {
+                Button(busy ? "Saving..." : "Mark as read") {
+                    busy = true
+                    Task { await store.markReadThis(message.id); busy = false }
+                }
+                .font(.caption.weight(.semibold))
+                .buttonStyle(.borderedProminent)
+                .disabled(busy)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color.yellow.opacity(0.15))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }

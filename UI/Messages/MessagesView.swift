@@ -197,6 +197,16 @@ struct MessagesView: View {
             }
             .navigationTitle("Messages")
             .navigationBarTitleDisplayMode(.inline)
+            // BOREAL_DIALER_MAYA_SESSIONS_v789 - Maya's live chats, read-only.
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    NavigationLink {
+                        MayaSessionsView()
+                    } label: {
+                        Label("Maya chats", systemImage: "sparkles")
+                    }
+                }
+            }
         }
         .task { await viewModel.load() }
     }

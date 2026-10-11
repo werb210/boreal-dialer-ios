@@ -36,4 +36,52 @@ if grep -rq '"/voice/resolve-caller?' Sources UI --include='*.swift'; then
   exit 1
 fi
 
+# BOREAL_DIALER_SERVER_PATHS_v789 - BF-Server routes live under /api/ with no
+# version segment. APIConfig.BASE_URL already ends in /api, so a path literal
+# must not repeat /api/ or add /v1/.
+# bi-server is a separate deployment whose routes are /v1/bi/...; only BF-Server
+# paths are checked.
+if grep -rnE '"/(api/)?v1/' Sources UI --include='*.swift' | grep -v '"/v1/bi/'; then
+  echo "::error::BF-Server paths have no /v1/ segment"
+  exit 1
+fi
+if grep -rnE '"/api/' Sources UI --include='*.swift'; then
+  echo "::error::path literals are relative to APIConfig.BASE_URL, which already ends in /api"
+  exit 1
+fi
+
+# BOREAL_DIALER_SERVER_PATHS_v789 - the team chat, SMS typing, Maya and
+# notification endpoints added in v789 must stay wired. Each entry is
+# "file|literal fragment that builds the path".
+missing=0
+while IFS='|' read -r file fragment; do
+  [ -z "$file" ] && continue
+  if ! grep -qF -- "$fragment" "$file"; then
+    echo "::error file=$file::missing server path fragment: $fragment"
+    missing=1
+  fi
+done <<'PATHS'
+UI/Team/TeamParity.swift|"/team/channels/\(pathSegment(channelId))/messages/\(pathSegment(messageId))"
+UI/Team/TeamParity.swift|method: "PATCH", json: ["body": trimmed]
+UI/Team/TeamParity.swift|messageId: messageId), method: "DELETE")
+UI/Team/TeamParity.swift|+ "/reactions",
+UI/Team/TeamParity.swift|+ "/reactions?emoji=" + Self.queryValue(emoji), method: "DELETE")
+UI/Team/TeamParity.swift|+ "/pin", method: "POST")
+UI/Team/TeamParity.swift|+ "/pins")
+UI/Team/TeamParity.swift|+ "/typing", method: "POST")
+UI/Team/TeamParity.swift|+ "/search?q=" + Self.queryValue(trimmed))
+UI/Team/TeamParity.swift|+ "/reads")
+UI/SMS/SMSTyping.swift|makeRequest(path: "/communications/messages/typing",
+UI/SMS/SMSTyping.swift|["contactId": contactId, "side": "staff"]
+UI/SMS/SMSTyping.swift|"/communications/messages/typing?contactId=\(id)&side=client"
+UI/Messages/MayaSessionsView.swift|"/communications/maya-sessions"
+UI/Messages/MayaSessionsView.swift|"/communications/maya-sessions/\(TeamParityStore.pathSegment(sessionId))/messages"
+UI/Notifications/NotificationsView.swift|"/notifications/\(Self.pathSegment(id))/read", method: "POST"
+UI/Notifications/NotificationsView.swift|"/notifications/read-all", method: "POST"
+PATHS
+if [ "$missing" -ne 0 ]; then
+  exit 1
+fi
+echo "v789 endpoints wired: team edit/delete/reactions/pin/pins/typing/search/reads, SMS typing, Maya sessions, notification read."
+
 echo "No known-dead paths."

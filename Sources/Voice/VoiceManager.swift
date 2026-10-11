@@ -1,6 +1,5 @@
 import Foundation
 import TwilioVoice
-import AVFoundation
 
 enum RegistrationState {
     case unregistered
@@ -9,22 +8,27 @@ enum RegistrationState {
     case failed
 }
 
+// BOREAL_DIALER_VOICE_DEAD_CODE_v789 - VoiceManager owns the Twilio access
+// token, the VoIP push registration and presence. Calls are handled by
+// TwilioVoiceManager / VoiceEngine / CallKitReporter; this class's own copy of
+// the incoming-call handling (its CallDelegate and NotificationDelegate, invite
+// map and accept/reject methods) was never wired to anything and is gone.
 @MainActor
 final class VoiceManager: NSObject, ObservableObject {
 
     static let shared = VoiceManager()
 
-    @Published private(set) var activeCall: Call?
     @Published private(set) var registrationState: RegistrationState = .unregistered
 
     private var accessToken: String?
     private var tokenRefreshTask: Task<Void, Never>?
-    private var inviteUUIDMap: [UUID: CallInvite] = [:]
-    private var pendingInvite: CallInvite?
     private var latestToken: String?
     private var registeredToken: String?
     private var deviceToken: Data?
-    private var hasRequestedMicrophonePermission = false
+    // BOREAL_DIALER_VOICE_REFRESH_v789
+    private var hasInitialized = false
+    private var isInitializing = false
+    private var reregisterAfterCurrent = false
 
     var currentToken: String {
         latestToken ?? ""
@@ -40,59 +44,43 @@ final class VoiceManager: NSObject, ObservableObject {
         await initialize()
     }
 
+    /// Fetches a token, registers for VoIP pushes with Twilio and starts the
+    /// 50-minute token refresh. Presence "online" is sent only on the first
+    /// initialize of a session, and only when no call is up.
     func initialize() async {
+        guard !isInitializing else { return }
+        isInitializing = true
+        defer { isInitializing = false }
         guard let token = await fetchToken() else { return }
 
+        let firstInitialize = !hasInitialized
+        hasInitialized = true
         accessToken = token
-        updateAccessToken(token)
-        scheduleTokenRefresh()
-        TwilioVoiceSDK.audioDevice = DefaultAudioDevice()
+        if firstInitialize {
+            TwilioVoiceSDK.audioDevice = DefaultAudioDevice()
+        }
         configureIdentityIfNeeded(from: token) { [weak self] in
             guard let self else { return }
             await self.logout()
             SessionGuard.recordReason("Signed out because the calling identity changed. Please sign in again.") // v314
             await AuthService.shared.invalidateSessionAfterIdentityMismatch()
         }
+        updateAccessToken(token)
+        scheduleTokenRefresh()
+        PushManager.shared.register()
         PushManager.shared.registerDeviceTokenWithTwilio()
-        sendPresence(status: "online")
-    }
-
-    func acceptCallFromCallKit() {
-        guard CallStateManager.shared.current() == .connecting else {
-            pendingInvite?.reject()
-            return
+        if firstInitialize && Self.noCallActive() {
+            sendPresence(status: "online")
         }
-        guard let invite = pendingInvite else { return }
-
-        configureAudioSessionForCall()
-
-        activeCall = invite.accept(with: self)
-        pendingInvite = nil
-        inviteUUIDMap = inviteUUIDMap.filter { $0.value.callSid != invite.callSid }
-        sendPresence(status: "busy")
     }
 
-    func endActiveCall() {
-        activeCall?.disconnect()
-        pendingInvite?.reject()
-        transitionToIdleState()
-    }
-
-    func acceptCallFromCallKit(uuid: UUID) {
-        guard let invite = inviteUUIDMap[uuid] else { return }
-        pendingInvite = invite
-        acceptCallFromCallKit()
-    }
-
-    func rejectCallFromCallKit(uuid: UUID) {
-        if let invite = inviteUUIDMap[uuid] {
-            invite.reject()
-            inviteUUIDMap.removeValue(forKey: uuid)
-            if pendingInvite?.callSid == invite.callSid {
-                pendingInvite = nil
-            }
-        }
-        endActiveCall()
+    /// BOREAL_DIALER_VOICE_REFRESH_v789 - the 50-minute refresh. It used to
+    /// call initialize(), which also re-sent presence "online" in the middle of
+    /// calls and restarted the refresh loop from inside itself.
+    func refreshToken() async {
+        guard let token = await fetchToken() else { return }
+        accessToken = token
+        updateAccessToken(token)
     }
 
     func handleNetworkReconnect() {
@@ -110,9 +98,15 @@ final class VoiceManager: NSObject, ObservableObject {
         attemptRegistrationIfPossible()
     }
 
-    func updateDeviceToken(_ token: Data) {
-        if deviceToken == token, registrationState == .registered { return }
+    /// `forceReregister` - PushKit handed the token over again (every launch);
+    /// register it even when it matches the one already registered.
+    func updateDeviceToken(_ token: Data, forceReregister: Bool = false) {
+        if !forceReregister, deviceToken == token, registrationState == .registered { return }
         deviceToken = token
+        if registrationState == .registering {
+            reregisterAfterCurrent = true
+            return
+        }
         registrationState = .unregistered
         attemptRegistrationIfPossible()
     }
@@ -127,7 +121,7 @@ final class VoiceManager: NSObject, ObservableObject {
                     return
                 }
                 guard !Task.isCancelled else { return }
-                await self?.initialize()
+                await self?.refreshToken()
             }
         }
     }
@@ -140,50 +134,18 @@ final class VoiceManager: NSObject, ObservableObject {
             request.httpMethod = "POST"
             request.httpShouldHandleCookies = true
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            // BOREAL_DIALER_VOICE_SILO_v789 - the token is minted for the active line.
+            request.setValue(APIConfig.siloHeader(for: APIConfig.activeSilo), forHTTPHeaderField: "X-Silo")
 
             let data = try await AuthService.shared.performAuthorizedRequest(request)
             let response = try JSONDecoder().decode(TokenResponse.self, from: data)
-            return response.token
+            guard let token = response.token, !token.isEmpty else { return nil }
+            return token
         } catch {
 #if DEBUG
             print("Token fetch failed:", error)
 #endif
             return nil
-        }
-    }
-
-    func startCall(clientId: String) async {
-        guard CallStateManager.shared.current() == .idle else { return }
-        guard activeCall == nil else { return }
-        guard clientId == IdentityManager.shared.requireIdentity() else { return }
-        guard let token = accessToken else { return }
-
-        CallStateManager.shared.transition(to: .connecting)
-        configureAudioSessionForCall()
-
-        let options = ConnectOptions(accessToken: token) { builder in
-            builder.params = ["clientId": clientId]
-        }
-
-        activeCall = TwilioVoiceSDK.connect(options: options, delegate: self)
-        sendPresence(status: "busy")
-    }
-
-    func acceptCall(invite: CallInvite) {
-        guard CallStateManager.shared.current() == .ringing else { return }
-
-        CallStateManager.shared.transition(to: .connecting)
-        configureAudioSessionForCall()
-
-        activeCall = invite.accept(with: self)
-        pendingInvite = nil
-        sendPresence(status: "busy")
-    }
-
-    func rejectCall(invite: CallInvite) {
-        invite.reject()
-        if pendingInvite?.uuid == invite.uuid {
-            pendingInvite = nil
         }
     }
 
@@ -204,7 +166,8 @@ final class VoiceManager: NSObject, ObservableObject {
             }
         }
 
-        guard let tokenToUnregister = registeredToken else {
+        // Re-registering the same access token needs no unregister first.
+        guard let tokenToUnregister = registeredToken, tokenToUnregister != token else {
             registerWithToken()
             return
         }
@@ -221,10 +184,15 @@ final class VoiceManager: NSObject, ObservableObject {
             print("Twilio push registration failed:", failure)
 #endif
             registrationState = .failed
-            return
+        } else {
+            registeredToken = token
+            registrationState = .registered
         }
-        registeredToken = token
-        registrationState = .registered
+        if reregisterAfterCurrent {
+            reregisterAfterCurrent = false
+            registrationState = .unregistered
+            attemptRegistrationIfPossible()
+        }
     }
 
     func invalidateDeviceToken(_ invalidatedToken: Data?) {
@@ -243,8 +211,6 @@ final class VoiceManager: NSObject, ObservableObject {
     func logout() async {
         tokenRefreshTask?.cancel()
         tokenRefreshTask = nil
-        activeCall?.disconnect()
-        pendingInvite?.reject()
         if let token = registeredToken ?? latestToken, let deviceToken {
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
                 TwilioVoiceSDK.unregister(accessToken: token, deviceToken: deviceToken) { _ in
@@ -256,49 +222,21 @@ final class VoiceManager: NSObject, ObservableObject {
         latestToken = nil
         registeredToken = nil
         registrationState = .unregistered
+        hasInitialized = false
         cleanup()
         IdentityManager.shared.clear()
     }
 
-
-    private func configureAudioSessionForCall() {
-        let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP, .duckOthers])
-            try session.setActive(true)
-        } catch {
-#if DEBUG
-            print("Audio session config failed:", error)
-#endif
-        }
-    }
-
+    /// Stops the token refresh. Calls are owned by TwilioVoiceManager, which
+    /// LineManager disconnects itself before reinitializing.
     func cleanup() {
-        activeCall = nil
-        pendingInvite = nil
-        inviteUUIDMap.removeAll()
-
-        let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setActive(false, options: [])
-        } catch {
-#if DEBUG
-            print("Audio session deactivate failed:", error)
-#endif
-        }
+        tokenRefreshTask?.cancel()
+        tokenRefreshTask = nil
+        reregisterAfterCurrent = false
     }
 
-    private func transitionToIdleState() {
-        activeCall = nil
-        pendingInvite = nil
-        inviteUUIDMap.removeAll()
-        sendPresence(status: "online")
-    }
-
-    private func requestMicrophonePermissionIfNeeded() {
-        guard !hasRequestedMicrophonePermission else { return }
-        hasRequestedMicrophonePermission = true
-        AVAudioSession.sharedInstance().requestRecordPermission { _ in }
+    private static func noCallActive() -> Bool {
+        CallStateManager.shared.current() == .idle && VoiceEngine.shared.isIdle
     }
 
     /// Configures the first valid voice identity. A different identity is never
@@ -357,6 +295,8 @@ final class VoiceManager: NSObject, ObservableObject {
                 request.httpMethod = "POST"
                 request.httpShouldHandleCookies = true
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                // BOREAL_DIALER_VOICE_SILO_v789 - presence is per line.
+                request.setValue(APIConfig.siloHeader(for: APIConfig.activeSilo), forHTTPHeaderField: "X-Silo")
 
                 let body: [String: String] = [
                     "status": status,
@@ -374,130 +314,6 @@ final class VoiceManager: NSObject, ObservableObject {
     }
 }
 
-extension VoiceManager: @preconcurrency CallDelegate {
-
-    func callDidStartRinging(call: Call) {
-#if DEBUG
-        print("Ringing")
-#endif
-    }
-
-    func callDidConnect(call: Call) {
-#if DEBUG
-        print("Connected")
-#endif
-        CallStateManager.shared.transition(to: .connected)
-        sendPresence(status: "busy")
-        notifyServerStatus(status: "connected")
-    }
-
-    func callDidDisconnect(call: Call, error: Error?) {
-#if DEBUG
-        print("Disconnected")
-#endif
-        if let uuid = inviteUUIDMap.first(where: { $0.value.callSid == call.sid })?.key {
-            CallKitManager.shared.endCall(uuid: uuid)
-            inviteUUIDMap.removeValue(forKey: uuid)
-        }
-
-        CallStateManager.shared.reset()
-        cleanup()
-        transitionToIdleState()
-        notifyServerStatus(status: "completed")
-    }
-
-    func callDidFailToConnect(call: Call, error: Error) {
-        CallStateManager.shared.reset()
-        cleanup()
-        transitionToIdleState()
-        notifyServerStatus(status: "failed")
-    }
-
-    private func notifyServerStatus(status: String) {
-        Task {
-            do {
-                let requestURL = try APIClient.shared.url(path: "/voice/status")
-
-                var request = URLRequest(url: requestURL)
-                request.httpMethod = "POST"
-                request.httpShouldHandleCookies = true
-                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                // BOREAL_DIALER_VOICE_STATUS_SILO_v1 - send the silo like every other
-                // BF-Server call (Authorization is added by performAuthorizedRequest).
-                request.setValue(APIConfig.siloHeader(for: APIConfig.activeSilo), forHTTPHeaderField: "X-Silo")
-
-                let body = [
-                    "callStatus": status
-                ]
-
-                request.httpBody = try JSONSerialization.data(withJSONObject: body)
-                _ = try await AuthService.shared.performAuthorizedRequest(request)
-            } catch {
-#if DEBUG
-                print("Failed to notify voice status:", error)
-#endif
-            }
-        }
-    }
-}
-
-extension VoiceManager: @preconcurrency NotificationDelegate {
-
-    func callInviteReceived(callInvite: CallInvite) {
-        if CallStateManager.shared.current() != .idle {
-            callInvite.reject()
-            return
-        }
-
-        guard CallStateManager.shared.transition(from: .idle, to: .ringing) else {
-            callInvite.reject()
-            return
-        }
-
-        if activeCall != nil || pendingInvite != nil {
-            callInvite.reject()
-            CallStateManager.shared.reset()
-            return
-        }
-
-        pendingInvite = callInvite
-        let uuid = callInvite.uuid
-        inviteUUIDMap[uuid] = callInvite
-
-        DispatchQueue.main.async {
-            guard CallStateManager.shared.current() == .ringing else { return }
-            CallKitManager.shared.reportIncomingCall(
-                uuid: uuid,
-                handle: callInvite.from ?? "Unknown"
-            )
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in
-            guard let self else { return }
-            guard self.activeCall == nil else { return }
-            guard self.pendingInvite?.callSid == callInvite.callSid else { return }
-            self.pendingInvite?.reject()
-            self.pendingInvite = nil
-            CallStateManager.shared.transition(to: .ended)
-            CallStateManager.shared.reset()
-            self.cleanup()
-        }
-    }
-
-    func cancelledCallInviteReceived(cancelledCallInvite: CancelledCallInvite, error: any Error) {
-        if pendingInvite?.callSid == cancelledCallInvite.callSid {
-            pendingInvite = nil
-            cleanup()
-            CallStateManager.shared.transition(to: .ended)
-            CallStateManager.shared.reset()
-        }
-        if let uuid = inviteUUIDMap.first(where: { $0.value.callSid == cancelledCallInvite.callSid })?.key {
-            CallKitManager.shared.endCall(uuid: uuid)
-            inviteUUIDMap.removeValue(forKey: uuid)
-        }
-    }
-}
-
 private struct TokenResponse: Decodable {
-    let token: String
+    let token: String?
 }

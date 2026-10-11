@@ -5,7 +5,7 @@ struct AppNotification: Identifiable, Decodable {
     let body: String?
     let type: String?
     let contextUrl: String?
-    let isRead: Bool?
+    var isRead: Bool?
     let createdAt: String?
 
     enum CodingKeys: String, CodingKey {
@@ -33,6 +33,36 @@ final class NotificationsViewModel: ObservableObject {
             self.error = "Could not load notifications."
         }
         loading = false
+    }
+
+    // BOREAL_DIALER_NOTIFICATIONS_READ_v789 - POST /api/notifications/:id/read
+    func markRead(_ id: String) async {
+        do {
+            let req = try APIClient.shared.makeRequest(path: "/notifications/\(Self.pathSegment(id))/read", method: "POST")
+            _ = try await APIClient.shared.makeAuthorizedRequest(req)
+            if let index = items.firstIndex(where: { $0.id == id }) { items[index].isRead = true }
+        } catch {
+            self.error = "Mark read failed."
+        }
+    }
+
+    // BOREAL_DIALER_NOTIFICATIONS_READ_v789 - POST /api/notifications/read-all
+    func markAllRead() async {
+        do {
+            let req = try APIClient.shared.makeRequest(path: "/notifications/read-all", method: "POST")
+            _ = try await APIClient.shared.makeAuthorizedRequest(req)
+            for index in items.indices { items[index].isRead = true }
+        } catch {
+            self.error = "Mark all read failed."
+        }
+    }
+
+    var hasUnread: Bool { items.contains { !($0.isRead ?? false) } }
+
+    nonisolated static func pathSegment(_ raw: String) -> String {
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove(charactersIn: "/?#")
+        return raw.addingPercentEncoding(withAllowedCharacters: allowed) ?? raw
     }
 
     func delete(_ id: String) async {
@@ -64,6 +94,10 @@ struct NotificationsView: View {
             HStack {
                 Text("Notifications").font(.headline)
                 Spacer()
+                if vm.hasUnread {
+                    Button("Mark all read") { Task { await vm.markAllRead() } }
+                        .padding(.trailing, 8)
+                }
                 if !vm.items.isEmpty {
                     Button(role: .destructive) {
                         Task { await vm.deleteAll() }
@@ -87,9 +121,21 @@ struct NotificationsView: View {
                     ForEach(vm.items) { n in
                         VStack(alignment: .leading, spacing: 2) {
                             Text(n.body ?? n.type ?? "Notification")
+                                .fontWeight((n.isRead ?? false) ? .regular : .semibold)
                             if let ts = n.createdAt {
                                 Text(ts).font(.caption).foregroundColor(.secondary)
                             }
+                        }
+                        // BOREAL_DIALER_NOTIFICATIONS_READ_v789
+                        .swipeActions(edge: .leading) {
+                            if !(n.isRead ?? false) {
+                                Button("Mark read") { Task { await vm.markRead(n.id) } }
+                                    .tint(.blue)
+                            }
+                        }
+                        // Custom swipe actions replace the synthesized onDelete swipe.
+                        .swipeActions(edge: .trailing) {
+                            Button("Delete", role: .destructive) { Task { await vm.delete(n.id) } }
                         }
                     }
                     .onDelete { idx in

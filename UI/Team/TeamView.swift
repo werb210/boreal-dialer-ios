@@ -16,6 +16,43 @@ struct TeamMessage: Identifiable, Decodable, Equatable {
     // the sender sees who has read it. Same feature as the portal (BF-portal v760).
     let read_this: Bool?
     let read_by: [TeamReadReceipt]?
+    // BOREAL_DIALER_TEAM_PARITY_v789 - edit, delete, reactions and pins (portal parity).
+    let edited_at: String?
+    let deleted_at: String?
+    let pinned: Bool?
+    let reactions: [TeamReaction]?
+}
+
+// BOREAL_DIALER_TEAM_PARITY_v789 - every field but id is optional on the wire. A
+// message the server reshapes (an edit, a delete, reactions in another form)
+// must not fail the whole conversation's decode.
+extension TeamMessage {
+    private enum CodingKeys: String, CodingKey {
+        case id, channel_id, sender_id, body, created_at, thread, thread_root_id, bot
+        case read_this, read_by, edited_at, deleted_at, pinned, is_pinned, pinned_at, reactions
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        guard let id = TeamLossy.string(c, .id) else {
+            throw DecodingError.keyNotFound(CodingKeys.id, .init(codingPath: c.codingPath, debugDescription: "message id"))
+        }
+        self.id = id
+        channel_id = TeamLossy.string(c, .channel_id) ?? ""
+        sender_id = TeamLossy.string(c, .sender_id)
+        body = TeamLossy.string(c, .body) ?? ""
+        created_at = TeamLossy.string(c, .created_at)
+        thread = try? c.decodeIfPresent(TeamThreadSummary.self, forKey: .thread)
+        thread_root_id = TeamLossy.string(c, .thread_root_id)
+        bot = TeamLossy.string(c, .bot)
+        read_this = try? c.decodeIfPresent(Bool.self, forKey: .read_this)
+        read_by = try? c.decodeIfPresent([TeamReadReceipt].self, forKey: .read_by)
+        edited_at = TeamLossy.string(c, .edited_at)
+        deleted_at = TeamLossy.string(c, .deleted_at)
+        let pinnedFlag = (try? c.decodeIfPresent(Bool.self, forKey: .pinned)) ?? (try? c.decodeIfPresent(Bool.self, forKey: .is_pinned))
+        pinned = pinnedFlag ?? (TeamLossy.string(c, .pinned_at) != nil ? true : nil)
+        reactions = (try? c.decodeIfPresent(TeamReactionList.self, forKey: .reactions))?.items
+    }
 }
 
 struct TeamReadReceipt: Decodable, Equatable {
@@ -239,7 +276,8 @@ final class TeamStore: ObservableObject {
         guard ws == nil,
               let token = TokenStorage.shared.getToken(),
               let encodedToken = token.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "wss://server.boreal.financial/api/team/ws?token=\(encodedToken)") else { return }
+              // BOREAL_DIALER_TEAM_WS_CONFIG_v789 - host comes from APIConfig.
+              let url = URL(string: APIConfig.TEAM_WS_URL + "?token=\(encodedToken)") else { return }
         let task = URLSession.shared.webSocketTask(with: url)
         ws = task
         task.resume()
@@ -266,9 +304,17 @@ final class TeamStore: ObservableObject {
             let type = obj["type"] as? String
             if type == "message" {
                 await loadChannels()
-                if let channelId = obj["channel_id"] as? String, channelId == activeId {
-                    await open(channelId)
+                if let channelId = obj["channel_id"] as? String {
+                    // BOREAL_DIALER_TEAM_PARITY_v789 - a sent message ends that person's typing.
+                    TeamParityStore.shared.clearTyping(channelId: channelId,
+                                                       userId: (obj["sender_id"] as? String) ?? (obj["user_id"] as? String))
+                    if channelId == activeId { await open(channelId) }
                 }
+            } else if type == "typing" { // BOREAL_DIALER_TEAM_PARITY_v789
+                if (obj["user_id"] as? String) != myId { TeamParityStore.shared.handleTypingEvent(obj) }
+            } else if let type, ["message_updated", "message_edited", "message_deleted", "reaction", "reactions", "pin", "pinned", "unpinned"].contains(type) {
+                // BOREAL_DIALER_TEAM_PARITY_v789 - edits, deletes, reactions and pins elsewhere.
+                if let channelId = obj["channel_id"] as? String, channelId == activeId { await open(channelId) }
             } else if type == "read_this" { // BOREAL_DIALER_READ_THIS_v687 - someone marked a message read
                 if let channelId = obj["channel_id"] as? String, channelId == activeId { await open(channelId) }
             } else if type == "channel" {
@@ -507,6 +553,14 @@ struct TeamChannelView: View {
     @State private var showDetails = false
     @ObservedObject private var store = TeamStore.shared
     @State private var draft = ""
+    // BOREAL_DIALER_TEAM_PARITY_v789
+    @ObservedObject private var parity = TeamParityStore.shared
+    @State private var editTarget: TeamMessage?
+    @State private var deleteTarget: TeamMessage?
+    @State private var seenTarget: TeamMessage?
+    @State private var showPins = false
+    @State private var showChannelSearch = false
+    @State private var showSeenBy = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -530,7 +584,8 @@ struct TeamChannelView: View {
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
                                 }
-                                TeamFormattedText(text: message.body)
+                                TeamFormattedText(text: message.deleted_at == nil ? message.body : "Message deleted")
+                                    .italic(message.deleted_at != nil)
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
                                     .background(mine ? Color.accentColor : Color(.systemGray5))
@@ -543,7 +598,12 @@ struct TeamChannelView: View {
                                         Button { Task { await TeamPhaseCStore.shared.save(message.id, choice: "1h") } } label: { Label("Remind me in 1 hour", systemImage: "alarm") }
                                         Button { Task { await TeamPhaseCStore.shared.save(message.id, choice: "tomorrow") } } label: { Label("Remind me tomorrow at 9 am", systemImage: "alarm") }
                                         Button { UIPasteboard.general.string = message.body } label: { Label("Copy", systemImage: "doc.on.doc") }
+                                        // BOREAL_DIALER_TEAM_PARITY_v789 - react, pin, seen by, edit and delete.
+                                        TeamMessageParityMenu(channelId: channelId, message: message, mine: mine,
+                                                              editTarget: $editTarget, deleteTarget: $deleteTarget,
+                                                              seenTarget: $seenTarget)
                                     }
+                                TeamMessageParityFooter(channelId: channelId, message: message)
                                 // BOREAL_DIALER_BLOCK_v506_TEAM_LINK_PREVIEWS
                                 TeamLinkPreviewCard(text: message.body)
                                 TeamCardsView(text: message.body) // BOREAL_DIALER_TEAM_PHASE_C_v673
@@ -571,6 +631,7 @@ struct TeamChannelView: View {
             .onChange(of: store.messages.last?.id) { _ in scrollToLatest(proxy, animated: true) }
             }
             Divider()
+            TeamTypingLine(channelId: channelId) // BOREAL_DIALER_TEAM_PARITY_v789
             HStack {
                 // BOREAL_DIALER_READ_THIS_v687 - pin = send the next message as Read this.
                 Button { store.readThisNext.toggle() } label: {
@@ -581,6 +642,8 @@ struct TeamChannelView: View {
                     .lineLimit(1...6)
                     .textFieldStyle(.roundedBorder)
                     .disabled(channel?.archived_at != nil)
+                    // BOREAL_DIALER_TEAM_PARITY_v789 - tell the others, at most every 3 s.
+                    .onChange(of: draft) { text in parity.userTyped(in: channelId, draft: text) }
                 Button {
                     let body = draft
                     draft = ""
@@ -605,13 +668,25 @@ struct TeamChannelView: View {
         }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarItems(trailing: Group {
+        .navigationBarItems(trailing: HStack(spacing: 14) {
+            // BOREAL_DIALER_TEAM_PARITY_v789 - pinned, search in this conversation, seen by.
+            Menu {
+                Button { showPins = true } label: { Label("Pinned messages", systemImage: "pin") }
+                Button { showChannelSearch = true } label: { Label("Search this conversation", systemImage: "magnifyingglass") }
+                Button { showSeenBy = true } label: { Label("Seen by", systemImage: "eye") }
+            } label: { Image(systemName: "ellipsis.circle") }
+            .accessibilityLabel("Conversation options")
             if let channel, channel.kind != "dm" { Button { showDetails = true } label: { Image(systemName: "info.circle") } }
             if let channel, channel.kind == "dm", let other = channel.member_ids.first(where: { $0 != store.myId }) { // BOREAL_DIALER_TEAM_PHASE_C_v673 - call the other person
                 Button { VoiceEngine.shared.startInternalCall(staffIdentity: other, displayName: store.name(for: other)) } label: { Image(systemName: "phone.fill") }
             }
         })
         .sheet(isPresented: $showDetails) { if let channel { TeamChannelDetailsView(channel: channel, onLeft: { dismiss() }) } }
+        // BOREAL_DIALER_TEAM_PARITY_v789 - edit, seen by, pinned, search, delete.
+        .modifier(TeamChannelParitySheets(channelId: channelId, editTarget: $editTarget,
+                                          deleteTarget: $deleteTarget, seenTarget: $seenTarget,
+                                          showPins: $showPins, showChannelSearch: $showChannelSearch,
+                                          showSeenBy: $showSeenBy))
         .background(
             NavigationLink(isActive: Binding(get: { threadTarget != nil }, set: { if !$0 { threadTarget = nil } })) {
                 if let root = threadTarget { TeamThreadView(channelId: channelId, rootId: root, archived: channel?.archived_at != nil) }

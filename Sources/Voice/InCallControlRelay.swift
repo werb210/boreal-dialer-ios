@@ -42,7 +42,8 @@ public final class InCallControlRelay {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("BF", forHTTPHeaderField: "X-Silo")
+        // BOREAL_DIALER_VOICE_SILO_v789 - the active line's silo, not a fixed "BF".
+        request.setValue(APIConfig.siloHeader(for: APIConfig.activeSilo), forHTTPHeaderField: "X-Silo")
         if let token = TokenStorage.shared.getToken() {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }

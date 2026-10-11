@@ -59,6 +59,16 @@ enum WatchFaceSync {
         WidgetCenter.shared.reloadAllTimelines()
     }
 
+    /// BOREAL_DIALER_LOGOUT_CLEAR_v789 - the iPhone signed out: the complication
+    /// shows nothing from that account until the next refresh.
+    static func clear() {
+        guard let defaults = UserDefaults(suiteName: appGroup) else { return }
+        for key in ["presence.status", "calls.missed", "tasks.due", "meeting.next.title", "meeting.next.at"] {
+            defaults.removeObject(forKey: key)
+        }
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
     /// Keeps the face fresh while the app is closed. watchOS decides the real
     /// time; 15 minutes is the preferred cadence.
     static func scheduleNext() {

@@ -90,6 +90,18 @@ enum WatchSnapshotSync {
 #endif
     }
 
+    /// BOREAL_DIALER_LOGOUT_CLEAR_v789 - sign-out removes the presence, missed
+    /// calls, tasks and next meeting this phone published.
+    static func clear() {
+        guard let defaults = UserDefaults(suiteName: WidgetSnapshotStore.appGroup) else { return }
+        for key in [statusKey, missedKey, tasksKey, meetingTitleKey, meetingAtKey] {
+            defaults.removeObject(forKey: key)
+        }
+#if canImport(WidgetKit)
+        WidgetCenter.shared.reloadTimelines(ofKind: "BorealWatchWidget")
+#endif
+    }
+
     /// The published meeting, or nil once it has started or if none was set.
     static func nextMeeting() -> (title: String, startsAt: Date)? {
         guard let defaults = UserDefaults(suiteName: WidgetSnapshotStore.appGroup),

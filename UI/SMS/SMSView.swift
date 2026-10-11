@@ -227,6 +227,7 @@ struct SMSThreadView: View {
     @State private var media: SMSMediaPayload?
     @State private var photoItem: PhotosPickerItem?
     @State private var showingPdfImporter = false
+    @StateObject private var typing = SMSTypingMonitor() // BOREAL_DIALER_SMS_TYPING_v789
 
     private var draftIsEmpty: Bool { draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
@@ -259,6 +260,16 @@ struct SMSThreadView: View {
 
             if let error {
                 Text(error).font(.footnote).foregroundColor(.red).padding(.horizontal)
+            }
+
+            // BOREAL_DIALER_SMS_TYPING_v789
+            if typing.clientTyping {
+                Text("\(thread.title) is typing...")
+                    .font(.caption)
+                    .foregroundColor(Theme.muted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+                    .padding(.top, 4)
             }
 
             // BOREAL_DIALER_TEMPLATES_EVERYWHERE_v167 - supplying onTemplates
@@ -322,6 +333,10 @@ struct SMSThreadView: View {
             await loadMessages()
             await markRead()
         }
+        // BOREAL_DIALER_SMS_TYPING_v789 - staff typing goes out (throttled), the
+        // client's typing is polled while the thread is open.
+        .onChange(of: draft) { text in typing.userTyped(contactId: thread.contactId, draft: text) }
+        .task(id: thread.contactId) { await typing.poll(contactId: thread.contactId) }
     }
 
     private var threadQuery: String? {

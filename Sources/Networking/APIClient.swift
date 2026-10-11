@@ -101,11 +101,18 @@ final class APIClient {
             throw APIError.invalidResponse
         }
 
-        print("[REQ]", request.httpMethod ?? "", request.url?.absoluteString ?? "")
+        // BOREAL_DIALER_LOG_PRIVACY_v789 - request URLs carry contact ids, phone
+        // numbers and search text in their query strings. Logged in DEBUG only,
+        // and never with the query string.
+#if DEBUG
+        print("[REQ]", request.httpMethod ?? "", Self.loggableURL(request.url))
         print("[STATUS]", http.statusCode)
+#endif
 
         if http.statusCode == 401 {
+#if DEBUG
             print("[AUTH FAIL] TOKEN REJECTED")
+#endif
             // BOREAL_DIALER_SESSION_EXPIRY_v174
             // Clearing the token was only half the job: nothing anywhere caught
             // APIError.unauthorized, so the app stayed on the tab bar with a
@@ -142,6 +149,14 @@ final class APIClient {
     ) async throws -> Data {
         let request = try makeRequest(path: path, method: method, body: body, headers: headers)
         return try await executeUnauthenticated(request)
+    }
+
+    /// scheme://host/path with no query string or fragment.
+    static func loggableURL(_ url: URL?) -> String {
+        guard let url, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return "" }
+        components.query = nil
+        components.fragment = nil
+        return components.string ?? ""
     }
 
     private func normalized(path: String) -> String {

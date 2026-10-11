@@ -269,30 +269,37 @@ extension TwilioVoiceManager: @preconcurrency CallDelegate {
     }
 }
 
+// BOREAL_DIALER_CALLKIT_REPORTER_v789 - lets CallKitReporter reject an invite
+// without depending on the SDK type, so tests can use a fake.
+extension CallInvite: IncomingCallInvite {}
+
 extension TwilioVoiceManager: @preconcurrency NotificationDelegate {
 
     func callInviteReceived(callInvite: CallInvite) {
+        // BOREAL_DIALER_CALLKIT_REPORTER_v789
         // Push delivery can be retried. A CallSid is the logical invite
         // identity, whereas the PushKit delivery itself has no stable ID.
-        guard inviteLedger.begin(callInvite.callSid) else {
-            callInvite.reject()
-            return
+        // Every outcome reports to CallKit through CallKitReporter, which this
+        // runs inside synchronously: a duplicate or busy invite is rejected and
+        // reported as an immediately-ended call instead of being dropped.
+        let firstDelivery = inviteLedger.begin(callInvite.callSid)
+        let decision = CallKitReporter.shared.receive(invite: callInvite, firstDelivery: firstDelivery) { invite in
+            CallStateManager.shared.transition(to: .ringing)
+            pendingCallInvite = callInvite
+            VoiceEngine.shared.reportIncoming(uuid: invite.uuid, handle: invite.from ?? "Unknown") { [weak self] accepted in
+                guard !accepted, let self else { return }
+                // CallKit refused the call (Do Not Disturb, blocked number):
+                // nothing is ringing, so the invite must not stay pending.
+                if self.pendingCallInvite?.callSid == invite.callSid {
+                    invite.reject()
+                    self.pendingCallInvite = nil
+                }
+                self.inviteLedger.finish(invite.callSid)
+                CallStateManager.shared.reset()
+            }
         }
-        guard CallStateManager.shared.current() == .idle else {
-            callInvite.reject()
+        if decision == .rejectBusy {
             inviteLedger.finish(callInvite.callSid)
-            return
-        }
-
-        CallStateManager.shared.transition(to: .ringing)
-        pendingCallInvite = callInvite
-
-        let uuid = callInvite.uuid
-        let handle = callInvite.from ?? "Unknown"
-
-        DispatchQueue.main.async {
-            guard CallStateManager.shared.current() == .ringing else { return }
-            VoiceEngine.shared.reportIncoming(uuid: uuid, handle: handle)
         }
     }
 

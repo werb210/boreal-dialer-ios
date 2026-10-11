@@ -26,14 +26,18 @@ final class PushManager: NSObject {
         VoiceManager.shared.updateDeviceToken(voipPushToken)
     }
 
-    /// Returns false when Twilio rejects the payload. General notification
-    /// types are never converted into local notifications or synthetic calls.
+    /// Hands an eligible payload to Twilio. Returns false when Twilio rejects
+    /// it. Twilio calls TwilioVoiceManager's NotificationDelegate synchronously
+    /// on this queue (delegateQueue nil = main), so the invite reaches
+    /// CallKitReporter before this returns. General notification types are
+    /// never converted into local notifications or synthetic calls.
+    /// BOREAL_DIALER_CALLKIT_REPORTER_v789 - eligibility is checked by
+    /// CallKitReporter, which must still report a call when it fails.
     @discardableResult
     func handlePushPayload(_ payload: [AnyHashable: Any]) -> Bool {
-        guard Self.isEligibleVoIPPayload(payload) else { return false }
-        return TwilioVoiceSDK.handleNotification(payload,
-                                                  delegate: TwilioVoiceManager.shared,
-                                                  delegateQueue: nil)
+        TwilioVoiceSDK.handleNotification(payload,
+                                          delegate: TwilioVoiceManager.shared,
+                                          delegateQueue: nil)
     }
 
     static func isEligibleVoIPPayload(_ payload: [AnyHashable: Any]) -> Bool {
@@ -65,10 +69,14 @@ extension PushManager: PKPushRegistryDelegate { // BOREAL_DIALER_v529 - methods 
     ) {
         guard type == .voIP else { return }
         let token = credentials.token
+        // BOREAL_DIALER_VOICE_RESUME_v789 - PushKit hands over the token on every
+        // launch and whenever it rotates. Register it with Twilio each time, even
+        // when it matches the last one, so a registration Twilio has expired or
+        // dropped is renewed. VoiceManager defers until it holds an access token.
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.voipPushToken = token
-            self.registerDeviceTokenWithTwilio()
+            VoiceManager.shared.updateDeviceToken(token, forceReregister: true)
         }
     }
 
@@ -96,15 +104,27 @@ extension PushManager: PKPushRegistryDelegate { // BOREAL_DIALER_v529 - methods 
             return
         }
 
-        // Copy the bridged NSDictionary while still in the delegate callback.
-        // The box is safe to transfer because this snapshot is immutable after
-        // construction; its unchecked conformance is limited to this bridge.
-        let payload = VoIPPayloadSnapshot(payload.dictionaryPayload)
-        let completion = VoIPPushCompletion(completion)
-        Task { @MainActor [weak self] in
-            defer { completion.call() }
-            guard let self else { return }
-            self.handlePushPayload(payload.dictionary)
+        // BOREAL_DIALER_CALLKIT_REPORTER_v789
+        // Report to CallKit synchronously, on the PushKit queue, before this
+        // callback returns. The registry is created on .main, so this is the
+        // main thread and the main actor; there is no async hop. The PushKit
+        // completion is handed to CallKitReporter, which calls it only after
+        // CallKit's reportNewIncomingCall callback.
+        let dictionary = payload.dictionaryPayload
+        if Thread.isMainThread {
+            MainActor.assumeIsolated {
+                CallKitReporter.shared.handleVoIPPush(dictionary, completion: completion)
+            }
+        } else {
+            // Defensive only: a registry on another queue still reports before
+            // returning, by waiting for the main actor rather than queueing.
+            let payload = VoIPPayloadSnapshot(dictionary)
+            let completion = VoIPPushCompletion(completion)
+            DispatchQueue.main.sync {
+                MainActor.assumeIsolated {
+                    CallKitReporter.shared.handleVoIPPush(payload.dictionary) { completion.call() }
+                }
+            }
         }
     }
 }

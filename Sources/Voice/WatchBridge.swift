@@ -76,6 +76,20 @@ public final class WatchBridge: NSObject {
         return true
     }
 
+    // BOREAL_DIALER_LOGOUT_CLEAR_v789 - tell the wrist to drop this account's
+    // snapshot. Sent immediately when reachable and queued otherwise. Not put in
+    // the application context: that persists, and would re-clear on every
+    // Watch launch.
+    public func sendClear() {
+        guard let session, session.activationState == .activated else { return }
+        let payload = WatchPayload.encode(WatchClearMessage(), under: WatchPayload.clearKey)
+        guard !payload.isEmpty else { return }
+        if session.isReachable {
+            session.sendMessage(payload, replyHandler: nil) { _ in }
+        }
+        if session.isPaired, session.isWatchAppInstalled { session.transferUserInfo(payload) }
+    }
+
     // BOREAL_DIALER_WATCH_LINK_TRUTH_v340 - what the phone actually believes, in
     // words, so a failed link names its own cause instead of being guessed at.
     public func linkDiagnostics() -> String {
@@ -87,6 +101,7 @@ public final class WatchBridge: NSObject {
 #else
     public func activate() {}
     public func send(_ event: WatchEvent) {}
+    public func sendClear() {} // BOREAL_DIALER_LOGOUT_CLEAR_v789
     // BOREAL_DIALER_WATCH_ENROLL_DELIVERY_v173 - signature matches the real one.
     @discardableResult
     public func sendEnrollment(_ code: String) -> Bool { false }

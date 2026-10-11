@@ -90,6 +90,10 @@ jobs:
         run: bash scripts/check-watchos-unavailable-api.sh
       - name: Widget container backgrounds
         run: bash scripts/check-widget-container-background.sh
+      # BOREAL_DIALER_V789_AUDIT - VoIP push -> CallKit wiring, privacy manifests,
+      # one build number for every target, dead code stays deleted.
+      - name: v789 audit round 2
+        run: bash scripts/check-v789-audit.sh
 
   ios-build:
     needs: swift-lint
@@ -97,6 +101,9 @@ jobs:
     env:
       HOMEBREW_NO_AUTO_UPDATE: "1"
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      # BOREAL_DIALER_BUILD_NUMBER_v789 - CFBundleVersion of the app, the Watch
+      # app and every extension (project.yml reads CURRENT_PROJECT_VERSION).
+      BUILD_NUMBER: ${{ github.run_number }}
     steps:
       - uses: actions/checkout@v5
       - name: Install XcodeGen
@@ -128,6 +135,7 @@ jobs:
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             build-for-testing 2>&1 | tee /tmp/xcodebuild.log
 
       - name: Run unit tests
@@ -140,7 +148,36 @@ jobs:
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             test-without-building 2>&1 | tee /tmp/xcodebuild-test.log
+
+      # BOREAL_DIALER_CALLKIT_REPORTER_v789 - the push-to-CallKit paths (unrecognised
+      # payload, ring, duplicate, busy, CallKit refusal) must have actually run.
+      - name: Push-to-CallKit tests ran
+        run: |
+          if ! grep -E "CallKitReporterTests" /tmp/xcodebuild-test.log | grep -qE "passed"; then
+            echo "::error::CallKitReporterTests did not run (or did not pass) in the unit-test step"
+            exit 1
+          fi
+          if grep -E "CallKitReporterTests" /tmp/xcodebuild-test.log | grep -qE "failed"; then
+            echo "::error::CallKitReporterTests failed"
+            exit 1
+          fi
+          echo "CallKitReporterTests ran and passed."
+
+      # BOREAL_DIALER_BUILD_NUMBER_v789 - every bundle in the built app carries this run's number.
+      - name: Bundle versions match the build number
+        run: |
+          set -euo pipefail
+          APP="$(ls -d "$HOME"/Library/Developer/Xcode/DerivedData/BorealDialer-*/Build/Products/Debug-iphonesimulator/BorealDialer.app 2>/dev/null | head -1)"
+          [ -n "$APP" ] || { echo "::error::built BorealDialer.app not found"; exit 1; }
+          bad=0
+          while IFS= read -r plist; do
+            v="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist" 2>/dev/null || echo missing)"
+            echo "$plist -> $v"
+            [ "$v" = "$BUILD_NUMBER" ] || { echo "::error::$plist has CFBundleVersion $v, expected $BUILD_NUMBER"; bad=1; }
+          done < <(find "$APP" \( -path '*.app/Info.plist' -o -path '*.appex/Info.plist' \) -not -path '*.framework/*' -not -path '*.xctest/*')
+          exit "$bad"
 
       - name: Resolve a watch simulator destination
         id: watch-sim
@@ -149,13 +186,18 @@ jobs:
           # BOREAL_DIALER_CI_SIMULATOR_v682 - picks the newest simulator, or creates one (downloading the
           # runtime if needed) when the runner image has none.
           UDID="$(bash scripts/ci-simulator.sh watchOS BorealDialerWatch /tmp/watch-destinations.txt)"
+          # BOREAL_DIALER_CI_WATCH_REQUIRED_v789 - no Watch simulator is a failure,
+          # not a reason to skip the Watch build and tests.
+          if [ -z "$UDID" ]; then
+            echo "::error::No watchOS simulator could be resolved; the Watch app and its tests cannot be verified."
+            exit 1
+          fi
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
 
       # BOREAL_DIALER_WATCH_v55 - the app was compiled above; this primarily
       # builds the Watch test bundle.
       - name: Build watch app and tests
         id: watch-build
-        if: steps.watch-sim.outputs.udid != ''
         run: |
           set -o pipefail
           xcodebuild \
@@ -165,13 +207,14 @@ jobs:
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             build-for-testing 2>&1 | tee /tmp/xcodebuild-watch.log
           # BOREAL_DIALER_CI_TRUTHFUL_v1
           echo "watch_built=true" >> "$GITHUB_OUTPUT"
 
       - name: Run watch unit tests
-        # BOREAL_DIALER_WATCH_TEST_GUARD_v218 - never run with an empty udid.
-        if: steps.watch-build.outputs.watch_built == 'true' && steps.watch-sim.outputs.udid != ''
+        # BOREAL_DIALER_CI_WATCH_REQUIRED_v789 - runs whenever the steps above
+        # succeeded; an unresolved simulator already failed the job.
         run: |
           set -o pipefail
           # BOREAL_DIALER_WATCH_TEST_RETRY_v317 - retry only launch failures.
@@ -186,6 +229,7 @@ jobs:
               -configuration Debug \
               CODE_SIGNING_ALLOWED=NO \
               CODE_SIGNING_REQUIRED=NO \
+              CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
               test-without-building 2>&1 | tee /tmp/xcodebuild-watch-test.log
           }
           if run_watch_tests; then exit 0; fi

@@ -10,6 +10,15 @@ options:
     watchOS: "9.0"
   createIntermediateGroups: true
 
+# BOREAL_DIALER_BUILD_NUMBER_v789 - one build number for every target. CI sets
+# CURRENT_PROJECT_VERSION from GITHUB_RUN_NUMBER on each xcodebuild; each
+# target's CFBundleVersion reads it, so the app, the Watch app and every
+# extension always carry the same number (App Store Connect rejects a build
+# whose embedded bundles disagree). "1" is the local default.
+settings:
+  base:
+    CURRENT_PROJECT_VERSION: "1"
+
 packages:
   TwilioVoice:
     url: https://github.com/twilio/twilio-voice-ios
@@ -62,7 +71,7 @@ targets:
       properties:
         CFBundleDisplayName: Boreal Dialer
         CFBundleShortVersionString: "1.0"
-        CFBundleVersion: "1"
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
         UIBackgroundModes:
           - voip
@@ -178,6 +187,12 @@ targets:
     deploymentTarget: "9.0"
     sources:
       - path: Watch
+        excludes:
+          - PrivacyInfo.xcprivacy
+      # BOREAL_DIALER_PRIVACY_MANIFESTS_v789 - each bundle declares its own
+      # required-reason API use; App Store Connect checks every one.
+      - path: Watch/PrivacyInfo.xcprivacy
+        buildPhase: resources
       # The shared vocabulary is compiled into both sides so the two cannot
       # drift; WCSession itself carries untyped dictionaries.
       - path: Sources/WatchShared
@@ -186,7 +201,7 @@ targets:
       properties:
         CFBundleDisplayName: Boreal
         CFBundleShortVersionString: "1.0"
-        CFBundleVersion: "1"
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         WKApplication: true
         WKCompanionAppBundleIdentifier: financial.boreal.dialer
         WKRunsIndependentlyOfCompanionApp: true
@@ -214,6 +229,10 @@ targets:
     deploymentTarget: "10.0"
     sources:
       - path: WatchWidget
+        excludes:
+          - PrivacyInfo.xcprivacy
+      - path: WatchWidget/PrivacyInfo.xcprivacy # BOREAL_DIALER_PRIVACY_MANIFESTS_v789
+        buildPhase: resources
     # INFOPLIST_KEY_NSExtensionPointIdentifier is not a real build setting --
     # Xcode only honours a fixed allowlist of INFOPLIST_KEY_* keys and silently
     # drops the rest. The generated plist had no NSExtension dictionary, so the
@@ -225,7 +244,7 @@ targets:
       properties:
         CFBundleDisplayName: Boreal
         CFBundleShortVersionString: "1.0"
-        CFBundleVersion: "1"
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     # The provider reads UserDefaults(suiteName:) for its snapshot; without the
@@ -264,11 +283,17 @@ targets:
     deploymentTarget: "16.1"
     sources:
       - path: LiveActivity
+        excludes:
+          - PrivacyInfo.xcprivacy
+      - path: LiveActivity/PrivacyInfo.xcprivacy # BOREAL_DIALER_PRIVACY_MANIFESTS_v789
+        buildPhase: resources
       - path: Sources/Shared
     info:
       path: LiveActivity/Info.plist
       properties:
         CFBundleDisplayName: Boreal Call
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
@@ -295,6 +320,8 @@ targets:
       path: CallDirectory/Info.plist
       properties:
         CFBundleDisplayName: Boreal Caller ID
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.callkit.call-directory
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).CallDirectoryProvider

@@ -193,6 +193,8 @@ public enum WatchPayload {
     // BOREAL_DIALER_WATCH_AUTOLINK_v341 - the Watch asking the phone for a code.
     public static let enrollRequestKey = "boreal.watch.enroll.request"
     public static let inCallKey = "boreal.watch.incall" // BOREAL_DIALER_WATCH_INCALL_v1
+    // BOREAL_DIALER_LOGOUT_CLEAR_v789 - the phone signed out; drop its data on the wrist.
+    public static let clearKey = "boreal.watch.clear"
 
     public static func encode<T: Encodable>(_ value: T, under key: String) -> [String: Any] {
         guard let data = try? JSONEncoder().encode(value) else { return [:] }
@@ -226,5 +228,19 @@ public struct WatchInCallMessage: Codable, Sendable, Equatable {
         self.control = control
         self.callId = callId
         self.digits = digits
+    }
+}
+
+// BOREAL_DIALER_LOGOUT_CLEAR_v789
+// Sent when the iPhone signs out. The Watch removes the events the phone
+// relayed and the complication snapshot, so the last account's calls and
+// tasks are not left on the wrist.
+public struct WatchClearMessage: Codable, Sendable, Equatable {
+    public let reason: String
+    public let sentAt: Date
+
+    public init(reason: String = "signed_out", sentAt: Date = Date()) {
+        self.reason = reason
+        self.sentAt = sentAt
     }
 }

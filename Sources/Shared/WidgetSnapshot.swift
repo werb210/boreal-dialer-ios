@@ -32,6 +32,14 @@ enum WidgetSnapshotStore {
         save(load().contacts)
     }
 
+    /// BOREAL_DIALER_LOGOUT_CLEAR_v789 - sign-out leaves no contacts on the widget.
+    static func clear() {
+        UserDefaults(suiteName: appGroup)?.removeObject(forKey: snapshotKey)
+#if canImport(WidgetKit)
+        WidgetCenter.shared.reloadTimelines(ofKind: "BorealDialerWidget")
+#endif
+    }
+
     static func save(_ contacts: [WidgetContact]) {
         // BOREAL_DIALER_WIDGET_DEDUPE_v677 - one row per number: two calls with the same person
         // showed them twice ("Lorne Benjamin" x2). Keeps the most recent, in order.

@@ -40,6 +40,14 @@ final class CallDirectoryManager: ObservableObject {
         }
     }
 
+    /// BOREAL_DIALER_LOGOUT_CLEAR_v789 - empties the caller-ID directory and
+    /// reloads the extension so iOS stops labelling calls with this account's
+    /// contacts.
+    func clearAll() async {
+        CallDirectoryStore.clear()
+        try? await reloadExtension()
+    }
+
     func updateEnabledStatus() {
         CXCallDirectoryManager.sharedInstance.getEnabledStatusForExtension(
             withIdentifier: Self.extensionIdentifier

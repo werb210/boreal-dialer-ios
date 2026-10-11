@@ -95,6 +95,15 @@ final class VoiceEngine: NSObject, ObservableObject {
 
         provider = CXProvider(configuration: config)
         provider.setDelegate(self, queue: nil)
+        // BOREAL_DIALER_CALLKIT_REPORTER_v789 - every push reports through this provider.
+        CallKitReporter.shared.provider = CXProviderReporting(provider: provider)
+    }
+
+    // BOREAL_DIALER_CALLKIT_REPORTER_v789 - false while ringing, dialing, active
+    // and during the 1.5 s ended/failed cooldown in finishCall.
+    var isIdle: Bool {
+        if case .idle = state { return true }
+        return false
     }
 
     func startCall(to number: String, uuid: UUID = UUID()) {
@@ -170,8 +179,16 @@ final class VoiceEngine: NSObject, ObservableObject {
         }
     }
 
-    func reportIncoming(uuid: UUID, handle: String) {
-        guard case .idle = state else { return }
+    /// `onResult` receives true once CallKit is ringing the call.
+    func reportIncoming(uuid: UUID, handle: String, onResult: ((Bool) -> Void)? = nil) {
+        // BOREAL_DIALER_CALLKIT_REPORTER_v789 - this used to return silently
+        // when not idle (including the 1.5 s cooldown after a call), which is a
+        // VoIP push with no reported call. Report it and end it at once.
+        guard case .idle = state else {
+            CallKitReporter.shared.reportPlaceholder(handle: handle, reason: .unanswered)
+            onResult?(false)
+            return
+        }
 
         let update = CXCallUpdate()
         currentHandle = PhoneFormat.display(handle)
@@ -185,22 +202,22 @@ final class VoiceEngine: NSObject, ObservableObject {
         update.supportsUngrouping = false
         update.supportsDTMF = true
 
-        provider.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
-            let succeeded = error == nil
-            Task { @MainActor in
-                guard let self else { return }
-                if succeeded {
-                    self.state = .ringing(uuid)
-                    WatchBridge.shared.send(WatchEvent(kind: .incomingCall,
-                                                       callId: uuid.uuidString,
-                                                       displayName: "",
-                                                       handle: handle))
-                    // Named after the fact. Reporting must not wait on the network:
-                    // iOS terminates the app if a VoIP push does not report a call
-                    // almost immediately.
-                    self.nameIncomingCall(uuid: uuid, handle: handle)
-                }
+        // Reported synchronously; the ringing state is applied when CallKit
+        // answers, on the provider's (main) queue.
+        CallKitReporter.shared.reportRinging(uuid: uuid, handle: handle, update: update) { [weak self] succeeded in
+            guard let self else { return }
+            if succeeded {
+                self.state = .ringing(uuid)
+                WatchBridge.shared.send(WatchEvent(kind: .incomingCall,
+                                                   callId: uuid.uuidString,
+                                                   displayName: "",
+                                                   handle: handle))
+                // Named after the fact. Reporting must not wait on the network:
+                // iOS terminates the app if a VoIP push does not report a call
+                // almost immediately.
+                self.nameIncomingCall(uuid: uuid, handle: handle)
             }
+            onResult?(succeeded)
         }
     }
 
@@ -216,7 +233,7 @@ final class VoiceEngine: NSObject, ObservableObject {
 
                 let update = CXCallUpdate()
                 update.localizedCallerName = display
-                self.provider.reportCall(with: uuid, updated: update)
+                CallKitReporter.shared.reportUpdated(uuid: uuid, update: update)
                 WatchBridge.shared.send(WatchEvent(kind: .incomingCall,
                                                    callId: uuid.uuidString,
                                                    displayName: display,
@@ -326,7 +343,7 @@ final class VoiceEngine: NSObject, ObservableObject {
     }
 
     func endReportedCall(uuid: UUID, reason: CXCallEndedReason = .remoteEnded) {
-        provider.reportCall(with: uuid, endedAt: Date(), reason: reason)
+        CallKitReporter.shared.reportEnded(uuid: uuid, reason: reason)
         WatchBridge.shared.send(WatchEvent(kind: .missedCall,
                                            callId: uuid.uuidString,
                                            displayName: "", handle: ""))

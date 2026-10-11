@@ -15,6 +15,25 @@ final class TokenStorage {
         KeychainService.shared.load(key)
     }
 
+    /// BOREAL_DIALER_KEYCHAIN_v789 - tells "no token" apart from "the device
+    /// is locked and the token cannot be read yet".
+    enum State: Equatable {
+        case present
+        case absent
+        case locked
+    }
+
+    func state() -> State {
+        switch KeychainService.shared.read(key) {
+        case .found(let data):
+            return data.isEmpty ? .absent : .present
+        case .locked:
+            return .locked
+        case .notFound, .failed:
+            return .absent
+        }
+    }
+
     func getTokenOrFail() -> String {
         guard let token = KeychainService.shared.load(key),
               !token.isEmpty else {

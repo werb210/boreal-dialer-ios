@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import UIKit
 
 final class AuthService: ObservableObject {
 
@@ -9,9 +10,57 @@ final class AuthService: ObservableObject {
     // BOREAL_DIALER_FACE_ID_SIGN_IN_v299 - set once after a text-code sign-in to offer Face ID.
     @Published var offerFaceID = false
 
+    // BOREAL_DIALER_KEYCHAIN_v789 - true while a saved session could not be
+    // read because the device was locked (errSecInteractionNotAllowed). That is
+    // not "signed out": the session is re-checked when the app becomes active.
+    private(set) var awaitingUnlock = false
+    private var becameActiveObserver: NSObjectProtocol?
+
     private init() {
-        if TokenStorage.shared.getToken() != nil {
+        KeychainService.shared.migrateAccessibilityIfNeeded()
+        switch TokenStorage.shared.state() {
+        case .present:
             isAuthenticated = true
+        case .locked:
+            isAuthenticated = true
+            awaitingUnlock = true
+        case .absent:
+            isAuthenticated = false
+        }
+        becameActiveObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { _ in
+            AuthService.shared.recheckAfterUnlock()
+        }
+    }
+
+    /// BOREAL_DIALER_KEYCHAIN_v789 - the device is unlocked now: finish the
+    /// keychain migration and settle a session that was unreadable at launch.
+    func recheckAfterUnlock() {
+        KeychainService.shared.migrateAccessibilityIfNeeded()
+        guard awaitingUnlock else { return }
+        switch TokenStorage.shared.state() {
+        case .locked:
+            return // still locked; try again next time
+        case .present:
+            awaitingUnlock = false
+            resumeSavedSession()
+        case .absent:
+            awaitingUnlock = false
+            isAuthenticated = false
+        }
+    }
+
+    /// BOREAL_DIALER_VOICE_RESUME_v789 - called at launch. A saved staff session
+    /// registers for VoIP pushes and starts the 50-minute token refresh straight
+    /// away; before, that only happened on the next sign-in, so a relaunched app
+    /// never rang.
+    func resumeSavedSession() {
+        guard let token = TokenStorage.shared.getToken(), !token.isEmpty else { return }
+        guard shouldInitializeVoice(from: token) else { return }
+        Task { @MainActor in
+            PushManager.shared.register()
+            await VoiceManager.shared.initialize()
         }
     }
 
@@ -130,8 +179,22 @@ final class AuthService: ObservableObject {
         ResponseCache.clear() // BOREAL_DIALER_OFFLINE_v303 - nothing from this account stays on the phone
         OfflineQueue.shared.clear()
         ContactSpotlight.clear() // BOREAL_DIALER_v593_SPOTLIGHT
+        await Self.clearDeviceSurfaces()
         TokenStorage.shared.clear()
+        awaitingUnlock = false
         await MainActor.run { isAuthenticated = false }
+    }
+
+    // BOREAL_DIALER_LOGOUT_CLEAR_v789 - the widgets, Watch face and caller ID
+    // kept showing the last account's contacts, missed calls, tasks and names
+    // after sign-out. Clear every surface outside the app too.
+    @MainActor
+    static func clearDeviceSurfaces() async {
+        WidgetSnapshotStore.clear()
+        DialerDashboardStore.clear()
+        WatchSnapshotSync.clear()
+        WatchBridge.shared.sendClear()
+        await CallDirectoryManager.shared.clearAll()
     }
 
     func invalidateSessionAfterIdentityMismatch() async {

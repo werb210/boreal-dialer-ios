@@ -101,6 +101,14 @@ extension WatchEventStore: WCSessionDelegate {
             }
             return
         }
+        // BOREAL_DIALER_LOGOUT_CLEAR_v789 - the iPhone signed out.
+        if WatchPayload.decode(WatchClearMessage.self, from: message, key: WatchPayload.clearKey) != nil {
+            Task { @MainActor in
+                WatchEventStore.shared.clearSensitiveData()
+                WatchFaceSync.clear()
+            }
+            return
+        }
         guard let event = WatchPayload.decode(WatchEvent.self, from: message, key: WatchPayload.eventKey) else { return }
         Task { @MainActor in WatchEventStore.shared.ingest(event) }
     }

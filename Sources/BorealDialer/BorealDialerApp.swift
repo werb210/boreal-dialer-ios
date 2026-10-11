@@ -18,10 +18,16 @@ struct BorealDialerApp: App {
     @StateObject private var appLock = AppLockController.shared // BOREAL_DIALER_FACE_ID_v244
 
     init() {
+        // BOREAL_DIALER_CALLKIT_REPORTER_v789 - the CXProvider exists before
+        // PushKit can deliver the push that launched the app.
+        _ = VoiceEngine.shared
         PushManager.shared.register()
         StandardNotificationCoordinator.shared.register()
         WatchBridge.shared.activate() // BOREAL_DIALER_WATCH_v55
-        _ = VoiceEngine.shared
+        // BOREAL_DIALER_VOICE_RESUME_v789 - a saved session is a signed-in staff
+        // member: register for VoIP and start the token refresh now, not only
+        // after the next sign-in.
+        AuthService.shared.resumeSavedSession()
         _ = NetworkMonitor.shared
         _ = ReachabilityManager.shared
         _ = PersistenceController.shared

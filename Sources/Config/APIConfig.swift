@@ -10,6 +10,17 @@ struct APIConfig {
     // the same host the staff portal falls back to in src/config/api.ts.
     static let BI_BASE_URL = "https://bi-server-cse0apamgkheb9d5.canadacentral-01.azurewebsites.net/api"
 
+    // BOREAL_DIALER_TEAM_WS_CONFIG_v789 - the team chat websocket lives on the
+    // BF server; derived here so a host change is made in one place.
+    static var TEAM_WS_URL: String { webSocketURL(fromHTTPBase: BASE_URL) + "/team/ws" }
+
+    /// https://host/api -> wss://host/api, http -> ws.
+    static func webSocketURL(fromHTTPBase base: String) -> String {
+        if base.hasPrefix("https://") { return "wss://" + String(base.dropFirst("https://".count)) }
+        if base.hasPrefix("http://") { return "ws://" + String(base.dropFirst("http://".count)) }
+        return base
+    }
+
     // All silos use the same server — silo is sent as X-Silo header
     static var activeBaseURL: String = BASE_URL
     static var activeSilo: Silo = .bf

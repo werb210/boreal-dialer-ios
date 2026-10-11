@@ -40,6 +40,14 @@ enum DialerDashboardStore {
 #endif
     }
 
+    /// BOREAL_DIALER_LOGOUT_CLEAR_v789 - sign-out leaves no calls or tasks on the widget.
+    static func clear() {
+        UserDefaults(suiteName: WidgetSnapshotStore.appGroup)?.removeObject(forKey: key)
+#if canImport(WidgetKit)
+        WidgetCenter.shared.reloadTimelines(ofKind: "BorealDialerWidget")
+#endif
+    }
+
     /// Server timestamps come with or without fractional seconds.
     static func date(_ iso: String?) -> Date? {
         guard let iso, !iso.isEmpty else { return nil }

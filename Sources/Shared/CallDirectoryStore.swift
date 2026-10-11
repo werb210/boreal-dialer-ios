@@ -24,6 +24,13 @@ enum CallDirectoryStore {
         try JSONEncoder().encode(sorted).write(to: url, options: .atomic)
     }
 
+    /// BOREAL_DIALER_LOGOUT_CLEAR_v789 - sign-out removes every caller-ID label.
+    /// The extension then reloads and hands iOS an empty directory.
+    static func clear() {
+        guard let url = fileURL() else { return }
+        try? FileManager.default.removeItem(at: url)
+    }
+
     /// Converts an E.164 string into CallKit's signed 64-bit representation.
     static func phoneNumber(fromE164 value: String) -> Int64? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)

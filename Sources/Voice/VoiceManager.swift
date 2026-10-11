@@ -422,6 +422,9 @@ extension VoiceManager: @preconcurrency CallDelegate {
                 request.httpMethod = "POST"
                 request.httpShouldHandleCookies = true
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                // BOREAL_DIALER_VOICE_STATUS_SILO_v1 - send the silo like every other
+                // BF-Server call (Authorization is added by performAuthorizedRequest).
+                request.setValue(APIConfig.siloHeader(for: APIConfig.activeSilo), forHTTPHeaderField: "X-Silo")
 
                 let body = [
                     "callStatus": status

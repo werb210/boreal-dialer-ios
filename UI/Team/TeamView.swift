@@ -272,16 +272,27 @@ final class TeamStore: ObservableObject {
         }
     }
 
+    // BOREAL_DIALER_URL_TICKET_v790 - the socket authenticates with a short-lived
+    // URL ticket (BF-Server v789 refuses the full sign-in token in a URL).
+    private var connecting = false
+    private var wantsConnection = false
+
     func connect() {
-        guard ws == nil,
-              let token = TokenStorage.shared.getToken(),
-              let encodedToken = token.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              // BOREAL_DIALER_TEAM_WS_CONFIG_v789 - host comes from APIConfig.
-              let url = URL(string: APIConfig.TEAM_WS_URL + "?token=\(encodedToken)") else { return }
-        let task = URLSession.shared.webSocketTask(with: url)
-        ws = task
-        task.resume()
-        receive(on: task)
+        wantsConnection = true
+        guard ws == nil, !connecting, TokenStorage.shared.getToken() != nil else { return }
+        connecting = true
+        Task { @MainActor in
+            defer { self.connecting = false }
+            let ticket = await URLTicket.fetch()
+            // BOREAL_DIALER_TEAM_WS_CONFIG_v789 - host comes from APIConfig.
+            guard self.wantsConnection, self.ws == nil,
+                  let credential = ticket ?? TokenStorage.shared.getToken(),
+                  let url = URLTicket.teamSocketURL(token: credential) else { return }
+            let task = URLSession.shared.webSocketTask(with: url)
+            self.ws = task
+            task.resume()
+            self.receive(on: task)
+        }
     }
 
     private func receive(on task: URLSessionWebSocketTask) {
@@ -329,6 +340,7 @@ final class TeamStore: ObservableObject {
     }
 
     func disconnect() {
+        wantsConnection = false
         ws?.cancel(with: .goingAway, reason: nil)
         ws = nil
     }

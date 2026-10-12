@@ -466,18 +466,9 @@ private struct SMSBubble: View {
 
             VStack(alignment: message.isOutbound ? .trailing : .leading, spacing: 4) {
                 if message.hasMedia, let url = mediaURL {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image.resizable().scaledToFit().frame(maxWidth: 220)
-                        case .failure:
-                            Label("Attachment unavailable", systemImage: "photo")
-                                .font(.caption).foregroundColor(.secondary)
-                        default:
-                            ProgressView().frame(width: 120, height: 90)
-                        }
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    // BOREAL_DIALER_URL_TICKET_v790 - loaded with the Authorization header, not a token in the URL.
+                    AuthorizedMediaImage(url: url)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
 
                 // BOREAL_DIALER_THREAD_STYLE_v32
@@ -504,11 +495,11 @@ private struct SMSBubble: View {
 }
 
 private extension SMSBubble {
-    // Twilio media needs Basic auth, so it is proxied by the server. The token
-    // rides the query string because AsyncImage cannot set a header.
+    // Twilio media needs Basic auth, so it is proxied by the server.
+    // BOREAL_DIALER_URL_TICKET_v790 - no token in the URL; AuthorizedMediaImage
+    // sends the Authorization header (BF-Server v789 refuses ?token= sign-in tokens).
     var mediaURL: URL? {
-        guard message.hasMedia, let token = TokenStorage.shared.getToken() else { return nil }
-        let base = APIConfig.baseURL
-        return URL(string: "\(base)/communications/messages/\(message.id)/media?token=\(token)")
+        guard message.hasMedia else { return nil }
+        return URL(string: "\(APIConfig.baseURL)/communications/messages/\(message.id)/media")
     }
 }

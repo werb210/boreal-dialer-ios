@@ -22,23 +22,74 @@ struct WatchRootView: View {
                         Text("Open Boreal on your iPhone").font(.caption2).foregroundStyle(.secondary)
                     }
                 }
-                NavigationLink("Dial", destination: WatchDialView())
-                NavigationLink("Call by Voice", destination: WatchVoiceCallView())
-                NavigationLink("Contacts", destination: WatchContactsView())
-                NavigationLink("Favorites", destination: WatchFavoritesView())
+                // BOREAL_DIALER_v804_WATCH - icons on every row; the three call
+                // starters (Dial, Favorites, Calls Due) lead, the rest keep their order.
+                NavigationLink(destination: WatchDialView()) { menuLabel("Dial", "circle.grid.3x3.fill") }
+                NavigationLink(destination: WatchFavoritesView()) { menuLabel("Favorites", "star.fill") }
                 // BOREAL_DIALER_WATCH_CALLBACKS_v219 - what you owe outranks
                 // what already happened, so it sits above Recent Calls.
-                NavigationLink("Calls Due", destination: WatchCallbacksView())
-                NavigationLink("Recent Calls", destination: WatchRecentsView())
-                NavigationLink("Quick Text", destination: WatchQuickTextRecipientsView())
-                NavigationLink("Log Outcome", destination: WatchDispositionView())
-                NavigationLink("Notifications", destination: WatchNotificationsView())
-                NavigationLink("Account", destination: WatchAccountView())
+                NavigationLink(destination: WatchCallbacksView()) { menuLabel("Calls Due", "checklist") }
+                NavigationLink(destination: WatchVoiceCallView()) { menuLabel("Call by Voice", "mic.fill") }
+                NavigationLink(destination: WatchContactsView()) { menuLabel("Contacts", "person.crop.circle") }
+                NavigationLink(destination: WatchRecentsView()) { menuLabel("Recent Calls", "clock") }
+                NavigationLink(destination: WatchQuickTextRecipientsView()) { menuLabel("Quick Text", "message.fill") }
+                NavigationLink(destination: WatchDispositionView()) { menuLabel("Log Outcome", "square.and.pencil") }
+                NavigationLink(destination: WatchNotificationsView()) { menuLabel("Notifications", "bell.fill") }
+                NavigationLink(destination: WatchAccountView()) { menuLabel("Account", "person.crop.circle.badge.checkmark") }
             }.navigationTitle("Boreal")
             // BOREAL_DIALER_WATCH_FACE_v371 - complication taps land on the screen they name.
             .navigationDestination(isPresented: complicationBinding("dial")) { WatchDialView() }
             .navigationDestination(isPresented: complicationBinding("recents")) { WatchRecentsView() }
         }.onAppear { store.startCompanionOptimization() }
+    }
+    // BOREAL_DIALER_v804_WATCH
+    private func menuLabel(_ title: String, _ symbol: String) -> some View {
+        Label {
+            Text(title)
+        } icon: {
+            Image(systemName: symbol).foregroundStyle(WatchTheme.greenBright)
+        }
+    }
+}
+
+// BOREAL_DIALER_v804_WATCH - the iPhone app's brand greens (UI/Components/Theme.swift
+// is not compiled into the Watch target, so the two values are repeated here).
+enum WatchTheme {
+    static let green = Color(red: 47.0 / 255.0, green: 168.0 / 255.0, blue: 106.0 / 255.0)       // #2FA86A
+    static let greenBright = Color(red: 84.0 / 255.0, green: 208.0 / 255.0, blue: 138.0 / 255.0) // #54D08A
+    static let neutral = Color.gray.opacity(0.28)
+}
+
+// BOREAL_DIALER_v804_WATCH - initials circle + green phone glyph for call rows.
+// The glyph is part of the row label, so a tap anywhere on the row (glyph
+// included) takes the same path the row always took; no second tap target.
+struct WatchCallRowLabel: View {
+    let title: String
+    let subtitle: String?
+    var detail: String? = nil
+    var detailColor: Color = .secondary
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ZStack {
+                Circle().fill(WatchTheme.green.opacity(0.35))
+                Text(Self.initials(from: title)).font(.system(size: 11, weight: .semibold))
+            }
+            .frame(width: 24, height: 24)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).lineLimit(1)
+                if let subtitle { Text(subtitle).font(.caption2).foregroundStyle(.secondary).lineLimit(1) }
+                if let detail { Text(detail).font(.caption2).foregroundStyle(detailColor).lineLimit(1) }
+            }
+            Spacer(minLength: 2)
+            Image(systemName: "phone.fill").foregroundStyle(WatchTheme.greenBright)
+        }
+    }
+
+    static func initials(from name: String) -> String {
+        let words = name.split(separator: " ").filter { $0.first?.isLetter == true }
+        let letters = words.prefix(2).compactMap { $0.first }.map { String($0).uppercased() }
+        return letters.isEmpty ? "#" : letters.joined()
     }
 }
 
@@ -61,10 +112,14 @@ struct WatchDialView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 4) {
-                Text(number.isEmpty ? "Enter number" : number)
-                    .font(.headline).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
+                // BOREAL_DIALER_v804_WATCH - phone-style display: large monospaced
+                // digits, a dim "+1" hint while empty.
+                Text(number.isEmpty ? "+1" : number)
+                    .font(.system(size: 24, weight: .medium, design: .monospaced))
+                    .lineLimit(1).minimumScaleFactor(0.4)
                     .foregroundStyle(number.isEmpty ? .secondary : .primary)
                     .frame(maxWidth: .infinity)
+                    .padding(.vertical, 2)
                 // BOREAL_DIALER_WATCH_DIALPAD_FIT_v314 - compact plain keys sized from the
                 // screen: display + four key rows + action row fit without scrolling.
                 ForEach(keys, id: \.self) { row in
@@ -103,7 +158,7 @@ struct WatchDialView: View {
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
                             .frame(height: keyHeight)
-                            .background(RoundedRectangle(cornerRadius: keyHeight * 0.35).fill(Color.green))
+                            .background(RoundedRectangle(cornerRadius: keyHeight * 0.35).fill(WatchTheme.green)) // BOREAL_DIALER_v804_WATCH
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -209,7 +264,30 @@ struct WatchContactsView: View {
 
 struct ContactDetailView: View {
     let contact: ContactSummary
-    var body: some View { List { Text(contact.name); if let company = contact.company { Text(company) }; Text(contact.primaryPhone); NavigationLink("Dial", destination: PrefilledDialView(number: contact.primaryPhone)) } }
+    // BOREAL_DIALER_v804_WATCH - a prominent green Call (same prefilled dial
+    // screen as before) and a Text row into the existing Quick Text flow.
+    var body: some View {
+        List {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(contact.name).font(.headline)
+                if let company = contact.company { Text(company).font(.caption2).foregroundStyle(.secondary) }
+                Text(contact.primaryPhone).font(.caption).monospacedDigit()
+            }
+            NavigationLink(destination: PrefilledDialView(number: contact.primaryPhone)) {
+                Label("Call", systemImage: "phone.fill").foregroundStyle(.white)
+            }
+            .listRowBackground(RoundedRectangle(cornerRadius: 12).fill(WatchTheme.green))
+            NavigationLink(destination: WatchQuickTextTemplatesView(recipient: textRecipient)) {
+                Label("Text", systemImage: "message.fill")
+            }
+        }
+        .navigationTitle("Contact")
+    }
+    // WatchQuickTextTemplatesView reads only name and number from its recipient.
+    private var textRecipient: WatchRecentCall {
+        WatchRecentCall(id: contact.id, name: contact.name, number: contact.primaryPhone,
+                        direction: .outgoing, occurredAt: Date(), line: .BF)
+    }
 }
 struct PrefilledDialView: View { let number: String; var body: some View { WatchDialView(initialNumber: number) } }
 
@@ -227,10 +305,9 @@ struct WatchRecentsView: View {
             if unavailable { Text("Recents unavailable").font(.caption) }
             ForEach(recents) { recent in
                 NavigationLink(destination: PrefilledDialView(number: recent.number)) {
-                    VStack(alignment: .leading) {
-                        Text(recent.name ?? recent.number)
-                        if recent.name != nil { Text(recent.number).font(.caption2).foregroundStyle(.secondary) }
-                    }
+                    // BOREAL_DIALER_v804_WATCH
+                    WatchCallRowLabel(title: recent.name ?? recent.number,
+                                      subtitle: recent.name != nil ? recent.number : nil)
                 }
             }
         }
@@ -265,18 +342,11 @@ struct WatchCallbacksView: View {
                 // Opens the dial screen rather than dialling on tap. A misplaced
                 // tap on a wrist should not ring a client.
                 NavigationLink(destination: PrefilledDialView(number: callback.number)) {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(callback.contactName ?? callback.number)
-                        Text(callback.title)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        if callback.overdue {
-                            Text("Overdue").font(.caption2).foregroundStyle(.orange)
-                        } else if let due = callback.dueAt {
-                            Text(Self.clock.string(from: due)).font(.caption2).foregroundStyle(.secondary)
-                        }
-                    }
+                    // BOREAL_DIALER_v804_WATCH
+                    WatchCallRowLabel(title: callback.contactName ?? callback.number,
+                                      subtitle: callback.title,
+                                      detail: dueLabel(callback),
+                                      detailColor: callback.overdue ? .orange : .secondary)
                 }
             }
         }
@@ -290,6 +360,13 @@ struct WatchCallbacksView: View {
             }
             loaded = true
         }
+    }
+
+    // BOREAL_DIALER_v804_WATCH
+    private func dueLabel(_ callback: WatchCallback) -> String? {
+        if callback.overdue { return "Overdue" }
+        guard let due = callback.dueAt else { return nil }
+        return Self.clock.string(from: due)
     }
 
     private static let clock: DateFormatter = {
@@ -516,27 +593,58 @@ struct CompanionCallView: View {
     // BOREAL_DIALER_WATCH_INCALL_v1 - mute and keypad during an active call.
     @State private var muted = false
     @State private var showingKeypad = false
+    // BOREAL_DIALER_v804_WATCH - two Buttons in one List row made a single
+    // tappable cell on watchOS, so a tap could fire the wrong control or both.
+    // Every control now sits in its own row with its own tap target.
+    private let keypadRows: [[String]] = [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"], ["*", "0", "#"]]
+    private var keyDiameter: CGFloat {
+        max(30, min(46, (WKInterfaceDevice.current().screenBounds.width - 24) / 3 - 4))
+    }
     var body: some View { Section("iPhone call") {
         Text(call.subtitle)
-        HStack {
-            Button { store.sendCompanionAction(.decline) } label: { Image(systemName: "phone.down.fill") }.tint(.red)
-            Button { store.sendCompanionAction(.answer) } label: { Image(systemName: "phone.fill") }.tint(.green)
+        Button { store.sendCompanionAction(.answer) } label: {
+            Label("Answer", systemImage: "phone.fill").frame(maxWidth: .infinity)
         }
-        HStack {
-            Button {
-                muted.toggle()
-                store.sendInCallControl(muted ? .mute : .unmute)
-            } label: {
-                Image(systemName: muted ? "mic.slash.fill" : "mic.fill")
-            }.tint(muted ? .orange : .gray)
-            Button { showingKeypad = true } label: { Image(systemName: "circle.grid.3x3.fill") }.tint(.gray)
+        .buttonStyle(.borderedProminent)
+        .tint(WatchTheme.green)
+        Button { store.sendCompanionAction(.decline) } label: {
+            Label("Decline", systemImage: "phone.down.fill").frame(maxWidth: .infinity)
         }
+        .buttonStyle(.borderedProminent)
+        .tint(.red)
+        Button {
+            muted.toggle()
+            store.sendInCallControl(muted ? .mute : .unmute)
+        } label: {
+            Label(muted ? "Unmute" : "Mute", systemImage: muted ? "mic.slash.fill" : "mic.fill")
+                .foregroundStyle(muted ? Color.orange : Color.primary)
+        }
+        Button { showingKeypad = true } label: { Label("Keypad", systemImage: "circle.grid.3x3.fill") }
         Text("Controlled by nearby iPhone").font(.caption2).foregroundStyle(.secondary)
     }.sheet(isPresented: $showingKeypad) {
-        List {
-            ForEach(["1","2","3","4","5","6","7","8","9","*","0","#"], id: \.self) { key in
-                Button(key) { store.sendInCallControl(.dtmf, digits: key) }
+        // BOREAL_DIALER_v804_WATCH - 3x4 grid of round keys instead of a
+        // 12-row list; each key sends the same DTMF control as before.
+        ScrollView {
+            VStack(spacing: 4) {
+                ForEach(keypadRows, id: \.self) { row in
+                    HStack(spacing: 4) {
+                        ForEach(row, id: \.self) { key in
+                            Button {
+                                store.sendInCallControl(.dtmf, digits: key)
+                                WKInterfaceDevice.current().play(.click)
+                            } label: {
+                                Text(key)
+                                    .font(.system(size: keyDiameter * 0.45, weight: .medium))
+                                    .frame(width: keyDiameter, height: keyDiameter)
+                                    .background(Circle().fill(WatchTheme.neutral))
+                                    .contentShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
             }
+            .frame(maxWidth: .infinity)
         }.navigationTitle("Keypad")
     } }
 }
@@ -547,7 +655,7 @@ struct WatchAccountView: View {
     @State private var message: String?
     var body: some View { List {
         if linked {
-            Text("Linked")
+            linkStatusPill // BOREAL_DIALER_v804_WATCH
             Toggle("Standalone cellular fallback", isOn: $fallback).onChange(of: fallback) { enabled in updateRouting(enabled) }
             Button("Sign Out", role: .destructive) { Task { do { try await WatchAuthService.shared.logout(client: WatchAPIClient()); await MainActor.run { store.clearSensitiveData(); linked = false; message = "Signed out on this Watch" } } catch { await MainActor.run { message = "Could not revoke this Watch. Try again." } } } }
         } else {
@@ -557,10 +665,10 @@ struct WatchAccountView: View {
             // screen previously led with a bare code field, which made the
             // supported path look unavailable. Say where the code comes from;
             // keep manual entry collapsed for an out-of-range phone.
-            Text("Link this Apple Watch").font(.headline)
-            Text("On your iPhone, open Boreal Dialer → Settings → Account → Link Apple Watch. This Watch links itself.")
+            // BOREAL_DIALER_v804_WATCH - one sentence plus a status pill.
+            linkStatusPill
+            Text("On iPhone tap Settings > Account > Link Apple Watch.")
                 .font(.caption2).foregroundStyle(.secondary)
-            Text("Waiting for iPhone…").font(.caption2).foregroundStyle(.tertiary)
             // BOREAL_DIALER_WATCH_LINK_COPY_v2 - v1 used DisclosureGroup, which
             // SwiftUI marks unavailable on watchOS; the target would not
             // compile. A NavigationLink to a small screen is the watchOS
@@ -572,6 +680,16 @@ struct WatchAccountView: View {
         }
         if let message { Text(message).font(.caption).foregroundStyle(.secondary) }
     }.navigationTitle("Account").task { linked = await WatchAuthService.shared.restore(); if linked { try? await WatchAPIClient().registerDevice() } } }
+    // BOREAL_DIALER_v804_WATCH
+    private var linkStatusPill: some View {
+        HStack(spacing: 4) {
+            Circle().fill(linked ? WatchTheme.greenBright : Color.gray).frame(width: 6, height: 6)
+            Text(linked ? "Linked" : "Not linked").font(.caption2.weight(.semibold))
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(Capsule().fill((linked ? WatchTheme.green : Color.gray).opacity(0.3)))
+    }
     private func updateRouting(_ enabled: Bool) { Task { do {
         guard let session = await WatchAuthService.shared.session else { return }
         struct Body: Encodable { let enabled: Bool }
@@ -648,7 +766,7 @@ struct ConfirmCallView: View {
             }
             Button { start() } label: {
                 Label("Call \(contact.name)", systemImage: "phone.fill")
-            }.buttonStyle(.borderedProminent).tint(.green).disabled(status == .requesting)
+            }.buttonStyle(.borderedProminent).tint(WatchTheme.green).disabled(status == .requesting) // BOREAL_DIALER_v804_WATCH
             if status != .idle { Text(status.rawValue.capitalized).font(.caption2).foregroundStyle(.secondary) }
             if let errorMessage { Text(errorMessage).font(.caption2).foregroundStyle(.red) }
         }.navigationTitle("Confirm")
@@ -689,10 +807,9 @@ struct WatchFavoritesView: View {
             }
             ForEach(favorites) { fav in
                 NavigationLink(destination: PrefilledDialView(number: fav.number)) {
-                    VStack(alignment: .leading) {
-                        Text(fav.name ?? fav.number)
-                        if fav.name != nil { Text(fav.number).font(.caption2).foregroundStyle(.secondary) }
-                    }
+                    // BOREAL_DIALER_v804_WATCH
+                    WatchCallRowLabel(title: fav.name ?? fav.number,
+                                      subtitle: fav.name != nil ? fav.number : nil)
                 }
             }
         }.navigationTitle("Favorites").task(id: line) { await load() }

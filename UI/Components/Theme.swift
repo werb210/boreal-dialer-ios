@@ -96,9 +96,9 @@ struct ComposerBar: View {
             TextField(placeholder, text: $text, axis: .vertical)
                 .lineLimit(1...5)
                 .textFieldStyle(.plain)
-                .font(.system(size: 14))
+                .font(.system(size: 15)) // BOREAL_DIALER_v803_UI
                 .padding(.horizontal, 14)
-                .padding(.vertical, 9)
+                .padding(.vertical, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 20).fill(Theme.surface2)
                 )
@@ -106,15 +106,18 @@ struct ComposerBar: View {
                     RoundedRectangle(cornerRadius: 20).stroke(Theme.line2, lineWidth: 1)
                 )
 
+            // BOREAL_DIALER_v803_UI - the mockup's send button: a solid green circle
+            // with a white paper plane. Disabled stays green-tinted, just dimmer.
             Button(action: onSend) {
-                Image(systemName: "arrow.up")
+                Image(systemName: "paperplane.fill")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(Theme.onGreen)
+                    .foregroundColor(.white)
                     .frame(width: 36, height: 36)
-                    .background(Circle().fill(disabled ? Theme.surface3 : Theme.green))
+                    .background(Circle().fill(Theme.green.opacity(disabled ? 0.4 : 1)))
             }
             .buttonStyle(.plain)
             .disabled(disabled)
+            .accessibilityLabel("Send")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -265,4 +268,165 @@ struct RowSubtext: ViewModifier {
 extension View {
     func rowTitle() -> some View { modifier(RowText()) }
     func rowSubtitle() -> some View { modifier(RowSubtext()) }
+}
+
+// BOREAL_DIALER_v803_UI - shared pieces for the mockup's view headers, filter
+// chips, status chips and priority tags, so every tab draws them the same way.
+extension Theme {
+    static let sky = Color(hex: 0x3B82F6)
+}
+
+// The mockup's .vhead: 24pt bold title, 12pt faint subtitle, and an optional
+// trailing control (usually a green text action such as "Compose" or "+ Add").
+struct ViewHeader<Trailing: View>: View {
+    let title: String
+    var subtitle: String? = nil
+    @ViewBuilder let trailing: () -> Trailing
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 24, weight: .bold))
+                    .kerning(-0.3)
+                    .foregroundColor(Theme.text)
+                    .lineLimit(1)
+                Text(subtitle ?? "")
+                    .font(.system(size: 12))
+                    .foregroundColor(Theme.faint)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            trailing()
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 14)
+        .padding(.bottom, 6)
+    }
+}
+
+// The mockup's .hbtn: 13pt semibold, bright green, no chrome.
+struct HeaderActionLabel: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundColor(Theme.greenBright)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+    }
+}
+
+// The mockup's .fchip: 12.5pt semibold capsule with a hairline border; the
+// selected chip is raised on surface3.
+struct FilterChip: View {
+    let title: String
+    let selected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 12.5, weight: .semibold))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(selected ? Theme.surface3 : Color.clear))
+                .overlay(Capsule().stroke(Theme.line2, lineWidth: 1))
+                .foregroundColor(selected ? Theme.text : Theme.muted)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// Presence chip on the Team roster: Available / Away / Offline.
+struct PresenceChip: View {
+    // "available", "away" or "offline".
+    let bucket: String
+
+    private var label: String {
+        switch bucket {
+        case "available": return "Available"
+        case "away": return "Away"
+        default: return "Offline"
+        }
+    }
+
+    private var tint: Color {
+        switch bucket {
+        case "available": return Color(hex: 0x8FD6B0)
+        case "away": return Color(hex: 0xFFCE8A)
+        default: return Theme.muted
+        }
+    }
+
+    var body: some View {
+        Text(label)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundColor(tint)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(bucket == "offline" ? Theme.line2 : tint.opacity(0.35), lineWidth: 1)
+            )
+    }
+}
+
+// HIGH / MED task priority tag (the mockup's .prio).
+struct PriorityTag: View {
+    let high: Bool
+
+    var body: some View {
+        Text(high ? "HIGH" : "MED")
+            .font(.system(size: 10, weight: .bold))
+            .foregroundColor(high ? Color(hex: 0xFF9A90) : Color(hex: 0xFFCE8A))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(high ? Theme.red.opacity(0.13) : Theme.away.opacity(0.13))
+            )
+    }
+}
+
+// The mockup's round outlined icon button (row call buttons, SMS thread header).
+struct RoundIconButton: View {
+    let systemImage: String
+    let accessibility: String
+    var size: CGFloat = 34
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: size * 0.44, weight: .semibold))
+                .foregroundColor(Theme.greenBright)
+                .frame(width: size, height: size)
+                .overlay(Circle().stroke(Theme.line2, lineWidth: 1))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel(accessibility)
+    }
+}
+
+// Short relative time for list rows: "9:14" today, "Yest", weekday this week,
+// otherwise "Jun 3".
+enum RowTime {
+    static func label(_ raw: String?) -> String {
+        guard let date = CalendarFormatters.parse(raw) else { return "" }
+        let calendar = Calendar.current
+        let formatter = DateFormatter()
+        if calendar.isDateInToday(date) {
+            formatter.dateFormat = "h:mm"
+        } else if calendar.isDateInYesterday(date) {
+            return "Yest"
+        } else if let days = calendar.dateComponents([.day], from: date, to: Date()).day, days < 7 {
+            formatter.dateFormat = "EEE"
+        } else {
+            formatter.dateFormat = "MMM d"
+        }
+        return formatter.string(from: date)
+    }
 }

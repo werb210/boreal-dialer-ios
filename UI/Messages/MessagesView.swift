@@ -49,13 +49,20 @@ struct CommunicationThread: Identifiable, Decodable {
 
     var isSMS: Bool { (type ?? "").lowercased() == "sms" }
 
+    // BOREAL_DIALER_v803_UI - the mockup's three channels. A website / Maya chat
+    // and a chat a staff member has picked up ("human") are both Chat.
     var channelLabel: String {
         switch (type ?? "").lowercased() {
-        case "human": return "Human"
-        case "chat": return "Chat"
         case "sms": return "SMS"
-        default: return "Message"
+        case "email", "mail": return "Email"
+        default: return "Chat"
         }
+    }
+
+    // BOREAL_DIALER_v803_UI - an SMS row opens the SMS conversation, which is
+    // the screen that actually sends a text.
+    var asSMSThread: SMSThread {
+        SMSThread(contactId: contactId, displayName: contactName, phone: contactPhone, unreadCount: unread)
     }
 
     var title: String {
@@ -102,11 +109,13 @@ final class MessagesViewModel: ObservableObject {
     // BOREAL_DIALER_TABS_PRESENTATION_v26
     @Published var filter: Filter = .all
 
+    // BOREAL_DIALER_v803_UI - All, Unread, SMS, Chat, Email (the mockup's filters).
     enum Filter: String, CaseIterable {
         case all = "All"
         case unread = "Unread"
+        case sms = "SMS"
         case chat = "Chat"
-        case human = "Human"
+        case email = "Email"
     }
 
     var unreadCount: Int {
@@ -117,8 +126,9 @@ final class MessagesViewModel: ObservableObject {
         switch filter {
         case .all: return threads
         case .unread: return threads.filter { ($0.unread ?? 0) > 0 }
+        case .sms: return threads.filter { $0.channelLabel == "SMS" }
         case .chat: return threads.filter { $0.channelLabel == "Chat" }
-        case .human: return threads.filter { $0.channelLabel == "Human" }
+        case .email: return threads.filter { $0.channelLabel == "Email" }
         }
     }
 
@@ -128,9 +138,10 @@ final class MessagesViewModel: ObservableObject {
         do {
             let request = try APIClient.shared.makeRequest(path: "/communications/threads")
             let data = try await APIClient.shared.makeAuthorizedRequest(request)
-            let all = try JSONDecoder().decode([CommunicationThread].self, from: data)
-            // SMS lives in its own tab.
-            threads = all.filter { !$0.isSMS }
+            // BOREAL_DIALER_v803_UI - the unified inbox shows every channel; SMS
+            // rows open the SMS conversation rather than this thread view.
+            threads = try JSONDecoder().decode([CommunicationThread].self, from: data)
+            InboxUnreadStore.shared.update(from: threads)
         } catch {
             self.error = "Could not load messages."
         }
@@ -138,102 +149,169 @@ final class MessagesViewModel: ObservableObject {
     }
 }
 
+// BOREAL_DIALER_v803_UI - whether any inbox conversation is unread, for the
+// green dot on the Messages pill in the tab rail.
+@MainActor
+final class InboxUnreadStore: ObservableObject {
+    static let shared = InboxUnreadStore()
+    @Published private(set) var hasUnread = false
+
+    private init() {}
+
+    func update(from threads: [CommunicationThread]) {
+        hasUnread = threads.contains { ($0.unread ?? 0) > 0 }
+    }
+
+    func refresh() async {
+        do {
+            let request = try APIClient.shared.makeRequest(path: "/communications/threads")
+            let data = try await APIClient.shared.makeAuthorizedRequest(request)
+            update(from: try JSONDecoder().decode([CommunicationThread].self, from: data))
+        } catch {
+            // Decoration only; keep the last known state.
+        }
+    }
+}
+
 struct MessagesView: View {
     @StateObject private var viewModel = MessagesViewModel()
+    // BOREAL_DIALER_v803_UI - the Compose menu replaces the unlabelled sparkle
+    // button: a new text message, and Maya's live chats (still read-only).
+    @State private var showNewMessage = false
+    @State private var showMaya = false
 
     var body: some View {
         NavigationStack {
-            Group {
-                if viewModel.loading && viewModel.threads.isEmpty {
-                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if viewModel.threads.isEmpty {
-                    Text(viewModel.error ?? "No conversations")
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    // BOREAL_DIALER_TABS_PRESENTATION_v26 - filter chips.
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(MessagesViewModel.Filter.allCases, id: \.self) { option in
-                                let selected = viewModel.filter == option
-                                let title = option == .unread && viewModel.unreadCount > 0
-                                    ? "Unread · \(viewModel.unreadCount)"
-                                    : option.rawValue
-                                Button {
-                                    viewModel.filter = option
-                                } label: {
-                                    Text(title)
-                                        .font(.caption.weight(selected ? .semibold : .regular))
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(
-                                            Capsule().fill(selected
-                                                ? Theme.green.opacity(0.2)
-                                                : Color.secondary.opacity(0.12))
-                                        )
-                                        .foregroundColor(selected ? Theme.green : Theme.text)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.horizontal)
-                        .padding(.vertical, 6)
-                    }
-
-                    List(viewModel.visible) { thread in
-                        NavigationLink {
-                            MessageThreadView(thread: thread) {
-                                Task { await viewModel.load() }
-                            }
+            VStack(spacing: 0) {
+                // BOREAL_DIALER_v803_UI - mockup header.
+                ViewHeader(title: "Messages", subtitle: "Unified inbox \u{00B7} all channels") {
+                    Menu {
+                        Button {
+                            showNewMessage = true
                         } label: {
-                            MessageThreadRow(thread: thread)
+                            Label("New text message", systemImage: "square.and.pencil")
+                        }
+                        // BOREAL_DIALER_MAYA_SESSIONS_v789 - Maya's live chats, read-only.
+                        Button {
+                            showMaya = true
+                        } label: {
+                            Label("Maya live chats", systemImage: "sparkles")
+                        }
+                    } label: {
+                        HeaderActionLabel(text: "Compose")
+                    }
+                    .accessibilityLabel("Compose")
+                }
+
+                // BOREAL_DIALER_TABS_PRESENTATION_v26 - filter chips.
+                // BOREAL_DIALER_v803_UI - All, Unread . N, SMS, Chat, Email.
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(MessagesViewModel.Filter.allCases, id: \.self) { option in
+                            FilterChip(
+                                title: chipTitle(option),
+                                selected: viewModel.filter == option
+                            ) {
+                                viewModel.filter = option
+                            }
                         }
                     }
-                    .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-                .background(Theme.bg)
-                    .refreshable { await viewModel.load() }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 6)
+                    .padding(.bottom, 4)
                 }
+
+                content
             }
-            .navigationTitle("Messages")
-            .navigationBarTitleDisplayMode(.inline)
-            // BOREAL_DIALER_MAYA_SESSIONS_v789 - Maya's live chats, read-only.
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    NavigationLink {
-                        MayaSessionsView()
-                    } label: {
-                        Label("Maya chats", systemImage: "sparkles")
-                    }
+            .background(Theme.bg)
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(isPresented: $showMaya) {
+                MayaSessionsView()
+            }
+            .sheet(isPresented: $showNewMessage) {
+                SMSNewMessageView {
+                    Task { await viewModel.load() }
                 }
             }
         }
         .task { await viewModel.load() }
     }
+
+    private func chipTitle(_ option: MessagesViewModel.Filter) -> String {
+        if option == .unread && viewModel.unreadCount > 0 {
+            return "Unread \u{00B7} \(viewModel.unreadCount)"
+        }
+        return option.rawValue
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if viewModel.loading && viewModel.threads.isEmpty {
+            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if viewModel.visible.isEmpty {
+            Text(viewModel.error ?? (viewModel.threads.isEmpty ? "No conversations" : "Nothing in this filter"))
+                .font(.system(size: 14))
+                .foregroundColor(Theme.muted)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            List(viewModel.visible) { thread in
+                NavigationLink {
+                    destination(for: thread)
+                } label: {
+                    MessageThreadRow(thread: thread)
+                }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 0, leading: 18, bottom: 0, trailing: 18))
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(Theme.bg)
+            .refreshable { await viewModel.load() }
+        }
+    }
+
+    @ViewBuilder
+    private func destination(for thread: CommunicationThread) -> some View {
+        if thread.isSMS {
+            SMSThreadView(thread: thread.asSMSThread) {
+                Task { await viewModel.load() }
+            }
+        } else {
+            MessageThreadView(thread: thread) {
+                Task { await viewModel.load() }
+            }
+        }
+    }
 }
 
+// BOREAL_DIALER_v803_UI - mockup row: 46pt avatar, 15.5pt name with a channel
+// chip, one muted preview line, time over a green unread badge.
 private struct MessageThreadRow: View {
     let thread: CommunicationThread
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            AvatarCircle(name: thread.title, size: 38)
+        HStack(alignment: .center, spacing: 13) {
+            AvatarCircle(name: thread.title, size: 46)
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 7) {
-                    Text(thread.title).rowTitle()
+                    Text(thread.title).rowTitle().lineLimit(1)
                     ChannelChip(label: thread.channelLabel)
                 }
-                if let preview = thread.message, !preview.isEmpty {
-                    Text(preview).rowSubtitle().lineLimit(1)
-                }
+                Text((thread.message ?? "").ifEmpty(" "))
+                    .rowSubtitle()
+                    .lineLimit(1)
             }
-            Spacer()
-            if let unread = thread.unread, unread > 0 {
-                CountBadge(count: unread)
+            Spacer(minLength: 6)
+            VStack(alignment: .trailing, spacing: 6) {
+                Text(RowTime.label(thread.updatedAt))
+                    .font(.system(size: 12))
+                    .foregroundColor(Theme.faint)
+                CountBadge(count: thread.unread ?? 0)
+                    .opacity((thread.unread ?? 0) > 0 ? 1 : 0)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 11)
     }
 }
 

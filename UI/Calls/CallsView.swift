@@ -39,20 +39,36 @@ struct CallsView: View {
 
     @State private var section: CallSection = .keypad
     @ObservedObject private var deepLinks = DeepLinkCoordinator.shared
+    // BOREAL_DIALER_v803_UI - account / settings moved here from the tab rail.
+    @State private var showAccount = false
 
     var body: some View {
         VStack(spacing: 0) {
             // BOREAL_DIALER_ROW_SEGMENT_STYLE_v31
-            SegmentedBar(
-                options: CallSection.allCases,
-                title: { $0.rawValue },
-                selection: $section
-            )
+            // BOREAL_DIALER_v803_UI - the account button sits at the end of this row.
+            HStack(spacing: 10) {
+                SegmentedBar(
+                    options: CallSection.allCases,
+                    title: { $0.rawValue },
+                    selection: $section
+                )
+                Button {
+                    showAccount = true
+                } label: {
+                    Image(systemName: "person.crop.circle")
+                        .font(.system(size: 24))
+                        .foregroundColor(Theme.muted)
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Account and settings")
+            }
             .padding(.horizontal, 16)
             .padding(.top, 8)
             .padding(.bottom, 4)
 
-            Divider()
+            Rectangle().fill(Theme.line).frame(height: 1)
 
             switch section {
             case .keypad:
@@ -65,6 +81,7 @@ struct CallsView: View {
         .onChange(of: deepLinks.pending) { link in
             if link != nil { section = .keypad }
         }
+        .sheet(isPresented: $showAccount) { AccountSheet() } // BOREAL_DIALER_v803_UI
     }
 }
 
@@ -184,6 +201,7 @@ struct RecentCallsView: View {
                 .refreshable { await viewModel.load() }
             }
         }
+        .toolbar(.hidden, for: .navigationBar) // BOREAL_DIALER_v803_UI - no empty bar above the list
         }
         .task { await viewModel.load() }
     }
@@ -206,33 +224,32 @@ struct RecentCallsView: View {
     }
 
     private func recentRow(_ call: RecentCall) -> some View {
-        HStack(spacing: 12) {
-            AvatarCircle(name: call.title)
+        // BOREAL_DIALER_v803_UI - mockup row: 44pt avatar, round outlined call button.
+        HStack(spacing: 13) {
+            AvatarCircle(name: call.title, size: 44)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(call.title)
                     .rowTitle()
                     .foregroundColor(call.missed ? Theme.red : Theme.text)
+                    .lineLimit(1)
                 HStack(spacing: 4) {
                     Image(systemName: call.isInbound ? "arrow.down.left" : "arrow.up.right")
                         .font(.system(size: 11))
                         .foregroundColor(call.missed ? Theme.red : Theme.muted)
-                    Text(call.subtitle).rowSubtitle()
+                    Text(call.subtitle).rowSubtitle().lineLimit(1)
                 }
             }
 
             Spacer()
 
             if let number = call.phoneNumber, !number.isEmpty {
-                Button {
+                RoundIconButton(systemImage: "phone.fill", accessibility: "Call back") {
                     CallManager.shared.startCall(to: number)
-                } label: {
-                    Image(systemName: "phone.fill").foregroundColor(Theme.green)
                 }
-                .buttonStyle(.borderless)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 5)
         .listRowBackground(Color.clear)
     }
 }
@@ -381,7 +398,7 @@ struct VoicemailView: View {
                                     }
                                     .buttonStyle(.plain)
 
-                                    AvatarCircle(name: voicemail.title, size: 34)
+                                    AvatarCircle(name: voicemail.title, size: 40) // BOREAL_DIALER_v803_UI
 
                                     // BOREAL_DIALER_CALLS_TAP_THROUGH_v35 - the
                                     // play button owns the row, so the name is
@@ -452,6 +469,7 @@ struct VoicemailView: View {
                 .refreshable { await viewModel.load() }
             }
         }
+        .toolbar(.hidden, for: .navigationBar) // BOREAL_DIALER_v803_UI - no empty bar above the list
         }
         .task { await viewModel.load() }
         .onDisappear { viewModel.stop() }

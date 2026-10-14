@@ -31,28 +31,36 @@ struct DialerView: View {
                 .foregroundColor(Theme.faint)
                 .padding(.top, 8)
 
-            Text("+1")
+            // BOREAL_DIALER_v803_UI - one large number display. The build showed a
+            // static "+1" AND a white "Enter number" field that repeated it; now the
+            // big line IS the number as you type ("+1..." when empty). Long-press
+            // it to paste a number or copy the one typed.
+            Text(displayNumber)
                 .font(.system(size: 34, weight: .semibold))
-                .foregroundColor(Theme.text)
-                .padding(.top, 2)
-                .padding(.bottom, 8)
-
-                // BOREAL_DIALER_TEAM_ROSTER_SELF_v50 - the placeholder used to
-                // read "+1…" while the chip immediately to its left already
-                // reads "+1", so an empty keypad showed the country code twice.
-                // PhoneFormat.display returns the national format with no
-                // country code, so the chip is the thing carrying that
-                // information and the placeholder should not repeat it.
-            Text(number.isEmpty ? "Enter number" : PhoneFormat.display(number))
-                .font(.system(size: 18, weight: number.isEmpty ? .regular : .medium))
-                .foregroundColor(number.isEmpty ? Color(hex: 0x9AA2FF) : Color(hex: 0x0A0B0D))
+                .foregroundColor(number.isEmpty ? Theme.faint : Theme.text)
                 .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-                .background(RoundedRectangle(cornerRadius: 13).fill(Color.white))
-                .padding(.horizontal, 18)
+                .minimumScaleFactor(0.5)
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: 44)
+                .padding(.horizontal, 24)
+                .padding(.top, 2)
+                .padding(.bottom, 6)
+                .contentShape(Rectangle())
+                .contextMenu {
+                    Button {
+                        pasteNumber()
+                    } label: {
+                        Label("Paste", systemImage: "doc.on.clipboard")
+                    }
+                    if !number.isEmpty {
+                        Button {
+                            UIPasteboard.general.string = number
+                        } label: {
+                            Label("Copy", systemImage: "doc.on.doc")
+                        }
+                    }
+                }
+                .accessibilityLabel(number.isEmpty ? "No number entered" : "Number \(number)")
 
             QuickCallRow()
 
@@ -78,21 +86,21 @@ struct DialerView: View {
                 .buttonStyle(.plain)
                 .simultaneousGesture(LongPressGesture().onEnded { _ in number = "" })
 
+                // BOREAL_DIALER_v803_UI - solid green 66pt circle, white phone,
+                // soft green glow. With nothing to dial it stays green, just dimmer.
                 Button {
                     VoiceEngine.shared.startCall(to: number)
                 } label: {
                     Image(systemName: "phone.fill")
-                        .font(.system(size: 26))
-                        .foregroundColor(Theme.onGreen)
+                        .font(.system(size: 28))
+                        .foregroundColor(.white)
                         .frame(width: 66, height: 66)
-                        .background(Circle().fill(
-                            (!reachability.isOnline || number.isEmpty || !isIdle)
-                                ? Theme.surface3 : Theme.green
-                        ))
-                        .shadow(color: Theme.green.opacity(number.isEmpty ? 0 : 0.55), radius: 14)
+                        .background(Circle().fill(Theme.green.opacity(canDial ? 1 : 0.45)))
+                        .shadow(color: Theme.green.opacity(canDial ? 0.6 : 0.25), radius: 14)
                 }
                 .buttonStyle(.plain)
-                .disabled(!reachability.isOnline || number.isEmpty || !isIdle)
+                .disabled(!canDial)
+                .accessibilityLabel("Call")
 
                 Button { number = "" } label: {
                     Text("Clear").font(.system(size: 14)).foregroundColor(Theme.muted).frame(width: 54)
@@ -148,6 +156,27 @@ struct DialerView: View {
             return true
         }
         return false
+    }
+
+    // BOREAL_DIALER_v803_UI - same rule the call button always used.
+    private var canDial: Bool {
+        reachability.isOnline && !number.isEmpty && isIdle
+    }
+
+    // BOREAL_DIALER_v803_UI - "+1 (403) 555-0142" once a full North American
+    // number is typed, the digits as typed before that, "+1..." when empty.
+    private var displayNumber: String {
+        if number.isEmpty { return "+1..." }
+        let national = PhoneFormat.display(number)
+        if national != number && national.hasPrefix("(") { return "+1 " + national }
+        return number
+    }
+
+    // BOREAL_DIALER_v803_UI - paste keeps only what a dial string can hold.
+    private func pasteNumber() {
+        guard let raw = UIPasteboard.general.string else { return }
+        let cleaned = String(raw.filter { $0.isNumber || $0 == "+" || $0 == "*" || $0 == "#" })
+        if !cleaned.isEmpty { number = cleaned }
     }
 
     private func formatDuration(_ seconds: Int) -> String {

@@ -119,6 +119,8 @@ enum TeamFormat {
 
 struct TeamFormattedText: View {
     let text: String
+    // BOREAL_DIALER_v803_MENTIONS - staff names whose "@Name" tokens are highlighted.
+    var mentionNames: [String] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -131,7 +133,7 @@ struct TeamFormattedText: View {
                         .background(Color.black.opacity(0.18))
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                 case .line(let line):
-                    Text(TeamFormat.attributed(line))
+                    Text(TeamMentionFormat.highlight(TeamFormat.attributed(line), names: mentionNames))
                 }
             }
         }
@@ -331,12 +333,15 @@ final class TeamPhaseBStore: ObservableObject {
         threadReplies = resp.replies
     }
 
-    func reply(channelId: String, rootId: String, body: String) async -> Bool {
+    func reply(channelId: String, rootId: String, body: String, mentions: [String] = []) async -> Bool {
         struct Resp: Decodable { let message: TeamMessage }
         let text = body.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return false }
         do {
-            let data = try await call("/team/channels/\(channelId)/threads/\(rootId)/messages", method: "POST", json: ["body": text])
+            // BOREAL_DIALER_v803_MENTIONS - @mentioned user ids travel with the reply.
+            var json: [String: Any] = ["body": text]
+            if !mentions.isEmpty { json["mentions"] = mentions }
+            let data = try await call("/team/channels/\(channelId)/threads/\(rootId)/messages", method: "POST", json: json)
             let message = try JSONDecoder().decode(Resp.self, from: data).message
             if threadKey == rootId && !threadReplies.contains(where: { $0.id == message.id }) { threadReplies.append(message) }
             return true

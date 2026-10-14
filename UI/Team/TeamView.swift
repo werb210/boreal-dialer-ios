@@ -21,6 +21,8 @@ struct TeamMessage: Identifiable, Decodable, Equatable {
     let deleted_at: String?
     let pinned: Bool?
     let reactions: [TeamReaction]?
+    // BOREAL_DIALER_v803_MENTIONS - user ids @mentioned in this message.
+    let mentions: [String]?
 }
 
 // BOREAL_DIALER_TEAM_PARITY_v789 - every field but id is optional on the wire. A
@@ -30,6 +32,7 @@ extension TeamMessage {
     private enum CodingKeys: String, CodingKey {
         case id, channel_id, sender_id, body, created_at, thread, thread_root_id, bot
         case read_this, read_by, edited_at, deleted_at, pinned, is_pinned, pinned_at, reactions
+        case mentions // BOREAL_DIALER_v803_MENTIONS
     }
 
     init(from decoder: Decoder) throws {
@@ -52,6 +55,7 @@ extension TeamMessage {
         let pinnedFlag = (try? c.decodeIfPresent(Bool.self, forKey: .pinned)) ?? (try? c.decodeIfPresent(Bool.self, forKey: .is_pinned))
         pinned = pinnedFlag ?? (TeamLossy.string(c, .pinned_at) != nil ? true : nil)
         reactions = (try? c.decodeIfPresent(TeamReactionList.self, forKey: .reactions))?.items
+        mentions = try? c.decodeIfPresent([String].self, forKey: .mentions) // BOREAL_DIALER_v803_MENTIONS
     }
 }
 
@@ -110,22 +114,43 @@ final class TeamStore: ObservableObject {
 
     // BOREAL_DIALER_TABS_PRESENTATION_v26
     func loadPresence() async {
-        struct Row: Decodable { let user_id: String; let status: String }
-        struct Resp: Decodable { let presence: [Row] }
+        // BOREAL_DIALER_v803_UI - one row with a null status used to fail the
+        // whole decode and blank everyone to Offline; rows now decode one by one.
+        struct Row: Decodable { let user_id: String; let status: String? }
         do {
             let req = try APIClient.shared.makeRequest(path: "/team/presence")
             let data = try await APIClient.shared.makeAuthorizedRequest(req)
-            let rows = try JSONDecoder().decode(Resp.self, from: data).presence
-            presence = Dictionary(rows.map { ($0.user_id, $0.status) }, uniquingKeysWith: { _, b in b })
+            let rows = TeamLossy.list(Row.self, from: data, keys: ["presence"])
+            presence = Dictionary(rows.map { ($0.user_id.lowercased(), $0.status ?? "offline") }, uniquingKeysWith: { _, b in b })
         } catch {
-            // Presence is decoration; the roster still lists everyone.
-            presence = [:]
+            // Presence is decoration; keep the last known roster state rather
+            // than flipping everyone to Offline on one failed refresh.
         }
     }
 
     // Staff with no presence row have never connected, which reads as offline.
     func status(for userId: String) -> String {
-        (presence[userId] ?? "offline").lowercased()
+        (presence[userId.lowercased()] ?? "offline").lowercased()
+    }
+
+    // BOREAL_DIALER_v803_UI - the server computes presence as available, busy
+    // or offline (busy = outside 08:00-18:00 Alberta, on a call, in a meeting
+    // or manually busy). The roster only had Available / Away / Offline groups
+    // and sent every "busy" person to Offline, which is why the whole team read
+    // Offline outside office hours. Busy and the Team "away" flag now group as Away.
+    nonisolated static func presenceBucket(status: String, away: Bool) -> String {
+        switch status.lowercased() {
+        case "available", "online":
+            return away ? "away" : "available"
+        case "away", "busy", "dnd", "on_call", "in_meeting", "idle":
+            return "away"
+        default:
+            return "offline"
+        }
+    }
+
+    func bucket(for userId: String) -> String {
+        Self.presenceBucket(status: status(for: userId), away: TeamPhaseBStore.shared.isAway(userId))
     }
 
     // BOREAL_DIALER_TEAM_ROSTER_SELF_v50
@@ -167,12 +192,12 @@ final class TeamStore: ObservableObject {
         let titles = ["available": "Available", "away": "Away", "offline": "Offline"]
         var buckets: [String: [TeamUser]] = [:]
         for user in Self.rosterMembers(users: users, excluding: myId) {
-            let key = order.contains(status(for: user.id)) ? status(for: user.id) : "offline"
-            buckets[key, default: []].append(user)
+            // BOREAL_DIALER_v803_UI - busy / away no longer fall through to Offline.
+            buckets[bucket(for: user.id), default: []].append(user)
         }
         return order.compactMap { key in
             guard let group = buckets[key], !group.isEmpty else { return nil }
-            return ("\(titles[key] ?? key) · \(group.count)", group)
+            return ("\(titles[key] ?? key) \u{00B7} \(group.count)", group)
         }
     }
 
@@ -229,13 +254,14 @@ final class TeamStore: ObservableObject {
         }
     }
 
-    func send(_ body: String) async {
+    func send(_ body: String, mentions: [String] = []) async {
         guard let id = activeId else { return }
         let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
         do {
             var object: [String: Any] = ["body": trimmed]
+            if !mentions.isEmpty { object["mentions"] = mentions } // BOREAL_DIALER_v803_MENTIONS
             if readThisNext { object["read_this"] = true } // BOREAL_DIALER_READ_THIS_v687
             readThisNext = false
             let payload = try JSONSerialization.data(withJSONObject: object)
@@ -303,9 +329,45 @@ final class TeamStore: ObservableObject {
                 if case .success(let message) = result {
                     await self.handle(message)
                     self.receive(on: task)
+                } else {
+                    // BOREAL_DIALER_v803_MENTIONS - the socket now stays open on every
+                    // tab, so a dropped connection must come back by itself.
+                    self.ws = nil
+                    self.scheduleReconnect()
                 }
             }
         }
+    }
+
+    // BOREAL_DIALER_v803_MENTIONS
+    private func scheduleReconnect() {
+        guard wantsConnection else { return }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 10_000_000_000)
+            if self.wantsConnection && self.ws == nil { self.connect() }
+        }
+    }
+
+    // BOREAL_DIALER_v803_MENTIONS - the conversation currently on screen (set by
+    // TeamChannelView / TeamThreadView while visible). activeId stays set after
+    // leaving a conversation, so it cannot answer "is this channel showing".
+    @Published var visibleChannelId: String?
+
+    // BOREAL_DIALER_v803_MENTIONS - a message that @mentions me, in a conversation
+    // that is not on screen, raises a local alert "<Sender> mentioned you".
+    private func alertIfMentioned(_ raw: Any?, channelId: String?) {
+        guard let me = myId?.lowercased(),
+              let message = raw as? [String: Any],
+              let mentions = message["mentions"] as? [String],
+              mentions.contains(where: { $0.lowercased() == me }) else { return }
+        let senderId = message["sender_id"] as? String
+        if let senderId, senderId.lowercased() == me { return }
+        if let channelId, channelId == visibleChannelId,
+           UIApplication.shared.applicationState == .active { return }
+        let sender = (message["bot"] as? String) ?? name(for: senderId)
+        let body = (message["body"] as? String) ?? ""
+        let messageId = (message["id"] as? String) ?? UUID().uuidString
+        TeamMentionAlert.post(sender: sender, body: body, channelId: channelId, messageId: messageId)
     }
 
     private func handle(_ message: URLSessionWebSocketTask.Message) async {
@@ -313,6 +375,10 @@ final class TeamStore: ObservableObject {
            let data = text.data(using: .utf8),
            let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             let type = obj["type"] as? String
+            // BOREAL_DIALER_v803_MENTIONS - channel messages and thread replies.
+            if type == "message" || type == "thread_message" {
+                alertIfMentioned(obj["message"], channelId: obj["channel_id"] as? String)
+            }
             if type == "message" {
                 await loadChannels()
                 if let channelId = obj["channel_id"] as? String {
@@ -377,66 +443,98 @@ struct TeamView: View {
         }
     }
 
+    // BOREAL_DIALER_v803_UI - the four unlabelled top icons became labelled pills.
+    private func toolPill(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundColor(Theme.muted)
+                .lineLimit(1)
+                .padding(.horizontal, 11)
+                .padding(.vertical, 6)
+                .overlay(Capsule().stroke(Theme.line2, lineWidth: 1))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+    }
+
     var body: some View {
         NavigationView {
+            VStack(spacing: 0) {
+            // BOREAL_DIALER_v803_UI - mockup header: title, subtitle, green "+ New".
+            ViewHeader(title: "Team", subtitle: "Boreal staff \u{00B7} internal calling") {
+                Button { showNew = true } label: { HeaderActionLabel(text: "+ New") }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("New conversation")
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    toolPill(myStatusLabel, systemImage: "face.smiling") { showStatus = true }
+                    toolPill("Saved", systemImage: "bookmark") { showSaved = true } // BOREAL_DIALER_TEAM_PHASE_C_v673
+                    toolPill("Search", systemImage: "magnifyingglass") { showSearch = true }
+                    toolPill("Channels", systemImage: "number") { showBrowse = true }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 4)
+            }
             List {
                 Section {
                     HStack {
                         Image(systemName: "magnifyingglass").foregroundColor(Theme.muted)
                         TextField("Search staff", text: $search)
                             .textFieldStyle(.plain)
+                            .font(.system(size: 14))
                             .autocorrectionDisabled()
                     }
-                    .padding(9)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
                     .background(Theme.surface2)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.line, lineWidth: 1))
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 4, trailing: 16))
                     .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
                 }
 
                 // Presence roster. Tapping a teammate places an internal VOIP
                 // call through the same conference endpoint as a PSTN call, so
                 // the mid-call controls work on it.
+                // BOREAL_DIALER_v803_UI - AVAILABLE / AWAY / OFFLINE . n sections,
+                // 42pt avatars with presence dots and a coloured status chip.
                 ForEach(roster, id: \.0) { title, members in
                     Section {
                         ForEach(members) { user in
+                            let bucket = store.bucket(for: user.id)
                             HStack(spacing: 13) {
                                 AvatarCircle(
                                     name: user.name,
-                                    size: 40,
-                                    presence: store.status(for: user.id)
+                                    size: 42,
+                                    presence: bucket
                                 )
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(user.name)
-                                        .font(.system(size: 15.5, weight: .semibold))
-                                    if let email = user.email, !email.isEmpty {
-                                        Text(email)
-                                            .font(.system(size: 13))
-                                            .foregroundColor(Theme.muted)
-                                            .lineLimit(1)
-                                    }
+                                        .rowTitle()
+                                        .lineLimit(1)
                                     if let line = extras.statusLine(for: user.id) {
-                                        Text(line).font(.system(size: 12)).foregroundColor(Theme.muted).lineLimit(1)
+                                        Text(line).rowSubtitle().lineLimit(1)
+                                    } else if let email = user.email, !email.isEmpty {
+                                        Text(email).rowSubtitle().lineLimit(1)
                                     }
                                 }
-                                Spacer()
-                                Text(extras.isAway(user.id) && store.status(for: user.id) != "offline" ? "Away" : store.status(for: user.id).capitalized)
-                                    .font(.system(size: 12))
-                                    .foregroundColor(Theme.faint)
+                                Spacer(minLength: 6)
+                                PresenceChip(bucket: bucket)
                                 if user.id != store.myId {
-                                    Button {
-                                        // BOREAL_DIALER_JOIN_CONFERENCE_v46
+                                    // BOREAL_DIALER_JOIN_CONFERENCE_v46
+                                    RoundIconButton(systemImage: "phone.fill", accessibility: "Call \(user.name)") {
                                         VoiceEngine.shared.startInternalCall(
                                             staffIdentity: user.id,
                                             displayName: user.name
                                         )
-                                    } label: {
-                                        Image(systemName: "phone.fill")
-                                            .foregroundColor(Theme.green)
                                     }
-                                    .buttonStyle(.borderless)
                                 }
                             }
+                            .padding(.vertical, 5)
                             .listRowBackground(Color.clear)
                         }
                     } header: {
@@ -463,8 +561,9 @@ struct TeamView: View {
                                         }
                                     }
                                     Spacer()
+                                    // BOREAL_DIALER_v803_MENTIONS - the "@" badge for a conversation that mentions me.
                                     if channel.has_mention ?? false {
-                                        Text("@").font(.caption.bold()).foregroundColor(.white).padding(.horizontal, 5).background(Theme.green).clipShape(Capsule())
+                                        Text("@").font(.system(size: 12, weight: .bold)).foregroundColor(Theme.onGreen).frame(minWidth: 20, minHeight: 20).background(Circle().fill(Theme.greenBright)).accessibilityLabel("Mentioned")
                                     }
                                     if channel.muted ?? false { Image(systemName: "bell.slash").foregroundColor(Theme.muted) }
                                     if channel.unread_count > 0 {
@@ -491,16 +590,12 @@ struct TeamView: View {
                     if let target = openTarget { TeamChannelView(channelId: target.channelId, title: target.title, openThreadId: target.threadRootId) }
                 } label: { EmptyView() }
             )
+            }
+            .background(Theme.bg)
             .navigationTitle("Team")
-            .navigationBarItems(
-                leading: Button { showStatus = true } label: { Text(myStatusLabel).font(.footnote).lineLimit(1) },
-                trailing: HStack(spacing: 16) {
-                    Button { showSaved = true } label: { Image(systemName: "bookmark") } // BOREAL_DIALER_TEAM_PHASE_C_v673
-                    Button { showSearch = true } label: { Image(systemName: "magnifyingglass") }
-                    Button { showBrowse = true } label: { Image(systemName: "number") }
-                    Button { showNew = true } label: { Image(systemName: "square.and.pencil") }
-                }
-            )
+            // BOREAL_DIALER_v803_UI - the header above replaces the navigation bar
+            // on this screen; conversations pushed from here show their own bar.
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showBrowse) { TeamBrowseView { id, title in openLater(TeamOpenTarget(channelId: id, title: title, threadRootId: nil)) } }
             .sheet(isPresented: $showSearch) { TeamSearchView { id, title, root in openLater(TeamOpenTarget(channelId: id, title: title, threadRootId: root)) } }
             .sheet(isPresented: $showSaved) { TeamSavedView { id, title, root in openLater(TeamOpenTarget(channelId: id, title: title, threadRootId: root)) } } // BOREAL_DIALER_TEAM_PHASE_C_v673
@@ -534,7 +629,8 @@ struct TeamView: View {
                 await TeamPhaseBStore.shared.loadStatuses()
             }
         }
-        .onDisappear { store.disconnect() }
+        // BOREAL_DIALER_v803_MENTIONS - no disconnect when leaving the tab: the
+        // socket stays open (RootTabView) so @mentions alert from any tab.
     }
 }
 
@@ -573,6 +669,35 @@ struct TeamChannelView: View {
     @State private var showPins = false
     @State private var showChannelSearch = false
     @State private var showSeenBy = false
+    // BOREAL_DIALER_v803_MENTIONS - picked mention ids and the "@partial" being typed.
+    @State private var mentionIds: [String] = []
+    @State private var mentionQuery: String?
+
+    private var draftIsBlank: Bool { draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    // BOREAL_DIALER_v803_MENTIONS
+    private var mentionNames: [String] { store.users.map { $0.name } + ["Maya"] }
+
+    private var mentionCandidates: [TeamUser] {
+        guard let query = mentionQuery else { return [] }
+        return TeamMentionDraft.candidates(users: store.users, memberIds: channel?.member_ids ?? [],
+                                           me: store.myId, query: query)
+    }
+
+    private func pickMention(_ user: TeamUser) {
+        draft = TeamMentionDraft.insert(name: user.name, into: draft)
+        if !mentionIds.contains(user.id) { mentionIds.append(user.id) }
+        mentionQuery = nil
+    }
+
+    private func sendDraft() {
+        let body = draft
+        let ids = TeamMentionDraft.outgoing(ids: mentionIds, draft: body, name: { store.name(for: $0) })
+        draft = ""
+        mentionIds = []
+        mentionQuery = nil
+        Task { await store.send(body, mentions: ids) }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -593,16 +718,21 @@ struct TeamChannelView: View {
                             VStack(alignment: mine ? .trailing : .leading, spacing: 2) {
                                 if !mine {
                                     Text(message.bot ?? store.name(for: message.sender_id))
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(Theme.muted)
                                 }
-                                TeamFormattedText(text: message.deleted_at == nil ? message.body : "Message deleted")
+                                // BOREAL_DIALER_v803_UI - mockup bubbles (14.5pt, 18pt corners,
+                                // green-deep outgoing, surface3 incoming).
+                                // BOREAL_DIALER_v803_MENTIONS - @Name tokens highlighted.
+                                TeamFormattedText(text: message.deleted_at == nil ? message.body : "Message deleted",
+                                                  mentionNames: mentionNames)
+                                    .font(.system(size: 14.5))
                                     .italic(message.deleted_at != nil)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(mine ? Color.accentColor : Color(.systemGray5))
-                                    .foregroundColor(mine ? .white : .primary)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .padding(.horizontal, 13)
+                                    .padding(.vertical, 9)
+                                    .background(mine ? Theme.greenDeep : Theme.surface3)
+                                    .foregroundColor(Theme.text)
+                                    .clipShape(RoundedRectangle(cornerRadius: 18))
                                     .contextMenu {
                                         Button { threadTarget = message.id } label: { Label("Reply in thread", systemImage: "bubble.left.and.bubble.right") }
                                         Button { Task { await extras.markUnread(channelId, messageId: message.id) } } label: { Label("Mark unread from here", systemImage: "circle.fill") }
@@ -642,31 +772,61 @@ struct TeamChannelView: View {
             }
             .onChange(of: store.messages.last?.id) { _ in scrollToLatest(proxy, animated: true) }
             }
-            Divider()
+            Rectangle().fill(Theme.line).frame(height: 1)
             TeamTypingLine(channelId: channelId) // BOREAL_DIALER_TEAM_PARITY_v789
-            HStack {
+            // BOREAL_DIALER_v803_MENTIONS - member list while an @mention is typed.
+            if mentionQuery != nil && !mentionCandidates.isEmpty {
+                TeamMentionSuggestions(users: mentionCandidates) { user in
+                    pickMention(user)
+                }
+            }
+            // BOREAL_DIALER_v803_UI - mockup composer: rounded field + round green send.
+            HStack(spacing: 10) {
                 // BOREAL_DIALER_READ_THIS_v687 - pin = send the next message as Read this.
                 Button { store.readThisNext.toggle() } label: {
-                    Image(systemName: store.readThisNext ? "pin.fill" : "pin").foregroundColor(store.readThisNext ? .orange : .secondary)
+                    Image(systemName: store.readThisNext ? "pin.fill" : "pin")
+                        .foregroundColor(store.readThisNext ? .orange : Theme.muted)
+                        .frame(width: 32, height: 36)
                 }
                 .accessibilityLabel(store.readThisNext ? "Read this is on" : "Send as Read this")
-                TextField(channel?.archived_at != nil ? "This channel is archived" : (store.readThisNext ? "Read this: message" : "Message or @Maya"), text: $draft, axis: .vertical)
+                TextField(channel?.archived_at != nil ? "This channel is archived" : (store.readThisNext ? "Read this: message" : "Message, @name or @Maya"), text: $draft, axis: .vertical)
                     .lineLimit(1...6)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 15))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(RoundedRectangle(cornerRadius: 20).fill(Theme.surface2))
+                    .overlay(RoundedRectangle(cornerRadius: 20).stroke(Theme.line2, lineWidth: 1))
                     .disabled(channel?.archived_at != nil)
                     // BOREAL_DIALER_TEAM_PARITY_v789 - tell the others, at most every 3 s.
-                    .onChange(of: draft) { text in parity.userTyped(in: channelId, draft: text) }
+                    .onChange(of: draft) { text in
+                        parity.userTyped(in: channelId, draft: text)
+                        mentionQuery = TeamMentionDraft.query(in: text) // BOREAL_DIALER_v803_MENTIONS
+                    }
                 Button {
-                    let body = draft
-                    draft = ""
-                    Task { await store.send(body) }
+                    sendDraft()
                 } label: {
-                    Image(systemName: "arrow.up.circle.fill").font(.title2)
+                    Image(systemName: "paperplane.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(Theme.green.opacity(draftIsBlank ? 0.4 : 1)))
                 }
-                .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
+                .buttonStyle(.plain)
+                .disabled(draftIsBlank)
+                .accessibilityLabel("Send")
             }
-            .padding(8)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
         }
+        .background(Theme.bg)
+        // BOREAL_DIALER_v803_MENTIONS - which conversation is on screen, so a
+        // mention here does not also raise a notification.
+        .onAppear { store.visibleChannelId = channelId }
+        .onDisappear {
+            if store.visibleChannelId == channelId { store.visibleChannelId = nil }
+        }
+        .toolbar(.visible, for: .navigationBar)
         .overlay(alignment: .bottom) {
             if let toast = phaseC.toast {
                 Text(toast)

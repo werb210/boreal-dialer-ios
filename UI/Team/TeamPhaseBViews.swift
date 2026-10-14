@@ -12,13 +12,22 @@ struct TeamThreadView: View {
     @ObservedObject var extras = TeamPhaseBStore.shared
     @State var draft = ""
     @State var sending = false
+    // BOREAL_DIALER_v803_MENTIONS - @mention autocomplete in thread replies.
+    @State var mentionIds: [String] = []
+    @State var mentionQuery: String? = nil
+
+    var mentionCandidates: [TeamUser] {
+        guard let query = mentionQuery else { return [] }
+        let members = team.channels.first(where: { $0.id == channelId })?.member_ids ?? []
+        return TeamMentionDraft.candidates(users: team.users, memberIds: members, me: team.myId, query: query)
+    }
 
     func row(_ message: TeamMessage) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(message.sender_id == team.myId ? "You" : (message.bot ?? team.name(for: message.sender_id)))
                 .font(.caption)
                 .foregroundColor(.secondary)
-            TeamFormattedText(text: message.body)
+            TeamFormattedText(text: message.body, mentionNames: team.users.map { $0.name } + ["Maya"]) // BOREAL_DIALER_v803_MENTIONS
             TeamCardsView(text: message.body) // BOREAL_DIALER_TEAM_PHASE_C_v673
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -51,16 +60,30 @@ struct TeamThreadView: View {
                 }
             }
             Divider()
+            // BOREAL_DIALER_v803_MENTIONS
+            if mentionQuery != nil && !mentionCandidates.isEmpty {
+                TeamMentionSuggestions(users: mentionCandidates) { user in
+                    draft = TeamMentionDraft.insert(name: user.name, into: draft)
+                    if !mentionIds.contains(user.id) { mentionIds.append(user.id) }
+                    mentionQuery = nil
+                }
+            }
             HStack(alignment: .bottom) {
                 TextField(archived ? "This channel is archived" : "Reply", text: $draft, axis: .vertical)
                     .lineLimit(1...5)
                     .textFieldStyle(.roundedBorder)
                     .disabled(archived)
+                    .onChange(of: draft) { text in mentionQuery = TeamMentionDraft.query(in: text) } // BOREAL_DIALER_v803_MENTIONS
                 Button {
                     let text = draft
+                    let ids = TeamMentionDraft.outgoing(ids: mentionIds, draft: text, name: { team.name(for: $0) })
                     sending = true
                     Task {
-                        if await extras.reply(channelId: channelId, rootId: rootId, body: text) { draft = "" }
+                        if await extras.reply(channelId: channelId, rootId: rootId, body: text, mentions: ids) {
+                            draft = ""
+                            mentionIds = []
+                            mentionQuery = nil
+                        }
                         sending = false
                     }
                 } label: {
@@ -73,6 +96,11 @@ struct TeamThreadView: View {
         .navigationTitle("Thread")
         .navigationBarTitleDisplayMode(.inline)
         .task { await extras.loadThread(channelId: channelId, rootId: rootId) }
+        // BOREAL_DIALER_v803_MENTIONS - this conversation is on screen.
+        .onAppear { team.visibleChannelId = channelId }
+        .onDisappear {
+            if team.visibleChannelId == channelId { team.visibleChannelId = nil }
+        }
     }
 }
 

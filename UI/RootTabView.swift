@@ -1,9 +1,11 @@
 import SwiftUI
 
-// boreal-dialer-ios v4 — top tab strip: Calls / Messages / SMS / Team / Notifications.
+// boreal-dialer-ios v4 - top tab strip: Calls / Contacts / Messages / SMS / Team / Calendar.
 struct RootTabView: View {
     // BOREAL_DIALER_ACCOUNT_SHEET_v42
-    @State private var showAccount = false
+    // BOREAL_DIALER_v803_UI - the account button no longer sits at the end of
+    // the rail (it crowded Team and Calendar off-screen); it lives in the Calls
+    // header next to Keypad / Recents / Voicemail.
 
     enum Tab: String, CaseIterable {
         // BOREAL_DIALER_CONTACTS_TAB_v7
@@ -14,45 +16,40 @@ struct RootTabView: View {
 
     @State private var tab: Tab = .calls
     @ObservedObject private var deepLinks = DeepLinkCoordinator.shared
+    // BOREAL_DIALER_v803_UI - drives the green dot on the Messages pill.
+    @ObservedObject private var inbox = InboxUnreadStore.shared
 
     var body: some View {
         VStack(spacing: 0) {
             OfflineStatusBar() // BOREAL_DIALER_OFFLINE_v303
             // BOREAL_DIALER_MOCKUP_LAYOUT_v60 - mockup tab strip: pills sized to their
-            // text, 8 pt apart, semibold; the account button sits at the row's end.
-            HStack(spacing: 8) {
+            // text, 8 pt apart, semibold.
+            // BOREAL_DIALER_v803_UI - just the six pills, horizontally scrollable,
+            // and the selected pill is scrolled into view.
+            ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(Tab.allCases, id: \.self) { t in
                             Button {
                                 tab = t
                             } label: {
-                                Text(t.rawValue)
-                                    .font(.system(size: 13.5, weight: .semibold))
-                                    .padding(.horizontal, 15)
-                                    .padding(.vertical, 9)
-                                    .background(Capsule().fill(tab == t ? Theme.green : Color.clear))
-                                    .overlay(Capsule().stroke(tab == t ? Color.clear : Theme.line2, lineWidth: 1))
-                                    .foregroundColor(tab == t ? Theme.onGreen : Theme.muted)
+                                tabPill(t)
                             }
                             .buttonStyle(.plain)
+                            .id(t)
                         }
                     }
-                    .padding(.leading, 16)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 6)
+                    .padding(.bottom, 10)
                 }
-                Button {
-                    showAccount = true
-                } label: {
-                    Image(systemName: "person.crop.circle")
-                        .font(.system(size: 22))
-                        .foregroundColor(Theme.muted)
+                .onChange(of: tab) { selected in
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        proxy.scrollTo(selected, anchor: .center)
+                    }
                 }
-                .buttonStyle(.plain)
-                .padding(.trailing, 14)
-                .accessibilityLabel("Account")
             }
-            Divider().overlay(Theme.line)
+            Rectangle().fill(Theme.line).frame(height: 1)
 
             Group {
                 switch tab {
@@ -67,9 +64,45 @@ struct RootTabView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .sheet(isPresented: $showAccount) { AccountSheet() }
         .onChange(of: deepLinks.pending) { link in
             if link != nil { tab = .calls }
         }
+        // BOREAL_DIALER_v803_MENTIONS - keep the Team socket open on every tab so
+        // an @mention can raise a local alert while the Team tab is not showing.
+        .task {
+            TeamStore.shared.connect()
+            await TeamStore.shared.loadUsers()
+        }
+        // Signed out: RootTabView goes away, and so does the socket.
+        .onDisappear { TeamStore.shared.disconnect() }
+        // BOREAL_DIALER_v803_UI - unread dot for Messages, refreshed every two minutes.
+        .task {
+            while !Task.isCancelled {
+                await inbox.refresh()
+                try? await Task.sleep(nanoseconds: 120_000_000_000)
+            }
+        }
+    }
+
+    // BOREAL_DIALER_v803_UI - the mockup's .tab pill: 13.5pt semibold, 9x15,
+    // capsule; the active pill is solid green with dark text.
+    private func tabPill(_ t: Tab) -> some View {
+        let active = tab == t
+        return HStack(spacing: 7) {
+            Text(t.rawValue)
+                .font(.system(size: 13.5, weight: .semibold))
+            if t == .messages && inbox.hasUnread {
+                Circle()
+                    .fill(active ? Theme.onGreen : Theme.greenBright)
+                    .frame(width: 7, height: 7)
+                    .accessibilityLabel("Unread")
+            }
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 9)
+        .background(Capsule().fill(active ? Theme.green : Color.clear))
+        .overlay(Capsule().stroke(active ? Theme.green : Theme.line2, lineWidth: 1))
+        .foregroundColor(active ? Theme.onGreen : Theme.muted)
+        .contentShape(Capsule())
     }
 }

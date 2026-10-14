@@ -36,7 +36,9 @@ struct BorealWatchProvider: TimelineProvider {
         let defaults = UserDefaults(suiteName: appGroup)
         return BorealWatchEntry(
             date: Date(),
-            status: defaults?.string(forKey: "presence.status") ?? "away",
+            // BOREAL_DIALER_v804_WATCH - no snapshot (signed out, never synced) reads as
+            // Offline rather than Busy.
+            status: defaults?.string(forKey: "presence.status") ?? "offline",
             missedCalls: defaults?.integer(forKey: "calls.missed") ?? 0,
             tasksDue: defaults?.integer(forKey: "tasks.due") ?? 0,
             meeting: Self.nextMeeting(from: defaults)
@@ -74,21 +76,47 @@ struct BorealWatchWidgetView: View {
         case "available": return "phone.circle.fill"
         case "on_call": return "phone.connection.fill"
         case "busy": return "phone.down.fill" // BOREAL_DIALER_WATCH_FACE_v371 - server status set is available|busy|offline
+        case "in_meeting", "away": return "phone.down.fill" // BOREAL_DIALER_v804_WATCH - shown as Busy
         default: return "moon.zzz.fill"
+        }
+    }
+
+    // BOREAL_DIALER_v804_WATCH - three words a person reads at a glance instead
+    // of the server's raw status ("on_call", "in_meeting", ...).
+    private enum Presence { case available, busy, offline }
+    private var presence: Presence {
+        switch entry.status.lowercased() {
+        case "available": return .available
+        case "busy", "on_call", "in_meeting", "away": return .busy
+        default: return .offline
+        }
+    }
+    private var presenceLabel: String {
+        switch presence {
+        case .available: return "Available"
+        case .busy: return "Busy"
+        case .offline: return "Offline"
+        }
+    }
+    private var presenceColor: Color {
+        switch presence {
+        case .available: return Color(red: 84.0 / 255.0, green: 208.0 / 255.0, blue: 138.0 / 255.0) // #54D08A
+        case .busy: return Color(red: 1.0, green: 0.75, blue: 0.0) // amber
+        case .offline: return .gray
         }
     }
 
     var body: some View {
         switch family {
         case .accessoryCircular:
-            ZStack { AccessoryWidgetBackground(); Image(systemName: symbol) }
+            ZStack { AccessoryWidgetBackground(); Image(systemName: symbol).foregroundStyle(presenceColor) }
         case .accessoryInline:
-            Label(entry.status.replacingOccurrences(of: "_", with: " "), systemImage: symbol)
+            Label(presenceLabel, systemImage: symbol)
         default:
             HStack(spacing: 6) {
-                Image(systemName: symbol)
+                Image(systemName: symbol).foregroundStyle(presenceColor)
                 VStack(alignment: .leading) {
-                    Text(entry.status.replacingOccurrences(of: "_", with: " ")).font(.headline)
+                    Text(presenceLabel).font(.headline).foregroundStyle(presenceColor)
                     if entry.missedCalls > 0 {
                         Text("\(entry.missedCalls) missed").font(.caption).foregroundStyle(.secondary)
                     }

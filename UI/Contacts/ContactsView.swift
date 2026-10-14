@@ -212,25 +212,16 @@ struct ContactsView: View {
         NavigationStack {
         VStack(spacing: 0) {
             // BOREAL_DIALER_CONTACTS_PRESENTATION_v24
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Contacts").font(.headline)
-                    Text("Synced from CRM · \(viewModel.totalCount)")
-                        .font(.caption).foregroundColor(Theme.muted)
-                }
-                Spacer()
+            // BOREAL_DIALER_v803_UI - mockup view header (24pt title, 12pt subtitle).
+            ViewHeader(title: "Contacts", subtitle: "Synced from CRM \u{00B7} \(viewModel.totalCount)") {
                 // BOREAL_DIALER_CREATE_CONTACT_v34
                 Button {
                     showNewContact = true
                 } label: {
-                    Text("+ New")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(Theme.green)
+                    HeaderActionLabel(text: "+ New")
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal)
-            .padding(.top, 10)
 
             HStack {
                 Image(systemName: "magnifyingglass").foregroundColor(.secondary)
@@ -310,6 +301,8 @@ struct ContactsView: View {
                 .refreshable { await viewModel.load() }
             }
         }
+        .background(Theme.bg)
+        .toolbar(.hidden, for: .navigationBar) // BOREAL_DIALER_v803_UI - the header above is the title
         .task { await viewModel.load() }
         .sheet(item: $smsRecipient) { contact in
             SMSComposeSheet(contact: contact)
@@ -331,8 +324,8 @@ private struct ContactRow: View {
     @Environment(\.openURL) private var openURL
 
     var body: some View {
-        HStack(spacing: 12) {
-            AvatarCircle(name: contact.displayName, size: 38)
+        HStack(spacing: 13) {
+            AvatarCircle(name: contact.displayName, size: 42) // BOREAL_DIALER_v803_UI
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(contact.displayName).rowTitle()
@@ -456,11 +449,11 @@ private struct CompanyRow: View {
     let company: CRMCompany
 
     var body: some View {
-        HStack(spacing: 12) {
-            AvatarCircle(name: company.displayName, size: 38)
+        HStack(spacing: 13) {
+            AvatarCircle(name: company.displayName, size: 42) // BOREAL_DIALER_v803_UI
             VStack(alignment: .leading, spacing: 2) {
-                Text(company.displayName).font(.body.weight(.semibold))
-                Text(company.subtitle).font(.subheadline).foregroundColor(.secondary)
+                Text(company.displayName).rowTitle()
+                Text(company.subtitle).rowSubtitle()
             }
             Spacer()
             Image(systemName: "building.2")

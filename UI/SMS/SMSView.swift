@@ -50,6 +50,20 @@ struct SMSThread: Identifiable, Decodable {
     var unread: Int { unreadCount ?? 0 }
 }
 
+// BOREAL_DIALER_v803_UI - lets the unified Messages inbox open an SMS row in
+// the SMS conversation screen.
+extension SMSThread {
+    init(contactId: String?, displayName: String?, phone: String?, unreadCount: Int?) {
+        self.threadKey = nil
+        self.contactId = contactId
+        self.displayName = displayName
+        self.phone = phone
+        self.lastAt = nil
+        self.lastBody = nil
+        self.unreadCount = unreadCount
+    }
+}
+
 struct SMSMessage: Identifiable, Decodable {
     let id: String
     let contactId: String?
@@ -115,33 +129,9 @@ struct SMSView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if viewModel.loading && viewModel.threads.isEmpty {
-                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if viewModel.threads.isEmpty {
-                    Text(viewModel.error ?? "No conversations")
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    List(viewModel.threads) { thread in
-                        NavigationLink {
-                            SMSThreadView(thread: thread) {
-                                Task { await viewModel.load() }
-                            }
-                        } label: {
-                            SMSThreadRow(thread: thread)
-                        }
-                    }
-                    .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-                .background(Theme.bg)
-                    .refreshable { await viewModel.load() }
-                }
-            }
-            .navigationTitle("SMS")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
+            VStack(spacing: 0) {
+                // BOREAL_DIALER_v803_UI - mockup view header with a green Compose action.
+                ViewHeader(title: "SMS", subtitle: "Text conversations") {
                     // BOREAL_DIALER_SMS_NEW_MESSAGE_v33
                     Menu {
                         Button {
@@ -155,10 +145,38 @@ struct SMSView: View {
                             Label("Broadcast", systemImage: "person.2.fill")
                         }
                     } label: {
-                        Image(systemName: "square.and.pencil")
+                        HeaderActionLabel(text: "Compose")
                     }
+                    .accessibilityLabel("Compose")
+                }
+
+                if viewModel.loading && viewModel.threads.isEmpty {
+                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if viewModel.threads.isEmpty {
+                    Text(viewModel.error ?? "No conversations")
+                        .font(.system(size: 14))
+                        .foregroundColor(Theme.muted)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List(viewModel.threads) { thread in
+                        NavigationLink {
+                            SMSThreadView(thread: thread) {
+                                Task { await viewModel.load() }
+                            }
+                        } label: {
+                            SMSThreadRow(thread: thread)
+                        }
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 0, leading: 18, bottom: 0, trailing: 18))
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .background(Theme.bg)
+                    .refreshable { await viewModel.load() }
                 }
             }
+            .background(Theme.bg)
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showBroadcast) {
                 SMSBroadcastView()
             }
@@ -177,22 +195,31 @@ private struct SMSThreadRow: View {
     let thread: SMSThread
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        // BOREAL_DIALER_v803_UI - same row as the Messages inbox: 46pt avatar,
+        // name + SMS chip, preview, time over the unread badge.
+        HStack(alignment: .center, spacing: 13) {
             // BOREAL_DIALER_ROW_SEGMENT_STYLE_v31
-            AvatarCircle(name: thread.title, size: 40)
+            AvatarCircle(name: thread.title, size: 46)
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(thread.title).rowTitle()
-                if let preview = thread.lastBody, !preview.isEmpty {
-                    Text(preview).rowSubtitle().lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 7) {
+                    Text(thread.title).rowTitle().lineLimit(1)
+                    ChannelChip(label: "SMS")
                 }
+                Text((thread.lastBody ?? "").ifEmpty(" "))
+                    .rowSubtitle()
+                    .lineLimit(1)
             }
-            Spacer()
-            if thread.unread > 0 {
+            Spacer(minLength: 6)
+            VStack(alignment: .trailing, spacing: 6) {
+                Text(RowTime.label(thread.lastAt))
+                    .font(.system(size: 12))
+                    .foregroundColor(Theme.faint)
                 CountBadge(count: thread.unread)
+                    .opacity(thread.unread > 0 ? 1 : 0)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 11)
     }
 }
 
@@ -276,34 +303,54 @@ struct SMSThreadView: View {
             // is what makes ComposerBar render the templates button; without it
             // the button is simply absent, which is why this thread had none.
             // BOREAL_DIALER_BLOCK_v501_SMS_PARITY - attach + length/text counter (portal v498/v500)
-            HStack(spacing: 14) {
+            // BOREAL_DIALER_v803_UI - tidier attach row: two small outlined pills
+            // (Photo, PDF), the attached file as a removable chip, the counter right.
+            HStack(spacing: 8) {
                 PhotosPicker(selection: $photoItem, matching: .images) {
                     Label("Photo", systemImage: "photo")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundColor(Theme.muted)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .overlay(Capsule().stroke(Theme.line2, lineWidth: 1))
                 }
                 Button {
                     showingPdfImporter = true
                 } label: {
                     Label("PDF", systemImage: "doc")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundColor(Theme.muted)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .overlay(Capsule().stroke(Theme.line2, lineWidth: 1))
                 }
+                .buttonStyle(.plain)
                 if let media {
-                    Text(media.name).lineLimit(1).foregroundColor(Theme.green)
-                    Button {
-                        self.media = nil
-                        photoItem = nil
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
+                    HStack(spacing: 4) {
+                        Text(media.name).lineLimit(1).foregroundColor(Theme.greenBright)
+                        Button {
+                            self.media = nil
+                            photoItem = nil
+                        } label: {
+                            Image(systemName: "xmark.circle.fill").foregroundColor(Theme.muted)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Remove attachment")
                     }
-                    .accessibilityLabel("Remove attachment")
+                    .font(.system(size: 12.5))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(Theme.surface2))
                 }
                 Spacer()
                 if !draftIsEmpty {
                     Text(SmsSegments.label(draft))
+                        .font(.system(size: 12))
                         .foregroundColor(SmsSegments.count(draft).segments > 1 ? .orange : Theme.faint)
                 }
             }
-            .font(.caption)
-            .padding(.horizontal)
-            .padding(.top, 6)
+            .padding(.horizontal, 14)
+            .padding(.top, 8)
             .onChange(of: photoItem) { item in
                 Task { await loadPhoto(item) }
             }
@@ -329,6 +376,39 @@ struct SMSThreadView: View {
         .background(Theme.bg)
         .navigationTitle(thread.title)
         .navigationBarTitleDisplayMode(.inline)
+        // BOREAL_DIALER_v803_UI - mockup thread header in the navigation bar (so
+        // the system back chevron and swipe-back keep working): 38pt avatar, name,
+        // number, and a round call button that dials this number.
+        .toolbar(.visible, for: .navigationBar)
+        .toolbarBackground(Theme.bg, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: 11) {
+                    AvatarCircle(name: thread.title, size: 38)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(thread.title)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(Theme.text)
+                            .lineLimit(1)
+                        Text(headerSubtitle)
+                            .font(.system(size: 12))
+                            .foregroundColor(Theme.faint)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                RoundIconButton(systemImage: "phone.fill", accessibility: "Call \(thread.title)") {
+                    if let phone = thread.phone, !phone.isEmpty {
+                        CallManager.shared.startCall(to: phone)
+                    }
+                }
+                .disabled((thread.phone ?? "").isEmpty)
+            }
+        }
         .task {
             await loadMessages()
             await markRead()
@@ -337,6 +417,13 @@ struct SMSThreadView: View {
         // client's typing is polled while the thread is open.
         .onChange(of: draft) { text in typing.userTyped(contactId: thread.contactId, draft: text) }
         .task(id: thread.contactId) { await typing.poll(contactId: thread.contactId) }
+    }
+
+    // BOREAL_DIALER_v803_UI - "+1 (403) 555-0142" under the name in the header.
+    private var headerSubtitle: String {
+        let formatted = PhoneFormat.display(thread.phone)
+        if formatted.hasPrefix("(") { return "+1 " + formatted }
+        return formatted
     }
 
     private var threadQuery: String? {

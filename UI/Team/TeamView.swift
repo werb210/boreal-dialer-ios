@@ -443,6 +443,16 @@ struct TeamView: View {
         }
     }
 
+    // BOREAL_DIALER_v817_MESSAGING - the search box filters chats as well as staff.
+    private var filteredChannels: [TeamChannel] {
+        let query = search.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !query.isEmpty else { return store.channels }
+        return store.channels.filter { channel in
+            store.label(channel).lowercased().contains(query)
+                || (channel.last_message?.body.lowercased().contains(query) ?? false)
+        }
+    }
+
     // BOREAL_DIALER_v803_UI - the four unlabelled top icons became labelled pills.
     private func toolPill(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
@@ -482,7 +492,7 @@ struct TeamView: View {
                 Section {
                     HStack {
                         Image(systemName: "magnifyingglass").foregroundColor(Theme.muted)
-                        TextField("Search staff", text: $search)
+                        TextField("Search staff and chats", text: $search)
                             .textFieldStyle(.plain)
                             .font(.system(size: 14))
                             .autocorrectionDisabled()
@@ -542,9 +552,9 @@ struct TeamView: View {
                     }
                 }
 
-                if !store.channels.isEmpty {
+                if !filteredChannels.isEmpty {
                     Section {
-                        ForEach(store.channels) { channel in
+                        ForEach(filteredChannels) { channel in
                             NavigationLink {
                                 TeamChannelView(channelId: channel.id, title: store.label(channel))
                             } label: {

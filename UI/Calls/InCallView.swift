@@ -99,8 +99,10 @@ struct InCallView: View {
             Spacer(minLength: 24)
 
             Button {
-                TwilioVoiceManager.shared.disconnect()
-                VoiceEngine.shared.handleDisconnect()
+                // BOREAL_DIALER_v817_CALLS - hang up through CallKit
+                // (CXEndCallAction), which disconnects the Twilio leg; ending
+                // only the Twilio leg left CallKit holding a stale call.
+                VoiceEngine.shared.hangUp()
                 conference.clear()
                 viewModel.clear()
             } label: {

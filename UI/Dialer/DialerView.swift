@@ -134,6 +134,19 @@ struct DialerView: View {
                 durationText: nil
             ) { _ in voiceEngine.finishedCall = nil }
         }
+        // BOREAL_DIALER_v817_CALLS - say why a call could not be placed (e.g.
+        // microphone access is off) instead of failing silently.
+        .alert(
+            "Can't place call",
+            isPresented: Binding(
+                get: { voiceEngine.callError != nil },
+                set: { if !$0 { voiceEngine.callError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { voiceEngine.callError = nil }
+        } message: {
+            Text(voiceEngine.callError ?? "")
+        }
     }
 
     private func applyPendingDeepLink() {

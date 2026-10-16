@@ -89,10 +89,20 @@ final class SMSNewMessageViewModel: ObservableObject {
 
     // A contact wins over a typed number; the number is the fallback for people
     // who are not in the CRM yet.
+    // BOREAL_DIALER_v817_MESSAGING - the number goes out in E.164 (+15875815330); Twilio
+    // rejected the raw "5875815330" / "(587) 581-5330", so texting a new number never worked.
     var resolvedNumber: String? {
-        if let selected, let phone = selected.callablePhone { return phone }
-        let digits = manualNumber.filter(\.isNumber)
-        return digits.count >= 10 ? manualNumber : nil
+        if let selected, let phone = selected.callablePhone { return PhoneFormat.e164(phone) }
+        return typedNumber
+    }
+
+    /// A full phone number typed in the To field (10+ digits and nothing but phone characters).
+    var typedNumber: String? {
+        let trimmed = manualNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+        let phoneCharacters = Set("0123456789+-(). ")
+        guard !trimmed.isEmpty, trimmed.allSatisfy({ phoneCharacters.contains($0) }) else { return nil }
+        let digits = trimmed.filter(\.isNumber)
+        return digits.count >= 10 ? PhoneFormat.e164(trimmed) : nil
     }
 
     var canSend: Bool {
@@ -191,9 +201,12 @@ struct SMSNewMessageView: View {
                         .padding(.vertical, 5)
                         .background(Capsule().fill(Theme.surface3))
                     } else {
+                        // BOREAL_DIALER_v817_MESSAGING - the phone pad made it impossible to
+                        // type a name; the normal keyboard takes both names and numbers.
                         TextField("Name or number", text: $viewModel.query)
                             .textFieldStyle(.plain)
-                            .keyboardType(.phonePad)
+                            .keyboardType(.default)
+                            .textInputAutocapitalization(.words)
                             .autocorrectionDisabled()
                             .onChange(of: viewModel.query) { value in
                                 // Digits mean they are typing a number rather
@@ -210,7 +223,25 @@ struct SMSNewMessageView: View {
                 Rectangle().fill(Theme.line).frame(height: 1)
 
                 if viewModel.selected == nil {
-                    List(viewModel.reachable) { contact in
+                    List {
+                        // BOREAL_DIALER_v817_MESSAGING - a typed number is always offered,
+                        // whether or not it belongs to a contact.
+                        if let number = viewModel.typedNumber {
+                            HStack(spacing: 13) {
+                                Image(systemName: "number")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(Theme.green)
+                                    .frame(width: 38, height: 38)
+                                    .background(Circle().fill(Theme.surface2))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Text " + PhoneFormat.display(number)).rowTitle()
+                                    Text("New number - type your message below").rowSubtitle()
+                                }
+                                Spacer()
+                            }
+                            .listRowBackground(Color.clear)
+                        }
+                        ForEach(viewModel.reachable) { contact in
                         Button {
                             viewModel.selected = contact
                         } label: {
@@ -227,6 +258,7 @@ struct SMSNewMessageView: View {
                         }
                         .buttonStyle(.plain)
                         .listRowBackground(Color.clear)
+                        }
                     }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)

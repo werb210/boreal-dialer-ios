@@ -46,7 +46,13 @@ struct SMSThread: Identifiable, Decodable {
     }
 
     var id: String { threadKey ?? contactId ?? phone ?? UUID().uuidString }
-    var title: String { displayName ?? phone ?? "Unknown" }
+    var title: String {
+        // BOREAL_DIALER_v817_MESSAGING - a contact named by its number shows formatted.
+        if let displayName, !displayName.isEmpty {
+            return displayName.hasPrefix("+") ? PhoneFormat.display(displayName) : displayName
+        }
+        return phone.map { PhoneFormat.display($0) } ?? "Unknown"
+    }
     var unread: Int { unreadCount ?? 0 }
 }
 
@@ -105,12 +111,30 @@ final class SMSViewModel: ObservableObject {
     @Published var threads: [SMSThread] = []
     @Published var loading = false
     @Published var error: String?
+    // BOREAL_DIALER_v817_MESSAGING - search by name or number (BF-Server ?q=).
+    @Published var query = ""
+    private var searchTask: Task<Void, Never>?
+
+    func queryChanged() {
+        searchTask?.cancel()
+        searchTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
+            await self?.load()
+        }
+    }
 
     func load() async {
         loading = true
         error = nil
         do {
-            let request = try APIClient.shared.makeRequest(path: "/communications/sms")
+            var path = "/communications/sms"
+            let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty,
+               let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
+                path += "?q=\(encoded)"
+            }
+            let request = try APIClient.shared.makeRequest(path: path)
             let data = try await APIClient.shared.makeAuthorizedRequest(request)
             threads = try JSONDecoder().decode(ThreadsEnvelope.self, from: data).conversations
         } catch {
@@ -150,10 +174,14 @@ struct SMSView: View {
                     .accessibilityLabel("Compose")
                 }
 
+                // BOREAL_DIALER_v817_MESSAGING
+                ListSearchField(placeholder: "Search by name or number", text: $viewModel.query)
+                    .onChange(of: viewModel.query) { _ in viewModel.queryChanged() }
+
                 if viewModel.loading && viewModel.threads.isEmpty {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if viewModel.threads.isEmpty {
-                    Text(viewModel.error ?? "No conversations")
+                    Text(viewModel.error ?? (viewModel.query.isEmpty ? "No conversations" : "No matches"))
                         .font(.system(size: 14))
                         .foregroundColor(Theme.muted)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)

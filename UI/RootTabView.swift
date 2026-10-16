@@ -1,6 +1,6 @@
 import SwiftUI
 
-// boreal-dialer-ios v4 - top tab strip: Calls / Contacts / Messages / SMS / Team / Calendar.
+// boreal-dialer-ios v4 - top tab strip: Calls / Contacts / SMS / Messages / Team / Calendar.
 struct RootTabView: View {
     // BOREAL_DIALER_ACCOUNT_SHEET_v42
     // BOREAL_DIALER_v803_UI - the account button no longer sits at the end of
@@ -10,8 +10,10 @@ struct RootTabView: View {
     enum Tab: String, CaseIterable {
         // BOREAL_DIALER_CONTACTS_TAB_v7
         // BOREAL_DIALER_CALENDAR_TAB_v8 - the six tabs from the concept mockup.
-        case calls = "Calls", contacts = "Contacts", messages = "Messages",
-             sms = "SMS", team = "Team", calendar = "Calendar"
+        // BOREAL_DIALER_v817_MESSAGING - same order as the portal's Communications tabs:
+        // SMS (texts), Messages (client-portal chats), Team (staff chat).
+        case calls = "Calls", contacts = "Contacts", sms = "SMS",
+             messages = "Messages", team = "Team", calendar = "Calendar"
     }
 
     @State private var tab: Tab = .calls
@@ -56,8 +58,8 @@ struct RootTabView: View {
                 // BOREAL_DIALER_CALLS_TAB_v11 - Keypad / Recents / Voicemail.
                 case .calls: CallsView()
                 case .contacts: ContactsView()
-                case .messages: MessagesView()
                 case .sms: SMSView()
+                case .messages: MessagesView()
                 case .team: TeamView()
                 case .calendar: CalendarView()
                 }

@@ -24,18 +24,18 @@ watch_widget = target_block("BorealWatchWidget")
 checks = [
     ('platform: iOS', phone, "BorealDialer must remain an iOS target"),
     ('TARGETED_DEVICE_FAMILY: "1"', phone, "BorealDialer must remain iPhone-only"),
-    ('PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer', phone, "iPhone bundle ID changed"),
+    ('PRODUCT_BUNDLE_IDENTIFIER: com.borealfinancial.dialer', phone, "iPhone bundle ID changed"),
     ('platform: watchOS', watch, "BorealDialerWatch must remain a watchOS target"),
     ('TARGETED_DEVICE_FAMILY: "4"', watch, "BorealDialerWatch must remain Watch-only"),
-    ('PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer.watchkitapp', watch, "Watch bundle ID changed"),
+    ('PRODUCT_BUNDLE_IDENTIFIER: com.borealfinancial.dialer.watchkitapp', watch, "Watch bundle ID changed"),
     ('WKRunsIndependentlyOfCompanionApp: true', watch, "independent Watch mode was disabled"),
-    ('WKCompanionAppBundleIdentifier: financial.boreal.dialer', watch, "Watch companion ID changed"),
+    ('WKCompanionAppBundleIdentifier: com.borealfinancial.dialer', watch, "Watch companion ID changed"),
     ('platform: iOS', call_directory, "Call Directory must remain an iOS target"),
-    ('PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer.calldirectory', call_directory, "Call Directory bundle ID changed"),
+    ('PRODUCT_BUNDLE_IDENTIFIER: com.borealfinancial.dialer.calldirectory', call_directory, "Call Directory bundle ID changed"),
     ('NSExtensionPointIdentifier: com.apple.callkit.call-directory', call_directory, "Call Directory extension point changed"),
     ('platform: watchOS', watch_widget, "Watch widget must remain a watchOS target"),
     ('TARGETED_DEVICE_FAMILY: "4"', watch_widget, "Watch widget must remain Watch-only"),
-    ('PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer.watchkitapp.widget', watch_widget, "Watch widget bundle ID changed"),
+    ('PRODUCT_BUNDLE_IDENTIFIER: com.borealfinancial.dialer.watchkitapp.widget', watch_widget, "Watch widget bundle ID changed"),
     ('NSExtensionPointIdentifier: com.apple.widgetkit-extension', watch_widget, "Watch widget extension point changed"),
 ]
 for expected, block, message in checks:

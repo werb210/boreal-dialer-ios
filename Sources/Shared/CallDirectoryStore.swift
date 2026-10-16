@@ -6,7 +6,7 @@ struct CallDirectoryEntry: Codable, Equatable {
 }
 
 enum CallDirectoryStore {
-    static let appGroupIdentifier = "group.financial.boreal.dialer"
+    static let appGroupIdentifier = "group.com.borealfinancial.dialer"
     private static let fileName = "caller-directory-v1.json"
 
     static func entries() -> [CallDirectoryEntry] {

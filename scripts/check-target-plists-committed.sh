@@ -26,7 +26,7 @@ import plistlib, sys
 # no error anywhere. Watch/BorealWatch.entitlements declared the group in
 # project.yml and lacked it on disk, which would have made every cross-target
 # UserDefaults(suiteName:) read return nil at runtime.
-GROUP = "group.financial.boreal.dialer"
+GROUP = "group.com.borealfinancial.dialer"
 failures = []
 for path in ["Config/BorealDialer.entitlements",
              "Watch/BorealWatch.entitlements",

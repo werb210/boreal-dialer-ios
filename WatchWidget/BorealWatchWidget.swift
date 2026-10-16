@@ -15,7 +15,7 @@ struct BorealWatchEntry: TimelineEntry {
 }
 
 struct BorealWatchProvider: TimelineProvider {
-    private let appGroup = "group.financial.boreal.dialer"
+    private let appGroup = "group.com.borealfinancial.dialer"
 
     // BOREAL_DIALER_WIDGET_SELF_CONTAINED_v226
     // Read straight from the app group because this target compiles only

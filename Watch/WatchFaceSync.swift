@@ -9,7 +9,7 @@ import WatchKit
 import WidgetKit
 
 enum WatchFaceSync {
-    static let appGroup = "group.financial.boreal.dialer"
+    static let appGroup = "group.com.borealfinancial.dialer"
     static let refreshTaskID = "boreal.face"
 
     struct Face: Decodable, Equatable {

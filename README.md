@@ -17,7 +17,7 @@ Twilio Voice does not provide a watchOS client SDK, so the Watch target neither 
 - [Native API audit](DIALER_API_CONTRACT.md)
 - [Cross-platform contract](CROSS_PLATFORM_DIALER_CONTRACT.md)
 
-The app bundle ID is `financial.boreal.dialer`; its registered fallback link forms are `borealdialer://call?phone=...` and `borealdialer://call?contactId=...`. Links prefill by default; only explicit validated `start=true` can request immediate action. A normal APNs server-registration contract does not yet exist and is documented rather than fabricated.
+The app bundle ID is `com.borealfinancial.dialer`; its registered fallback link forms are `borealdialer://call?phone=...` and `borealdialer://call?contactId=...`. Links prefill by default; only explicit validated `start=true` can request immediate action. A normal APNs server-registration contract does not yet exist and is documented rather than fabricated.
 
 ## Development
 Generate the Xcode project with XcodeGen, resolve dependencies, then run the `BorealDialer` scheme/tests on macOS. SwiftPM targets iOS 15+; the generated app currently targets iOS 16+.

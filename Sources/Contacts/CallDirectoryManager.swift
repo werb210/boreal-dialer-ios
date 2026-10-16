@@ -6,7 +6,7 @@ import UIKit
 @MainActor
 final class CallDirectoryManager: ObservableObject {
     static let shared = CallDirectoryManager()
-    static let extensionIdentifier = "financial.boreal.dialer.calldirectory"
+    static let extensionIdentifier = "com.borealfinancial.dialer.calldirectory"
 
     @Published private(set) var enabledStatus: CXCallDirectoryManager.EnabledStatus = .unknown
 

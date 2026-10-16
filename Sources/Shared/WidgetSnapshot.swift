@@ -14,7 +14,7 @@ struct WidgetSnapshot: Codable, Equatable {
 }
 
 enum WidgetSnapshotStore {
-    static let appGroup = "group.financial.boreal.dialer"
+    static let appGroup = "group.com.borealfinancial.dialer"
     private static let snapshotKey = "widget.recentContacts.v1"
 
     static func load() -> WidgetSnapshot {

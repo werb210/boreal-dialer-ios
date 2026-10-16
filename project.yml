@@ -4,7 +4,10 @@
 # the project is reviewable in git instead of an unmergeable pbxproj blob.
 name: BorealDialer
 options:
-  bundleIdPrefix: financial.boreal
+  # BOREAL_DIALER_v815_COMPANY_BUNDLE_ID - the dialer ships from the company Apple account (2630108 Alberta Ltd, team
+  # 76VAY7UJKJ). financial.boreal.dialer is held by another Apple account, so every target now uses
+  # com.borealfinancial.dialer[.*] and the app group group.com.borealfinancial.dialer (all registered Oct 16 2026).
+  bundleIdPrefix: com.borealfinancial
   deploymentTarget:
     iOS: "16.0"
     watchOS: "9.0"
@@ -84,7 +87,7 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         NSSupportsLiveActivities: true
         CFBundleURLTypes:
-          - CFBundleURLName: financial.boreal.dialer
+          - CFBundleURLName: com.borealfinancial.dialer
             CFBundleURLSchemes:
               - borealdialer
         # BOREAL_DIALER_SHARE_TO_BOREAL_v319 - appear in the share sheet for client documents.
@@ -111,7 +114,7 @@ targets:
       properties:
         aps-environment: development
         com.apple.security.application-groups:
-          - group.financial.boreal.dialer
+          - group.com.borealfinancial.dialer
     attributes:
       SystemCapabilities:
         com.apple.ApplicationGroups.iOS:
@@ -132,7 +135,7 @@ targets:
       - target: BorealDialerWatch
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer
+        PRODUCT_BUNDLE_IDENTIFIER: com.borealfinancial.dialer
         # BOREAL_DIALER_PRODUCT_NAME_v49
         # PRODUCT_NAME was 'Boreal Dialer', with a space, which diverged from
         # the target name in two places that both only mattered once the test
@@ -203,7 +206,7 @@ targets:
         CFBundleShortVersionString: "1.0"
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         WKApplication: true
-        WKCompanionAppBundleIdentifier: financial.boreal.dialer
+        WKCompanionAppBundleIdentifier: com.borealfinancial.dialer
         WKRunsIndependentlyOfCompanionApp: true
         BorealAPIBaseURL: https://server.boreal.financial/api
     dependencies:
@@ -213,10 +216,10 @@ targets:
       properties:
         aps-environment: development
         com.apple.security.application-groups:
-          - group.financial.boreal.dialer
+          - group.com.borealfinancial.dialer
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer.watchkitapp
+        PRODUCT_BUNDLE_IDENTIFIER: com.borealfinancial.dialer.watchkitapp
         PRODUCT_MODULE_NAME: BorealDialerWatch
         SWIFT_VERSION: 5.9
         TARGETED_DEVICE_FAMILY: "4"
@@ -254,10 +257,10 @@ targets:
       path: WatchWidget/BorealWatchWidget.entitlements
       properties:
         com.apple.security.application-groups:
-          - group.financial.boreal.dialer
+          - group.com.borealfinancial.dialer
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer.watchkitapp.widget
+        PRODUCT_BUNDLE_IDENTIFIER: com.borealfinancial.dialer.watchkitapp.widget
         PRODUCT_MODULE_NAME: BorealWatchWidget
         SWIFT_VERSION: "5.9"
         TARGETED_DEVICE_FAMILY: "4"
@@ -300,14 +303,14 @@ targets:
       path: LiveActivity/BorealCallLiveActivity.entitlements
       properties:
         com.apple.security.application-groups:
-          - group.financial.boreal.dialer
+          - group.com.borealfinancial.dialer
     attributes:
       SystemCapabilities:
         com.apple.ApplicationGroups.iOS:
           enabled: 1
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer.liveactivity
+        PRODUCT_BUNDLE_IDENTIFIER: com.borealfinancial.dialer.liveactivity
         GENERATE_INFOPLIST_FILE: NO
 
   BorealDialerCallDirectory:
@@ -329,14 +332,14 @@ targets:
       path: CallDirectory/BorealDialerCallDirectory.entitlements
       properties:
         com.apple.security.application-groups:
-          - group.financial.boreal.dialer
+          - group.com.borealfinancial.dialer
     attributes:
       SystemCapabilities:
         com.apple.ApplicationGroups.iOS:
           enabled: 1
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: financial.boreal.dialer.calldirectory
+        PRODUCT_BUNDLE_IDENTIFIER: com.borealfinancial.dialer.calldirectory
         SWIFT_VERSION: 5.9
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic

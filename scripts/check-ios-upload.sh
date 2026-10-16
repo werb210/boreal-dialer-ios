@@ -19,4 +19,9 @@ import plistlib, sys
 p = plistlib.load(open(sys.argv[1], "rb"))
 assert p["method"] == "app-store-connect" and p["destination"] == "upload" and p["teamID"] == "76VAY7UJKJ"
 PY
+# BOREAL_DIALER_v816_WATCH_ICON - App Store Connect refuses a Watch app without an icon.
+[ -s Watch/Assets.xcassets/AppIcon.appiconset/WatchIcon-1024.png ] || fail "the Watch app needs Watch/Assets.xcassets/AppIcon"
+grep -q '"platform" : "watchos"' Watch/Assets.xcassets/AppIcon.appiconset/Contents.json || fail "the Watch icon must be a watchOS icon"
+awk '/^  BorealDialerWatch:$/{n++} n==2' project.yml | grep -q "ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon" || fail "the Watch target must name its app icon"
+awk '/^  BorealDialerWatch:$/{n++} n==2' project.yml | grep -q "CFBundleIconName: AppIcon" || fail "the Watch Info.plist must name its app icon"
 echo "check-ios-upload: OK"

@@ -1,83 +1,72 @@
 // BOREAL_DIALER_MESSAGES_THREAD_v10
-// The Messages tab is the CMP chat and "talk to a human" escalation inbox - the
-// conversations a client starts on the website or the client portal that a
-// staff member has to pick up. SMS has its own tab, so SMS threads are filtered
-// out here rather than duplicated.
+// BOREAL_DIALER_v817_MESSAGING - the Messages tab now matches the staff portal's
+// Messages tab exactly: client-portal chats and "talk to a person" requests,
+// one conversation per contact. SMS lives only in the SMS tab, so the old
+// "Unified inbox" with All / Unread / SMS / Chat / Email filters is gone.
 //
-//   GET  /communications/threads          -> [ ...conversations ]
-//   GET  /communications/threads/:id      -> { ..., messages: [...] }
-//   POST /communications/threads/:id/messages { body } -> staff reply
-//
-// The list endpoint returns messages: [] on purpose and defers history to the
-// detail call, so opening a thread always fetches.
+// Same endpoints the portal uses:
+//   GET  /communications/messages-list?q=           -> { conversations: [...] }
+//   GET  /communications/messages/thread?contactId= -> [ ...messages ]
+//   POST /communications/messages/send { contactId, body }
+//   POST /communications/messages/mark-read { contactId }
 import SwiftUI
 
-struct CommunicationThread: Identifiable, Decodable {
-    let id: String
-    let sessionId: String?
-    let type: String?
-    let silo: String?
+struct MessageConversation: Identifiable, Decodable {
+    let threadKey: String?
     let contactId: String?
-    let contactName: String?
-    let contactPhone: String?
-    let contactEmail: String?
-    let unread: Int?
-    let message: String?
-    let updatedAt: String?
-
-    // BOREAL_DIALER_DECODE_AND_ACCENT_v36 - same bigint-as-string trap.
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = try c.decode(String.self, forKey: .id)
-        sessionId = try c.decodeIfPresent(String.self, forKey: .sessionId)
-        type = try c.decodeIfPresent(String.self, forKey: .type)
-        silo = try c.decodeIfPresent(String.self, forKey: .silo)
-        contactId = try c.decodeIfPresent(String.self, forKey: .contactId)
-        contactName = try c.decodeIfPresent(String.self, forKey: .contactName)
-        contactPhone = try c.decodeIfPresent(String.self, forKey: .contactPhone)
-        contactEmail = try c.decodeIfPresent(String.self, forKey: .contactEmail)
-        message = try c.decodeIfPresent(String.self, forKey: .message)
-        updatedAt = try c.decodeIfPresent(String.self, forKey: .updatedAt)
-        unread = FlexibleInt.decode(c, forKey: .unread)
-    }
+    let displayName: String?
+    let phone: String?
+    let email: String?
+    let lastAt: String?
+    let lastBody: String?
+    let unreadCount: Int?
 
     enum CodingKeys: String, CodingKey {
-        case id, type, silo, unread, message
-        case sessionId, contactId, contactName, contactPhone, contactEmail
-        case updatedAt
+        case threadKey = "thread_key"
+        case contactId = "contact_id"
+        case displayName = "display_name"
+        case phone, email
+        case lastAt = "last_at"
+        case lastBody = "last_body"
+        case unreadCount = "unread_count"
     }
 
-    var isSMS: Bool { (type ?? "").lowercased() == "sms" }
-
-    // BOREAL_DIALER_v803_UI - the mockup's three channels. A website / Maya chat
-    // and a chat a staff member has picked up ("human") are both Chat.
-    var channelLabel: String {
-        switch (type ?? "").lowercased() {
-        case "sms": return "SMS"
-        case "email", "mail": return "Email"
-        default: return "Chat"
-        }
+    // BOREAL_DIALER_DECODE_AND_ACCENT_v36 - counts arrive as 2 or "2".
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        threadKey = try c.decodeIfPresent(String.self, forKey: .threadKey)
+        contactId = try c.decodeIfPresent(String.self, forKey: .contactId)
+        displayName = try c.decodeIfPresent(String.self, forKey: .displayName)
+        phone = try c.decodeIfPresent(String.self, forKey: .phone)
+        email = try c.decodeIfPresent(String.self, forKey: .email)
+        lastAt = try c.decodeIfPresent(String.self, forKey: .lastAt)
+        lastBody = try c.decodeIfPresent(String.self, forKey: .lastBody)
+        unreadCount = FlexibleInt.decode(c, forKey: .unreadCount)
     }
 
-    // BOREAL_DIALER_v803_UI - an SMS row opens the SMS conversation, which is
-    // the screen that actually sends a text.
-    var asSMSThread: SMSThread {
-        SMSThread(contactId: contactId, displayName: contactName, phone: contactPhone, unreadCount: unread)
-    }
+    var id: String { contactId ?? threadKey ?? UUID().uuidString }
+    var unread: Int { unreadCount ?? 0 }
 
     var title: String {
-        contactName ?? contactPhone ?? contactEmail ?? "Unknown contact"
+        if let name = displayName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            return name
+        }
+        if let phone, !phone.isEmpty { return PhoneFormat.display(phone) }
+        return email ?? "Unknown contact"
     }
+}
+
+private struct MessageConversationsEnvelope: Decodable {
+    let conversations: [MessageConversation]
 }
 
 struct ThreadMessage: Identifiable, Decodable {
     let id: String
-    let type: String?
-    let direction: String?
-    let message: String?
+    let body: String?
+    let senderType: String?
+    let senderName: String?
     let createdAt: String?
-    // BOREAL_DIALER_BLOCK_v510_MESSAGES_READ_RECEIPTS - BF-Server v507 returns when
-    // the client opened a staff message (portal v508 shows the same).
+    // BOREAL_DIALER_BLOCK_v510_MESSAGES_READ_RECEIPTS - when the client opened a staff message.
     let readAt: String?
 
     var readLabel: String {
@@ -85,9 +74,7 @@ struct ThreadMessage: Identifiable, Decodable {
         return "Read " + CalendarFormatters.time.string(from: date)
     }
 
-    // "in" from the client, "out" from staff, "system" for anything generated.
-    var isOutbound: Bool { (direction ?? "") == "out" }
-    var isSystem: Bool { (direction ?? "") == "system" }
+    var isOutbound: Bool { (senderType ?? "").lowercased() == "staff" }
 
     var timeLabel: String {
         guard let date = CalendarFormatters.parse(createdAt) else { return "" }
@@ -95,61 +82,82 @@ struct ThreadMessage: Identifiable, Decodable {
     }
 }
 
-private struct ThreadDetail: Decodable {
-    let id: String
-    let contactName: String?
-    let messages: [ThreadMessage]
+// BOREAL_DIALER_v817_MESSAGING - one search field for SMS, Messages and Team.
+struct ListSearchField: View {
+    let placeholder: String
+    @Binding var text: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundColor(Theme.muted)
+            TextField(placeholder, text: $text)
+                .textFieldStyle(.plain)
+                .font(.system(size: 14))
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundColor(Theme.muted)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(Theme.surface2)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.line, lineWidth: 1))
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
+        .padding(.bottom, 6)
+    }
 }
 
 @MainActor
 final class MessagesViewModel: ObservableObject {
-    @Published var threads: [CommunicationThread] = []
+    @Published var conversations: [MessageConversation] = []
     @Published var loading = false
     @Published var error: String?
-    // BOREAL_DIALER_TABS_PRESENTATION_v26
-    @Published var filter: Filter = .all
+    @Published var query = ""
 
-    // BOREAL_DIALER_v803_UI - All, Unread, SMS, Chat, Email (the mockup's filters).
-    enum Filter: String, CaseIterable {
-        case all = "All"
-        case unread = "Unread"
-        case sms = "SMS"
-        case chat = "Chat"
-        case email = "Email"
-    }
-
-    var unreadCount: Int {
-        threads.reduce(0) { $0 + ($1.unread ?? 0) }
-    }
-
-    var visible: [CommunicationThread] {
-        switch filter {
-        case .all: return threads
-        case .unread: return threads.filter { ($0.unread ?? 0) > 0 }
-        case .sms: return threads.filter { $0.channelLabel == "SMS" }
-        case .chat: return threads.filter { $0.channelLabel == "Chat" }
-        case .email: return threads.filter { $0.channelLabel == "Email" }
-        }
-    }
+    private var searchTask: Task<Void, Never>?
 
     func load() async {
         loading = true
         error = nil
         do {
-            let request = try APIClient.shared.makeRequest(path: "/communications/threads")
+            var path = "/communications/messages-list"
+            let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty,
+               let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
+                path += "?q=\(encoded)"
+            }
+            let request = try APIClient.shared.makeRequest(path: path)
             let data = try await APIClient.shared.makeAuthorizedRequest(request)
-            // BOREAL_DIALER_v803_UI - the unified inbox shows every channel; SMS
-            // rows open the SMS conversation rather than this thread view.
-            threads = try JSONDecoder().decode([CommunicationThread].self, from: data)
-            InboxUnreadStore.shared.update(from: threads)
+            conversations = try JSONDecoder().decode(MessageConversationsEnvelope.self, from: data)
+                .conversations
+                .filter { !($0.contactId ?? "").isEmpty }
+            if trimmed.isEmpty { InboxUnreadStore.shared.update(from: conversations) }
         } catch {
             self.error = "Could not load messages."
         }
         loading = false
     }
+
+    func queryChanged() {
+        searchTask?.cancel()
+        searchTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
+            await self?.load()
+        }
+    }
 }
 
-// BOREAL_DIALER_v803_UI - whether any inbox conversation is unread, for the
+// BOREAL_DIALER_v803_UI - whether any Messages conversation is unread, for the
 // green dot on the Messages pill in the tab rail.
 @MainActor
 final class InboxUnreadStore: ObservableObject {
@@ -158,15 +166,15 @@ final class InboxUnreadStore: ObservableObject {
 
     private init() {}
 
-    func update(from threads: [CommunicationThread]) {
-        hasUnread = threads.contains { ($0.unread ?? 0) > 0 }
+    func update(from conversations: [MessageConversation]) {
+        hasUnread = conversations.contains { $0.unread > 0 }
     }
 
     func refresh() async {
         do {
-            let request = try APIClient.shared.makeRequest(path: "/communications/threads")
+            let request = try APIClient.shared.makeRequest(path: "/communications/messages-list")
             let data = try await APIClient.shared.makeAuthorizedRequest(request)
-            update(from: try JSONDecoder().decode([CommunicationThread].self, from: data))
+            update(from: try JSONDecoder().decode(MessageConversationsEnvelope.self, from: data).conversations)
         } catch {
             // Decoration only; keep the last known state.
         }
@@ -175,51 +183,24 @@ final class InboxUnreadStore: ObservableObject {
 
 struct MessagesView: View {
     @StateObject private var viewModel = MessagesViewModel()
-    // BOREAL_DIALER_v803_UI - the Compose menu replaces the unlabelled sparkle
-    // button: a new text message, and Maya's live chats (still read-only).
-    @State private var showNewMessage = false
+    // BOREAL_DIALER_MAYA_SESSIONS_v789 - Maya's live chats, read-only.
     @State private var showMaya = false
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // BOREAL_DIALER_v803_UI - mockup header.
-                ViewHeader(title: "Messages", subtitle: "Unified inbox \u{00B7} all channels") {
-                    Menu {
-                        Button {
-                            showNewMessage = true
-                        } label: {
-                            Label("New text message", systemImage: "square.and.pencil")
-                        }
-                        // BOREAL_DIALER_MAYA_SESSIONS_v789 - Maya's live chats, read-only.
-                        Button {
-                            showMaya = true
-                        } label: {
-                            Label("Maya live chats", systemImage: "sparkles")
-                        }
+                ViewHeader(title: "Messages", subtitle: "Client portal chats") {
+                    Button {
+                        showMaya = true
                     } label: {
-                        HeaderActionLabel(text: "Compose")
+                        HeaderActionLabel(text: "Maya chats")
                     }
-                    .accessibilityLabel("Compose")
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Maya live chats")
                 }
 
-                // BOREAL_DIALER_TABS_PRESENTATION_v26 - filter chips.
-                // BOREAL_DIALER_v803_UI - All, Unread . N, SMS, Chat, Email.
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(MessagesViewModel.Filter.allCases, id: \.self) { option in
-                            FilterChip(
-                                title: chipTitle(option),
-                                selected: viewModel.filter == option
-                            ) {
-                                viewModel.filter = option
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 6)
-                    .padding(.bottom, 4)
-                }
+                ListSearchField(placeholder: "Search by name, phone or email", text: $viewModel.query)
+                    .onChange(of: viewModel.query) { _ in viewModel.queryChanged() }
 
                 content
             }
@@ -228,37 +209,27 @@ struct MessagesView: View {
             .navigationDestination(isPresented: $showMaya) {
                 MayaSessionsView()
             }
-            .sheet(isPresented: $showNewMessage) {
-                SMSNewMessageView {
-                    Task { await viewModel.load() }
-                }
-            }
         }
         .task { await viewModel.load() }
     }
 
-    private func chipTitle(_ option: MessagesViewModel.Filter) -> String {
-        if option == .unread && viewModel.unreadCount > 0 {
-            return "Unread \u{00B7} \(viewModel.unreadCount)"
-        }
-        return option.rawValue
-    }
-
     @ViewBuilder
     private var content: some View {
-        if viewModel.loading && viewModel.threads.isEmpty {
+        if viewModel.loading && viewModel.conversations.isEmpty {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if viewModel.visible.isEmpty {
-            Text(viewModel.error ?? (viewModel.threads.isEmpty ? "No conversations" : "Nothing in this filter"))
+        } else if viewModel.conversations.isEmpty {
+            Text(viewModel.error ?? (viewModel.query.isEmpty ? "No conversations" : "No matches"))
                 .font(.system(size: 14))
                 .foregroundColor(Theme.muted)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            List(viewModel.visible) { thread in
+            List(viewModel.conversations) { conversation in
                 NavigationLink {
-                    destination(for: thread)
+                    MessageThreadView(conversation: conversation) {
+                        Task { await viewModel.load() }
+                    }
                 } label: {
-                    MessageThreadRow(thread: thread)
+                    MessageConversationRow(conversation: conversation)
                 }
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets(top: 0, leading: 18, bottom: 0, trailing: 18))
@@ -269,46 +240,30 @@ struct MessagesView: View {
             .refreshable { await viewModel.load() }
         }
     }
-
-    @ViewBuilder
-    private func destination(for thread: CommunicationThread) -> some View {
-        if thread.isSMS {
-            SMSThreadView(thread: thread.asSMSThread) {
-                Task { await viewModel.load() }
-            }
-        } else {
-            MessageThreadView(thread: thread) {
-                Task { await viewModel.load() }
-            }
-        }
-    }
 }
 
-// BOREAL_DIALER_v803_UI - mockup row: 46pt avatar, 15.5pt name with a channel
-// chip, one muted preview line, time over a green unread badge.
-private struct MessageThreadRow: View {
-    let thread: CommunicationThread
+// BOREAL_DIALER_v803_UI - 46pt avatar, name, one muted preview line, time over
+// a green unread badge.
+private struct MessageConversationRow: View {
+    let conversation: MessageConversation
 
     var body: some View {
         HStack(alignment: .center, spacing: 13) {
-            AvatarCircle(name: thread.title, size: 46)
+            AvatarCircle(name: conversation.title, size: 46)
 
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 7) {
-                    Text(thread.title).rowTitle().lineLimit(1)
-                    ChannelChip(label: thread.channelLabel)
-                }
-                Text((thread.message ?? "").ifEmpty(" "))
+                Text(conversation.title).rowTitle().lineLimit(1)
+                Text((conversation.lastBody ?? "").ifEmpty(" "))
                     .rowSubtitle()
                     .lineLimit(1)
             }
             Spacer(minLength: 6)
             VStack(alignment: .trailing, spacing: 6) {
-                Text(RowTime.label(thread.updatedAt))
+                Text(RowTime.label(conversation.lastAt))
                     .font(.system(size: 12))
                     .foregroundColor(Theme.faint)
-                CountBadge(count: thread.unread ?? 0)
-                    .opacity((thread.unread ?? 0) > 0 ? 1 : 0)
+                CountBadge(count: conversation.unread)
+                    .opacity(conversation.unread > 0 ? 1 : 0)
             }
         }
         .padding(.vertical, 11)
@@ -318,7 +273,7 @@ private struct MessageThreadRow: View {
 struct MessageThreadView: View {
     // BOREAL_DIALER_THREAD_SCROLL_v166
     // BOREAL_DIALER_SCROLL_BOTTOM_v649 - jump to a fixed marker after the last message, and try
-    // again as rows and pictures finish laying out (one early jump often stopped part-way).
+    // again as rows finish laying out (one early jump often stopped part-way).
     private func scrollToLatest(_ proxy: ScrollViewProxy, animated: Bool) {
         guard !messages.isEmpty else { return }
         for delay in [0.0, 0.15, 0.5] {
@@ -332,7 +287,7 @@ struct MessageThreadView: View {
         }
     }
 
-    let thread: CommunicationThread
+    let conversation: MessageConversation
     var onChange: () -> Void
 
     @State private var messages: [ThreadMessage] = []
@@ -349,12 +304,12 @@ struct MessageThreadView: View {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if messages.isEmpty {
                 Text(error ?? "No messages in this conversation.")
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.muted)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollViewReader { proxy in
                     ScrollView {
-                        VStack(spacing: 8) { // BOREAL_DIALER_SCROLL_BOTTOM_v649 - all rows exist, so the jump lands
+                        VStack(spacing: 8) {
                             ForEach(messages) { message in
                                 ThreadBubble(message: message).id(message.id)
                             }
@@ -363,9 +318,6 @@ struct MessageThreadView: View {
                         .padding(.horizontal)
                         .padding(.vertical, 12)
                     }
-                    // BOREAL_DIALER_THREAD_SCROLL_v166
-                    // onAppear covers the first render; onChange covers new
-                    // messages arriving afterwards.
                     .onAppear { scrollToLatest(proxy, animated: false) }
                     .onChange(of: messages.count) { _ in
                         scrollToLatest(proxy, animated: true)
@@ -375,16 +327,13 @@ struct MessageThreadView: View {
             }
 
             if let error, !messages.isEmpty {
-                Text(error).font(.footnote).foregroundColor(.red).padding(.horizontal)
+                Text(error).font(.footnote).foregroundColor(Theme.red).padding(.horizontal)
             }
 
-            // BOREAL_DIALER_TEMPLATES_EVERYWHERE_v167 - supplying onTemplates
-            // is what makes ComposerBar render the templates button; without it
-            // the button is simply absent, which is why this thread had none.
             ComposerBar(
                 placeholder: "Reply…",
                 text: $draft,
-                disabled: sending || draft.trimmingCharacters(in: .whitespaces).isEmpty,
+                disabled: sending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                 onTemplates: { showingTemplates = true },
                 onSend: send
             )
@@ -397,19 +346,30 @@ struct MessageThreadView: View {
             }
         }
         .background(Theme.bg)
-        .navigationTitle(thread.title)
+        .navigationTitle(conversation.title)
         .navigationBarTitleDisplayMode(.inline)
-        .task { await loadMessages() }
+        .toolbar(.visible, for: .navigationBar)
+        .task {
+            await loadMessages()
+            await markRead()
+        }
     }
 
+    private var contactId: String { conversation.contactId ?? "" }
+
     private func loadMessages() async {
+        guard !contactId.isEmpty,
+              let encoded = contactId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+            loading = false
+            return
+        }
         loading = true
         do {
             let request = try APIClient.shared.makeRequest(
-                path: "/communications/threads/\(thread.id)"
+                path: "/communications/messages/thread?contactId=\(encoded)"
             )
             let data = try await APIClient.shared.makeAuthorizedRequest(request)
-            messages = try JSONDecoder().decode(ThreadDetail.self, from: data).messages
+            messages = try JSONDecoder().decode([ThreadMessage].self, from: data)
             error = nil
         } catch {
             self.error = "Could not load this conversation."
@@ -417,16 +377,30 @@ struct MessageThreadView: View {
         loading = false
     }
 
+    // Clears the unread badge. Best effort: a failed mark-read must not look
+    // like the conversation failed to open.
+    private func markRead() async {
+        guard conversation.unread > 0, !contactId.isEmpty,
+              let body = try? JSONSerialization.data(withJSONObject: ["contactId": contactId]),
+              let request = try? APIClient.shared.makeRequest(
+                  path: "/communications/messages/mark-read",
+                  method: "POST",
+                  body: body
+              ) else { return }
+        _ = try? await APIClient.shared.makeAuthorizedRequest(request)
+        onChange()
+    }
+
     private func send() {
-        let text = draft.trimmingCharacters(in: .whitespaces)
-        guard !text.isEmpty else { return }
+        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, !contactId.isEmpty else { return }
         sending = true
         error = nil
         Task {
             do {
-                let payload = try JSONSerialization.data(withJSONObject: ["body": text])
+                let payload = try JSONSerialization.data(withJSONObject: ["contactId": contactId, "body": text])
                 let request = try APIClient.shared.makeRequest(
-                    path: "/communications/threads/\(thread.id)/messages",
+                    path: "/communications/messages/send",
                     method: "POST",
                     body: payload
                 )
@@ -446,33 +420,26 @@ private struct ThreadBubble: View {
     let message: ThreadMessage
 
     var body: some View {
-        if message.isSystem {
-            Text(message.message ?? "")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .frame(maxWidth: .infinity, alignment: .center)
-        } else {
-            HStack {
-                if message.isOutbound { Spacer(minLength: 40) }
+        HStack {
+            if message.isOutbound { Spacer(minLength: 40) }
 
-                // BOREAL_DIALER_THREAD_STYLE_v32
-                VStack(alignment: message.isOutbound ? .trailing : .leading, spacing: 4) {
-                    ChatBubble(outbound: message.isOutbound) {
-                        Text(message.message ?? "")
-                    }
-                    Text(message.timeLabel)
-                        .font(.system(size: 12))
-                        .foregroundColor(Theme.faint)
-                    // BOREAL_DIALER_BLOCK_v510_MESSAGES_READ_RECEIPTS
-                    if message.isOutbound {
-                        Text(message.readLabel)
-                            .font(.system(size: 12))
-                            .foregroundColor(message.readAt == nil ? Theme.faint : Theme.green)
-                    }
+            // BOREAL_DIALER_THREAD_STYLE_v32
+            VStack(alignment: message.isOutbound ? .trailing : .leading, spacing: 4) {
+                ChatBubble(outbound: message.isOutbound) {
+                    Text(message.body ?? "")
                 }
-
-                if !message.isOutbound { Spacer(minLength: 40) }
+                Text(message.timeLabel)
+                    .font(.system(size: 12))
+                    .foregroundColor(Theme.faint)
+                // BOREAL_DIALER_BLOCK_v510_MESSAGES_READ_RECEIPTS
+                if message.isOutbound {
+                    Text(message.readLabel)
+                        .font(.system(size: 12))
+                        .foregroundColor(message.readAt == nil ? Theme.faint : Theme.green)
+                }
             }
+
+            if !message.isOutbound { Spacer(minLength: 40) }
         }
     }
 }

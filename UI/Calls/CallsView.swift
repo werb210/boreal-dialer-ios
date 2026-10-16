@@ -341,6 +341,12 @@ final class VoicemailViewModel: ObservableObject {
         }
         stop()
         error = nil
+        // BOREAL_DIALER_v817_CALLS - voicemail switches the shared audio
+        // session to .playback, which cut the microphone out of a live call.
+        guard Self.noCallActive else {
+            self.error = "Voicemail can't play during a call."
+            return
+        }
         do {
             let request = try APIClient.shared.makeRequest(path: "/crm/voicemails/\(voicemail.id)/audio")
             let data = try await APIClient.shared.makeAuthorizedRequest(request)
@@ -348,22 +354,68 @@ final class VoicemailViewModel: ObservableObject {
                 .appendingPathComponent("vm-\(voicemail.id).mp3")
             try data.write(to: url, options: .atomic)
 
+            // BOREAL_DIALER_v817_CALLS - a call may have started during the download.
+            guard Self.noCallActive else {
+                self.error = "Voicemail can't play during a call."
+                return
+            }
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
             try AVAudioSession.sharedInstance().setActive(true)
 
             let audioPlayer = try AVAudioPlayer(contentsOf: url)
+            // BOREAL_DIALER_v817_CALLS - hand the session back when it finishes.
+            audioPlayer.delegate = finishObserver
             audioPlayer.play()
             player = audioPlayer
             playingId = voicemail.id
         } catch {
             self.error = "Couldn't play that voicemail."
+            restoreCallAudio()
         }
     }
 
     func stop() {
+        let wasPlaying = player != nil
         player?.stop()
         player = nil
         playingId = nil
+        if wasPlaying { restoreCallAudio() }
+    }
+
+    // BOREAL_DIALER_v817_CALLS - the player finished on its own.
+    private lazy var finishObserver: VoicemailFinishObserver = VoicemailFinishObserver { [weak self] in
+        Task { @MainActor in self?.stop() }
+    }
+
+    private static var noCallActive: Bool {
+        VoiceEngine.shared.isIdle && CallStateManager.shared.current() == .idle
+    }
+
+    // BOREAL_DIALER_v817_CALLS - release the playback session and put the call
+    // category back, so the next call starts on .playAndRecord/.voiceChat.
+    // Never touched while a call is up: CallKit owns the session then.
+    private func restoreCallAudio() {
+        guard Self.noCallActive else { return }
+        let session = AVAudioSession.sharedInstance()
+        try? session.setActive(false, options: .notifyOthersOnDeactivation)
+        TwilioVoiceManager.shared.configureAudioSessionForCall()
+    }
+}
+
+// BOREAL_DIALER_v817_CALLS - AVAudioPlayer's delegate must be an NSObject.
+private final class VoicemailFinishObserver: NSObject, AVAudioPlayerDelegate {
+    private let onFinish: () -> Void
+
+    init(onFinish: @escaping () -> Void) {
+        self.onFinish = onFinish
+    }
+
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        onFinish()
+    }
+
+    func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
+        onFinish()
     }
 }
 

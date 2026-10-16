@@ -142,9 +142,16 @@ final class AuthService: ObservableObject {
             return false
         }
 
-        let normalized = role.lowercased()
-        return normalized == "admin" || normalized == "staff"
+        // BOREAL_DIALER_v817_CALLS - every staff role BF-Server issues takes
+        // calls (its STAFF_ROLES: Admin, Staff, Ops, Marketing). Only admin and
+        // staff were allowed, so Ops/Marketing users never registered for VoIP
+        // pushes and never rang. Lender and Referrer are not staff.
+        let normalized = role.trimmingCharacters(in: .whitespaces).lowercased()
+        return Self.callingRoles.contains(normalized)
     }
+
+    // BOREAL_DIALER_v817_CALLS
+    private static let callingRoles: Set<String> = ["admin", "staff", "ops", "marketing"]
 
     private func decodeClaim(_ key: String, from token: String) -> String? {
         let segments = token.split(separator: ".")

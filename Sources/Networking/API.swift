@@ -51,7 +51,7 @@ enum API {
         request.setValue(await currentSiloHeader(), forHTTPHeaderField: "X-Silo")
 
         var payload: [String: Any] = [
-            "event_type": "call_completed",
+            "event_type": callEventType(status), // BOREAL_DIALER_v817_CALLS
             "to_number": number,
             "duration_seconds": duration,
             "payload": ["status": status],
@@ -62,11 +62,23 @@ enum API {
         _ = try await AuthService.shared.performAuthorizedRequest(request)
     }
 
+    // BOREAL_DIALER_v817_CALLS - BF-Server's call_events only accepts call.started / call.ended /
+    // call.failed / call.missed / call.declined. "call_completed" failed its CHECK constraint, so
+    // every call log 500'd and no call reached the contact's timeline.
+    static func callEventType(_ status: String) -> String {
+        switch status.lowercased() {
+        case "failed", "error", "busy": return "call.failed"
+        case "no-answer", "noanswer", "missed": return "call.missed"
+        case "declined", "rejected", "canceled", "cancelled": return "call.declined"
+        default: return "call.ended"
+        }
+    }
+
     // BOREAL_DIALER_OFFLINE_v303 - the same call-events body logCall sends, saved for later.
     static func queueCallLog(duration: Int, status: String, number: String?, callSid: String?) {
         guard let number, !number.isEmpty else { return }
         var payload: [String: Any] = [
-            "event_type": "call_completed",
+            "event_type": callEventType(status), // BOREAL_DIALER_v817_CALLS
             "to_number": number,
             "duration_seconds": duration,
             "payload": ["status": status],

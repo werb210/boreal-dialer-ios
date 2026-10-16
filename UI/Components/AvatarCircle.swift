@@ -82,6 +82,25 @@ enum PhoneFormat {
         let last = national.suffix(4)
         return "(\(area)) \(mid)-\(last)"
     }
+
+    // BOREAL_DIALER_v817_CALLS - Twilio needs E.164 to dial out. Typed or
+    // stored numbers like "403 555 0142" or "14035550142" were sent as-is and
+    // the call failed. 10 digits -> +1XXXXXXXXXX, 11 starting with 1 -> +1...,
+    // an existing +E.164 is kept (spacing stripped), any other dial string of
+    // phone characters is sent as its digits, and anything with letters (an
+    // internal call's display name or client identity) is left untouched.
+    static func e164(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return trimmed }
+        let phoneCharacters = Set("0123456789+-(). ")
+        guard trimmed.allSatisfy({ phoneCharacters.contains($0) }) else { return trimmed }
+        let digits = String(trimmed.filter(\.isNumber))
+        guard !digits.isEmpty else { return trimmed }
+        if trimmed.hasPrefix("+") { return "+" + digits }
+        if digits.count == 10 { return "+1" + digits }
+        if digits.count == 11, digits.hasPrefix("1") { return "+" + digits }
+        return digits
+    }
 }
 
 // Today / Yesterday / date, so lists group the way the mockup does.

@@ -45,7 +45,7 @@ final class VoiceManager: NSObject, ObservableObject {
     }
 
     /// Fetches a token, registers for VoIP pushes with Twilio and starts the
-    /// 50-minute token refresh. Presence "online" is sent only on the first
+    /// 50-minute token refresh. Presence "available" is sent only on the first
     /// initialize of a session, and only when no call is up.
     func initialize() async {
         guard !isInitializing else { return }
@@ -56,8 +56,14 @@ final class VoiceManager: NSObject, ObservableObject {
         let firstInitialize = !hasInitialized
         hasInitialized = true
         accessToken = token
+        // BOREAL_DIALER_v817_CALLS - the Twilio audio device is installed once,
+        // by VoiceEngine (which owns CallKit and toggles it on activation).
+        // Replacing it on every sign-in left the old device driving audio.
+        _ = VoiceEngine.shared
         if firstInitialize {
-            TwilioVoiceSDK.audioDevice = DefaultAudioDevice()
+            // BOREAL_DIALER_v817_CALLS - ask for the microphone at sign-in, not
+            // in the middle of the first call.
+            MicrophonePermission.requestIfNeeded()
         }
         configureIdentityIfNeeded(from: token) { [weak self] in
             guard let self else { return }
@@ -70,7 +76,9 @@ final class VoiceManager: NSObject, ObservableObject {
         PushManager.shared.register()
         PushManager.shared.registerDeviceTokenWithTwilio()
         if firstInitialize && Self.noCallActive() {
-            sendPresence(status: "online")
+            // BOREAL_DIALER_v817_CALLS - the server's presence value is
+            // "available"; "online" was rejected, so no call was ever routed here.
+            sendPresence(status: "available")
         }
     }
 
@@ -175,6 +183,14 @@ final class VoiceManager: NSObject, ObservableObject {
         TwilioVoiceSDK.unregister(accessToken: tokenToUnregister, deviceToken: deviceToken) { _ in
             registerWithToken()
         }
+    }
+
+    /// BOREAL_DIALER_v817_CALLS - registration is skipped while a call is up
+    /// and nothing retried it, so a token refreshed mid-call never registered
+    /// and the phone stopped ringing. VoiceEngine calls this once the call ends.
+    func retryRegistrationAfterCall() {
+        if registrationState == .failed { registrationState = .unregistered }
+        attemptRegistrationIfPossible()
     }
 
     /// BOREAL_DIALER_v529 - result of TwilioVoiceSDK.register, applied on the main actor.

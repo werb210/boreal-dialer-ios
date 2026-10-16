@@ -175,7 +175,9 @@ extension WatchBridge: WCSessionDelegate {
         switch message.action {
         case .answer:
             guard case .ringing(let active) = VoiceEngine.shared.state, active == uuid else { return }
-            TwilioVoiceManager.shared.accept()
+            // BOREAL_DIALER_v817_CALLS - answer through CallKit so it activates
+            // the audio session (and the Twilio audio device) for the call.
+            VoiceEngine.shared.answer(uuid: uuid)
         case .decline:
             guard case .ringing(let active) = VoiceEngine.shared.state, active == uuid else { return }
             TwilioVoiceManager.shared.reject()

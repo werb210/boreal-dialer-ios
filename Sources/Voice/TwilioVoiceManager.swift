@@ -45,11 +45,19 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
     // leg join the conference the server built instead of placing a second call.
     func startCall(uuid: UUID, to number: String, line: VoiceEngine.Line? = nil,
                    conferenceFriendly: String? = nil) {
-        guard CallStateManager.shared.current() == .idle else { return }
+        // BOREAL_DIALER_v817_CALLS - a busy state machine used to return
+        // silently, leaving CallKit with a call that never connected or ended.
+        guard CallStateManager.shared.current() == .idle else {
+            Telemetry.event("call_failed", metadata: ["error": "voice state not idle"])
+            VoiceEngine.shared.handleFailure()
+            return
+        }
 
+        // BOREAL_DIALER_v817_CALLS - Twilio dials E.164 only.
+        let dialled = PhoneFormat.e164(number)
         CallStateManager.shared.transition(to: .connecting)
         activeUUID = uuid
-        activeNumber = number
+        activeNumber = dialled
         callStartDate = Date()
         callDirection = "outbound"
 
@@ -60,12 +68,19 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
                 // Capture the selected line when the call is created; a later UI
                 // selection cannot change this call's attribution/token.
                 let token = try await API.getTwilioToken(line: line ?? VoiceEngine.shared.activeLine)
-                var connectParams: [String: String] = ["To": number]
+                // BOREAL_DIALER_v817_CALLS - the call was hung up or failed while
+                // the token was being fetched: do not connect a call nobody wants.
+                guard self.activeUUID == uuid else { return }
+                var connectParams: [String: String] = ["To": dialled]
                 if let conferenceFriendly, !conferenceFriendly.isEmpty {
                     connectParams["conferenceFriendly"] = conferenceFriendly
                 }
                 let options = ConnectOptions(accessToken: token) { builder in
                     builder.params = connectParams
+                    // BOREAL_DIALER_v817_CALLS - the SDK call must carry the
+                    // CallKit UUID, or connect/disconnect callbacks cannot be
+                    // matched to the CallKit call and it is never reported.
+                    builder.uuid = uuid
                 }
 
                 activeCall = TwilioVoiceSDK.connect(options: options, delegate: self)
@@ -171,25 +186,25 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
         callStartDate = nil
         callDirection = "outbound"
 
-        do {
-            try AVAudioSession.sharedInstance().setActive(false)
-        } catch {
-            Telemetry.event("audio_session_deactivate_failed", metadata: ["error": error.localizedDescription])
-        }
+        // BOREAL_DIALER_v817_CALLS - no setActive(false) here: CallKit owns the
+        // audio session and deactivates it itself (provider didDeactivate).
 
         CallStateManager.shared.transition(to: .ended)
         CallStateManager.shared.reset()
     }
 
-    private func configureAudioSessionForCall() {
+    // BOREAL_DIALER_v817_CALLS - category and mode only. CallKit activates the
+    // session (provider didActivate) and deactivates it when the call ends;
+    // activating it here as well fought CallKit and garbled call audio.
+    // Internal so CallKit actions and voicemail playback can restore it.
+    func configureAudioSessionForCall() {
         let session = AVAudioSession.sharedInstance()
         do {
             try session.setCategory(
                 .playAndRecord,
                 mode: .voiceChat,
-                options: [.allowBluetoothHFP, .duckOthers]
+                options: [.allowBluetoothHFP]
             )
-            try session.setActive(true)
         } catch {
             Telemetry.event("audio_session_config_failed", metadata: ["error": error.localizedDescription])
         }
@@ -204,12 +219,8 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
         callDirection = "outbound"
         inviteLedger.removeAll()
 
-        let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setActive(false, options: [])
-        } catch {
-            Telemetry.event("audio_session_deactivate_failed", metadata: ["error": error.localizedDescription])
-        }
+        // BOREAL_DIALER_v817_CALLS - no setActive(false): CallKit deactivates
+        // the audio session when the call ends.
 
         CallStateManager.shared.transition(to: .ended)
         CallStateManager.shared.reset()

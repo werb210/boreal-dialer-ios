@@ -3,6 +3,52 @@ import CallKit
 import TwilioVoice
 import AVFoundation
 
+// BOREAL_DIALER_v817_CALLS - one place for the microphone permission. The
+// deployment target is iOS 16; AVAudioApplication replaces the AVAudioSession
+// API from iOS 17.
+enum MicrophonePermission {
+    enum Status {
+        case granted
+        case denied
+        case undetermined
+    }
+
+    static let deniedMessage = "Microphone access is off for Boreal Dialer. Turn it on in Settings > Boreal Dialer > Microphone to make and take calls."
+
+    static var status: Status {
+        if #available(iOS 17.0, *) {
+            switch AVAudioApplication.shared.recordPermission {
+            case .granted: return .granted
+            case .denied: return .denied
+            case .undetermined: return .undetermined
+            @unknown default: return .undetermined
+            }
+        } else {
+            switch AVAudioSession.sharedInstance().recordPermission {
+            case .granted: return .granted
+            case .denied: return .denied
+            case .undetermined: return .undetermined
+            @unknown default: return .undetermined
+            }
+        }
+    }
+
+    /// `completion` may run on any queue.
+    static func request(_ completion: @escaping (Bool) -> Void) {
+        if #available(iOS 17.0, *) {
+            AVAudioApplication.requestRecordPermission(completionHandler: completion)
+        } else {
+            AVAudioSession.sharedInstance().requestRecordPermission(completion)
+        }
+    }
+
+    /// Prompts once, at sign-in / app start, so the first call is not the prompt.
+    static func requestIfNeeded() {
+        guard status == .undetermined else { return }
+        request { _ in }
+    }
+}
+
 @MainActor
 final class VoiceEngine: NSObject, ObservableObject {
 
@@ -59,6 +105,9 @@ final class VoiceEngine: NSObject, ObservableObject {
     @Published var isMuted = false
     @Published var isOnHold = false
     @Published var showKeypad = false
+    // BOREAL_DIALER_v817_CALLS - why the last call could not be placed (shown by
+    // the dialer). Cleared when the alert is dismissed.
+    @Published var callError: String?
 
     var activeCallSid: String? {
         if case .active(let uuid) = state {
@@ -72,9 +121,28 @@ final class VoiceEngine: NSObject, ObservableObject {
 
     private var provider: CXProvider!
     private var timer: Timer?
+    // BOREAL_DIALER_v817_CALLS - one long-lived controller for every CallKit
+    // transaction (start and end), rather than a throwaway one per request.
+    private let callController = CXCallController()
+    // BOREAL_DIALER_v817_CALLS - the Twilio audio device, installed once. It is
+    // disabled until CallKit activates the audio session (provider didActivate)
+    // and disabled again when CallKit deactivates it, so Twilio never runs
+    // audio on a session CallKit has not handed over.
+    let audioDevice = DefaultAudioDevice()
+
+    // BOREAL_DIALER_v817_CALLS - what a requested CXStartCallAction should
+    // dial. The action handler starts the Twilio leg from this.
+    private enum PendingOutgoing {
+        case pstn(number: String, line: Line)
+        case internalCall(staffIdentity: String, displayName: String)
+    }
+    private var pendingOutgoing: [UUID: PendingOutgoing] = [:]
 
     private override init() {
         super.init()
+        // BOREAL_DIALER_v817_CALLS - must be set before any connect or accept.
+        TwilioVoiceSDK.audioDevice = audioDevice
+        audioDevice.isEnabled = false
         configureCallKit()
     }
 
@@ -106,19 +174,35 @@ final class VoiceEngine: NSObject, ObservableObject {
         return false
     }
 
-    func startCall(to number: String, uuid: UUID = UUID()) {
+    func startCall(to rawNumber: String, uuid: UUID = UUID()) {
         guard case .idle = state else { return }
-        requestMicrophonePermissionIfNeeded()
+        // BOREAL_DIALER_v817_CALLS - Twilio dials E.164 only.
+        let number = PhoneFormat.e164(rawNumber)
+        guard !number.isEmpty else { return }
+        // BOREAL_DIALER_v817_CALLS - no microphone, no call: fail fast with a
+        // reason instead of connecting a silent call. An undetermined
+        // permission prompts and places the call once granted.
+        guard microphoneReady(retry: { VoiceEngine.shared.startCall(to: number, uuid: uuid) }) else { return }
+        callError = nil
         state = .dialing(uuid)
 
         currentHandle = PhoneFormat.display(number)
+        let capturedLine = activeLine
+        pendingOutgoing[uuid] = .pstn(number: number, line: capturedLine)
+        // BOREAL_DIALER_v817_CALLS - no Twilio audio until CallKit activates the session.
+        audioDevice.isEnabled = false
+
         let handle = CXHandle(type: .phoneNumber, value: number)
         let start = CXStartCallAction(call: uuid, handle: handle)
         // BOREAL_DIALER_CALLKIT_IDENTITY_v38 - names the call in iOS Recents.
         start.contactIdentifier = PhoneFormat.display(number)
         let transaction = CXTransaction(action: start)
 
-        CXCallController().request(transaction) { [weak self] error in
+        // BOREAL_DIALER_v817_CALLS - CallKit performs the start action and the
+        // Twilio leg is started from provider(_:perform: CXStartCallAction), so
+        // CallKit owns the call and its audio session. Starting Twilio here in
+        // parallel left the start action unhandled and the call "failed".
+        callController.request(transaction) { [weak self] error in
             let failed = error != nil
             Task { @MainActor in
                 guard let self else { return }
@@ -128,34 +212,35 @@ final class VoiceEngine: NSObject, ObservableObject {
             }
         }
 
-        let capturedLine = activeLine
         Telemetry.event("call_start", metadata: ["callId": uuid.uuidString, "silo": silo.rawValue])
-        // BOREAL_DIALER_JOIN_CONFERENCE_v46 - build the conference first so the
-        // SDK leg can join it. A plain call remains the fallback if setup fails.
-        Task { @MainActor in
-            let ok = await ConferenceSession.shared.start(to: number)
-            let friendly = ok ? ConferenceSession.shared.conferenceFriendly : nil
-            TwilioVoiceManager.shared.startCall(
-                uuid: uuid, to: number, line: capturedLine, conferenceFriendly: friendly
-            )
-        }
     }
 
     // BOREAL_DIALER_JOIN_CONFERENCE_v46 - create and join an internal call,
     // while also reporting the initiating leg to CallKit.
     func startInternalCall(staffIdentity: String, displayName: String) {
         guard case .idle = state else { return }
+        // BOREAL_DIALER_v817_CALLS - same microphone gate as startCall.
+        guard microphoneReady(retry: {
+            VoiceEngine.shared.startInternalCall(staffIdentity: staffIdentity, displayName: displayName)
+        }) else { return }
+        callError = nil
 
         let uuid = UUID()
         state = .dialing(uuid)
 
         currentHandle = displayName
+        pendingOutgoing[uuid] = .internalCall(staffIdentity: staffIdentity, displayName: displayName)
+        // BOREAL_DIALER_v817_CALLS - no Twilio audio until CallKit activates the session.
+        audioDevice.isEnabled = false
+
         let handle = CXHandle(type: .generic, value: displayName)
         let start = CXStartCallAction(call: uuid, handle: handle)
         start.contactIdentifier = displayName
         let transaction = CXTransaction(action: start)
 
-        CXCallController().request(transaction) { [weak self] error in
+        // BOREAL_DIALER_v817_CALLS - the conference and Twilio leg are started
+        // by provider(_:perform: CXStartCallAction).
+        callController.request(transaction) { [weak self] error in
             let failed = error != nil
             Task { @MainActor in
                 guard let self else { return }
@@ -166,16 +251,71 @@ final class VoiceEngine: NSObject, ObservableObject {
         Telemetry.event(
             "quick_call_start", metadata: ["staff": staffIdentity, "silo": silo.rawValue]
         )
+    }
 
-        Task { @MainActor in
-            let ok = await ConferenceSession.shared.startInternal(staffIdentity: staffIdentity)
-            guard ok, let friendly = ConferenceSession.shared.conferenceFriendly else {
-                self.handleFailure()
-                return
+    // BOREAL_DIALER_v817_CALLS - true when the microphone is granted. Denied:
+    // sets callError and returns false. Undetermined: prompts, returns false,
+    // and runs `retry` on the main actor if the user grants it.
+    private func microphoneReady(retry: @escaping @MainActor () -> Void) -> Bool {
+        switch MicrophonePermission.status {
+        case .granted:
+            return true
+        case .denied:
+            callError = MicrophonePermission.deniedMessage
+            Telemetry.event("call_blocked", metadata: ["reason": "microphone_denied"])
+            return false
+        case .undetermined:
+            MicrophonePermission.request { granted in
+                Task { @MainActor in
+                    if granted {
+                        retry()
+                    } else {
+                        VoiceEngine.shared.callError = MicrophonePermission.deniedMessage
+                    }
+                }
             }
-            TwilioVoiceManager.shared.startCall(
-                uuid: uuid, to: displayName, conferenceFriendly: friendly
-            )
+            return false
+        }
+    }
+
+    // BOREAL_DIALER_v817_CALLS - the in-call hang-up button. Ending through a
+    // CXEndCallAction keeps CallKit's call list in step; ending only the
+    // Twilio leg left a stale CallKit call that blocked every later call.
+    func hangUp() {
+        guard let uuid = liveCallUUID else {
+            forceTerminate()
+            return
+        }
+        let transaction = CXTransaction(action: CXEndCallAction(call: uuid))
+        callController.request(transaction) { [weak self] error in
+            guard error != nil else { return }
+            Task { @MainActor in
+                // CallKit refused (it no longer knows the call): end it here.
+                self?.forceTerminate()
+            }
+        }
+    }
+
+    // BOREAL_DIALER_v817_CALLS - answering from the Watch (or anywhere but the
+    // CallKit screen) goes through a CXAnswerCallAction too. Accepting the
+    // Twilio invite directly never had CallKit activate the audio session, so
+    // the Twilio audio device stayed off and the call was silent.
+    func answer(uuid: UUID) {
+        guard case .ringing(let ringing) = state, ringing == uuid else { return }
+        let transaction = CXTransaction(action: CXAnswerCallAction(call: uuid))
+        callController.request(transaction) { error in
+            guard let error else { return }
+            Telemetry.event("call_answer_failed", metadata: ["error": error.localizedDescription])
+        }
+    }
+
+    // BOREAL_DIALER_v817_CALLS - the CallKit UUID of the call in progress.
+    private var liveCallUUID: UUID? {
+        switch state {
+        case .dialing(let uuid), .ringing(let uuid), .active(let uuid):
+            return uuid
+        case .idle, .ended, .failed:
+            return nil
         }
     }
 
@@ -189,6 +329,10 @@ final class VoiceEngine: NSObject, ObservableObject {
             onResult?(false)
             return
         }
+
+        // BOREAL_DIALER_v817_CALLS - no Twilio audio until CallKit activates the
+        // session on answer (provider didActivate).
+        audioDevice.isEnabled = false
 
         let update = CXCallUpdate()
         currentHandle = PhoneFormat.display(handle)
@@ -261,13 +405,12 @@ final class VoiceEngine: NSObject, ObservableObject {
 
     func forceTerminate() {
         TwilioVoiceManager.shared.disconnect()
+        // BOREAL_DIALER_v817_CALLS - tell CallKit the call is over, or it keeps
+        // a stale call that (with one call group) blocks every later call.
+        // Nothing to end when idle - and nothing to log.
+        guard let uuid = liveCallUUID else { return }
+        CallKitReporter.shared.reportEnded(uuid: uuid, reason: .remoteEnded)
         finishCall(status: .ended)
-    }
-
-    private func requestMicrophonePermissionIfNeeded() {
-        if AVAudioSession.sharedInstance().recordPermission == .undetermined {
-            AVAudioSession.sharedInstance().requestRecordPermission { _ in }
-        }
     }
 
     func syncWithServer(_ serverCalls: [RemoteCallStatus]) {
@@ -307,6 +450,11 @@ final class VoiceEngine: NSObject, ObservableObject {
     }
 
     func handleCallConnected(uuid: UUID) {
+        // BOREAL_DIALER_v817_CALLS - an outgoing call is "connected" for CallKit
+        // (lock screen timer, Recents duration) once Twilio connects.
+        if case .dialing(let dialing) = state, dialing == uuid {
+            provider.reportOutgoingCall(with: uuid, connectedAt: Date())
+        }
         stopTimer()
         startTimer()
         state = .active(uuid)
@@ -327,11 +475,22 @@ final class VoiceEngine: NSObject, ObservableObject {
     }
 
     func handleFailure() {
+        // BOREAL_DIALER_v817_CALLS - report the failure to CallKit; a call it
+        // still thinks is up blocks every later call ("Call failed"). Ignored
+        // once the call has already finished (a late Twilio callback after a
+        // local hang-up) so it is not logged twice.
+        guard let uuid = liveCallUUID else { return }
+        CallKitReporter.shared.reportEnded(uuid: uuid, reason: .failed)
         finishCall(status: .failed)
     }
 
     func handleDisconnect() {
+        // BOREAL_DIALER_v817_CALLS - the remote side hung up: report it to
+        // CallKit. A local hang-up has already finished the call through
+        // CXEndCallAction, so its late Twilio callback lands here and stops.
+        guard let uuid = liveCallUUID else { return }
         Telemetry.event("call_end", metadata: ["duration": "\(callDuration)"])
+        CallKitReporter.shared.reportEnded(uuid: uuid, reason: .remoteEnded)
         finishCall(status: .ended)
     }
 
@@ -353,6 +512,7 @@ final class VoiceEngine: NSObject, ObservableObject {
     }
 
     private func finishCall(status: State) {
+        pendingOutgoing.removeAll() // BOREAL_DIALER_v817_CALLS
         stopTimer()
         state = status
         isMuted = false
@@ -382,7 +542,17 @@ final class VoiceEngine: NSObject, ObservableObject {
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            self.state = .idle
+            // BOREAL_DIALER_v817_CALLS - a new call may have started inside the
+            // cooldown; only an ended/failed state goes back to idle.
+            switch self.state {
+            case .ended, .failed:
+                self.state = .idle
+            default:
+                break
+            }
+            // BOREAL_DIALER_v817_CALLS - push registration is skipped while a
+            // call is up; retry it now so the phone keeps ringing.
+            VoiceManager.shared.retryRegistrationAfterCall()
         }
     }
 
@@ -405,13 +575,70 @@ final class VoiceEngine: NSObject, ObservableObject {
 extension VoiceEngine: @preconcurrency CXProviderDelegate {
 
     func providerDidReset(_ provider: CXProvider) {
+        audioDevice.isEnabled = false // BOREAL_DIALER_v817_CALLS
+        pendingOutgoing.removeAll() // BOREAL_DIALER_v817_CALLS
         TwilioVoiceManager.shared.disconnect()
         stopTimer()
         state = .idle
     }
 
+    // BOREAL_DIALER_v817_CALLS - outgoing calls. There was no handler, so every
+    // CXStartCallAction timed out and CallKit failed the call. Category only
+    // here (CallKit activates the session), report connecting, fulfil, then
+    // start the Twilio leg with this UUID. The action is fulfilled at once (as
+    // Twilio's CallKit reference does) so a slow conference setup cannot time
+    // it out; a setup that fails later ends the call through handleFailure,
+    // which reports it to CallKit as failed.
+    func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
+        let uuid = action.callUUID
+        guard let pending = pendingOutgoing.removeValue(forKey: uuid),
+              case .dialing(let dialing) = state, dialing == uuid else {
+            action.fail()
+            return
+        }
+        audioDevice.isEnabled = false
+        TwilioVoiceManager.shared.configureAudioSessionForCall()
+        provider.reportOutgoingCall(with: uuid, startedConnectingAt: Date())
+        action.fulfill()
+
+        Task { @MainActor in
+            switch pending {
+            case .pstn(let number, let line):
+                // BOREAL_DIALER_JOIN_CONFERENCE_v46 - build the conference first
+                // so the SDK leg can join it. A plain call remains the fallback.
+                let ok = await ConferenceSession.shared.start(to: number)
+                // BOREAL_DIALER_v817_CALLS - hung up or failed during setup:
+                // do not go on and dial.
+                guard self.isDialing(uuid) else { return }
+                let friendly = ok ? ConferenceSession.shared.conferenceFriendly : nil
+                TwilioVoiceManager.shared.startCall(
+                    uuid: uuid, to: number, line: line, conferenceFriendly: friendly
+                )
+            case .internalCall(let staffIdentity, let displayName):
+                let ok = await ConferenceSession.shared.startInternal(staffIdentity: staffIdentity)
+                guard self.isDialing(uuid) else { return }
+                guard ok, let friendly = ConferenceSession.shared.conferenceFriendly else {
+                    self.handleFailure()
+                    return
+                }
+                TwilioVoiceManager.shared.startCall(
+                    uuid: uuid, to: displayName, conferenceFriendly: friendly
+                )
+            }
+        }
+    }
+
+    // BOREAL_DIALER_v817_CALLS
+    private func isDialing(_ uuid: UUID) -> Bool {
+        if case .dialing(let dialing) = state, dialing == uuid { return true }
+        return false
+    }
+
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
-        requestMicrophonePermissionIfNeeded()
+        // BOREAL_DIALER_v817_CALLS - category only; CallKit activates the session.
+        MicrophonePermission.requestIfNeeded()
+        audioDevice.isEnabled = false
+        TwilioVoiceManager.shared.configureAudioSessionForCall()
         TwilioVoiceManager.shared.accept()
         startTimer()
         state = .active(action.callUUID)
@@ -419,9 +646,37 @@ extension VoiceEngine: @preconcurrency CXProviderDelegate {
     }
 
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
+        // BOREAL_DIALER_v817_CALLS - a local hang-up (CallKit UI, in-app button,
+        // Watch). Disconnect the Twilio leg (or reject a ringing invite) and
+        // finish the call; CallKit ends its own call when this is fulfilled.
+        pendingOutgoing.removeValue(forKey: action.callUUID)
         TwilioVoiceManager.shared.disconnect()
-        finishCall(status: .ended)
+        if liveCallUUID != nil {
+            Telemetry.event("call_end", metadata: ["duration": "\(callDuration)"])
+            finishCall(status: .ended)
+        }
         action.fulfill()
+    }
+
+    // BOREAL_DIALER_v817_CALLS - CallKit hands over the audio session: only now
+    // may Twilio start audio.
+    func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
+        audioDevice.isEnabled = true
+    }
+
+    // BOREAL_DIALER_v817_CALLS - CallKit took the audio session back.
+    func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
+        audioDevice.isEnabled = false
+    }
+
+    // BOREAL_DIALER_v817_CALLS - an action CallKit gave up on (e.g. a start
+    // whose setup never finished) must not leave a half-started call behind.
+    func provider(_ provider: CXProvider, timedOutPerforming action: CXAction) {
+        Telemetry.event("callkit_action_timed_out", metadata: ["action": String(describing: type(of: action))])
+        if action is CXStartCallAction || action is CXAnswerCallAction {
+            TwilioVoiceManager.shared.disconnect()
+            handleFailure()
+        }
     }
 
     func provider(_ provider: CXProvider, perform action: CXSetMutedCallAction) {

@@ -42,7 +42,8 @@ final class CallManager: ObservableObject {
     private init() {}
 
     func startCall(to number: String) {
-        VoiceEngine.shared.startCall(to: number)
+        // BOREAL_DIALER_v817_CALLS - Twilio dials E.164 only.
+        VoiceEngine.shared.startCall(to: PhoneFormat.e164(number))
     }
 
     func incomingCall(uuid: UUID) {
@@ -58,7 +59,8 @@ final class CallManager: ObservableObject {
 
     func answerCall(uuid: UUID) {
         guard activeCallUUID == uuid else { return }
-        TwilioVoiceManager.shared.accept()
+        // BOREAL_DIALER_v817_CALLS - through CallKit, which owns the audio session.
+        VoiceEngine.shared.answer(uuid: uuid)
     }
 
     func callDidConnect() {
@@ -71,8 +73,9 @@ final class CallManager: ObservableObject {
     }
 
     func endCall() {
-        TwilioVoiceManager.shared.disconnect()
-        VoiceEngine.shared.handleDisconnect()
+        // BOREAL_DIALER_v817_CALLS - end through CallKit (CXEndCallAction) so
+        // no stale CallKit call is left to block the next one.
+        VoiceEngine.shared.hangUp()
     }
 
     func endCall(uuid: UUID) {

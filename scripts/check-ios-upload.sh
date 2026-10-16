@@ -13,15 +13,16 @@ grep -q "DEVELOPMENT_TEAM=76VAY7UJKJ" "$wf" || fail "must sign with the company 
 for s in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8; do grep -q "secrets.$s" "$wf" || fail "missing secret $s"; done
 if grep -q "BEGIN PRIVATE KEY" "$wf"; then fail "a private key is written into the workflow"; fi
 grep -q 'CURRENT_PROJECT_VERSION="$BUILD_NUMBER"' "$wf" || fail "every target must get the run's build number"
-grep -A1 "if: always()" "$wf" | grep -q 'rm -rf "$RUNNER_TEMP/asc"' || fail "the key must be removed at the end"
+grep -A1 "if: always()" "$wf" | grep 'rm -rf "$RUNNER_TEMP/asc"' >/dev/null || fail "the key must be removed at the end"
 python3 - "$plist" <<'PY' || fail "ExportOptions.plist must upload to App Store Connect for team 76VAY7UJKJ"
 import plistlib, sys
 p = plistlib.load(open(sys.argv[1], "rb"))
 assert p["method"] == "app-store-connect" and p["destination"] == "upload" and p["teamID"] == "76VAY7UJKJ"
 PY
 # BOREAL_DIALER_v816_WATCH_ICON - App Store Connect refuses a Watch app without an icon.
+# BOREAL_DIALER_v817_CHECK_FLAKE - grep (not grep -q) so awk never gets SIGPIPE under pipefail, which failed this check at random.
 [ -s Watch/Assets.xcassets/AppIcon.appiconset/WatchIcon-1024.png ] || fail "the Watch app needs Watch/Assets.xcassets/AppIcon"
 grep -q '"platform" : "watchos"' Watch/Assets.xcassets/AppIcon.appiconset/Contents.json || fail "the Watch icon must be a watchOS icon"
-awk '/^  BorealDialerWatch:$/{n++} n==2' project.yml | grep -q "ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon" || fail "the Watch target must name its app icon"
-awk '/^  BorealDialerWatch:$/{n++} n==2' project.yml | grep -q "CFBundleIconName: AppIcon" || fail "the Watch Info.plist must name its app icon"
+awk '/^  BorealDialerWatch:$/{n++} n==2' project.yml | grep "ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon" >/dev/null || fail "the Watch target must name its app icon"
+awk '/^  BorealDialerWatch:$/{n++} n==2' project.yml | grep "CFBundleIconName: AppIcon" >/dev/null || fail "the Watch Info.plist must name its app icon"
 echo "check-ios-upload: OK"

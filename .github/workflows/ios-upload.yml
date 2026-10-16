@@ -1,0 +1,95 @@
+# BOREAL_DIALER_v815_IOS_UPLOAD - builds the iPhone dialer (with its Apple Watch app and extensions) in the cloud and
+# uploads it to App Store Connect (TestFlight), so no Mac or Xcode is needed. Run it by hand: GitHub > Actions >
+# "Upload iOS build" > Run workflow. It never runs on its own. Signing uses the company Apple account (team
+# 76VAY7UJKJ) through an App Store Connect API key kept in the repo secrets ASC_KEY_ID, ASC_ISSUER_ID and ASC_KEY_P8
+# (the full text of the .p8 file). Each run gets a new build number (1000 + run number) for every target. The build
+# appears in TestFlight after Apple processes it, usually 10-30 minutes.
+name: Upload iOS build
+on:
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: "What changed (shown in the run summary only)"
+        required: false
+        default: ""
+concurrency:
+  group: ios-upload
+  cancel-in-progress: false
+jobs:
+  upload:
+    runs-on: macos-latest
+    timeout-minutes: 75
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+    steps:
+      - name: Check the App Store Connect key is set up
+        run: |
+          missing=""
+          [ -n "$ASC_KEY_ID" ] || missing="$missing ASC_KEY_ID"
+          [ -n "$ASC_ISSUER_ID" ] || missing="$missing ASC_ISSUER_ID"
+          [ -n "$ASC_KEY_P8" ] || missing="$missing ASC_KEY_P8"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing (Settings > Secrets and variables > Actions)"
+            exit 1
+          fi
+      - name: Pick the build number (1000 + run number)
+        run: echo "BUILD_NUMBER=$((1000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v5
+      - name: Use the newest released Xcode (App Store Connect refuses beta builds)
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - run: xcodebuild -version
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate
+      - name: Install the App Store Connect key
+        run: |
+          mkdir -p "$RUNNER_TEMP/asc"
+          printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey_${ASC_KEY_ID}.p8"
+          chmod 600 "$RUNNER_TEMP/asc/AuthKey_${ASC_KEY_ID}.p8"
+      - name: Archive (signed with the company team)
+        run: >-
+          xcodebuild archive
+          -project BorealDialer.xcodeproj
+          -scheme BorealDialer
+          -configuration Release
+          -destination 'generic/platform=iOS'
+          -archivePath "$RUNNER_TEMP/BorealDialer.xcarchive"
+          -allowProvisioningUpdates
+          -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_${ASC_KEY_ID}.p8"
+          -authenticationKeyID "$ASC_KEY_ID"
+          -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          DEVELOPMENT_TEAM=76VAY7UJKJ
+          CODE_SIGN_STYLE=Automatic
+          CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
+      - name: Upload to App Store Connect
+        run: >-
+          xcodebuild -exportArchive
+          -archivePath "$RUNNER_TEMP/BorealDialer.xcarchive"
+          -exportOptionsPlist Config/ci/ExportOptions.plist
+          -exportPath "$RUNNER_TEMP/export"
+          -allowProvisioningUpdates
+          -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_${ASC_KEY_ID}.p8"
+          -authenticationKeyID "$ASC_KEY_ID"
+          -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+      - name: Summary
+        if: success()
+        env:
+          NOTES: ${{ inputs.notes }}
+        run: |
+          {
+            echo "### Uploaded to App Store Connect (TestFlight)"
+            echo "- App: Boreal Dialer (iPhone + Apple Watch)"
+            echo "- Build number: $BUILD_NUMBER"
+            echo "- Notes: ${NOTES:-none}"
+            echo "Apple processes the build for 10-30 minutes, then it appears in TestFlight."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove the key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/asc"

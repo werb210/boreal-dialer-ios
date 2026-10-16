@@ -10,7 +10,7 @@ while IFS= read -r file; do
     echo "::error file=$file::zero-byte asset"
     bad=1
   fi
-done < <(find Assets.xcassets Assets -type f \( -name '*.png' -o -name '*.jpg' -o -name '*.pdf' \) 2>/dev/null)
+done < <(find Assets.xcassets Assets Watch/Assets.xcassets -type f \( -name '*.png' -o -name '*.jpg' -o -name '*.pdf' \) 2>/dev/null)
 
 if [ "$bad" -ne 0 ]; then
   echo "Zero-byte assets break asset catalogue compilation."

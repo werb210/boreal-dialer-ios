@@ -205,6 +205,9 @@ targets:
         CFBundleDisplayName: Boreal
         CFBundleShortVersionString: "1.0"
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # BOREAL_DIALER_v816_WATCH_ICON - App Store Connect refused the upload: the Watch app had no icon
+        # (90391 / 90713). Watch/Assets.xcassets/AppIcon (the dialer icon, 1024 single-size) is now in the target.
+        CFBundleIconName: AppIcon
         WKApplication: true
         WKCompanionAppBundleIdentifier: com.borealfinancial.dialer
         WKRunsIndependentlyOfCompanionApp: true
@@ -221,6 +224,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.borealfinancial.dialer.watchkitapp
         PRODUCT_MODULE_NAME: BorealDialerWatch
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         SWIFT_VERSION: 5.9
         TARGETED_DEVICE_FAMILY: "4"
         CODE_SIGN_STYLE: Automatic

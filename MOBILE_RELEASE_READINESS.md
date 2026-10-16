@@ -9,8 +9,8 @@
 | iPad | **Not supported** |
 | Apple Watch | **Supported** |
 | Android / Wear OS | **Not supported** |
-| iPhone bundle ID | `financial.boreal.dialer` |
-| Watch bundle ID | `financial.boreal.dialer.watchkitapp` |
+| iPhone bundle ID | `com.borealfinancial.dialer` |
+| Watch bundle ID | `com.borealfinancial.dialer.watchkitapp` |
 | iPhone code state | Unsigned simulator build and unit tests verified by CI |
 | Watch code state | Unsigned Watch simulator build and Watch unit tests verified by CI |
 

@@ -94,6 +94,9 @@ jobs:
       # one build number for every target, dead code stays deleted.
       - name: v789 audit round 2
         run: bash scripts/check-v789-audit.sh
+      # BOREAL_DIALER_v815_IOS_UPLOAD
+      - name: Cloud upload workflow
+        run: bash scripts/check-ios-upload.sh
 
   ios-build:
     needs: swift-lint

@@ -59,7 +59,9 @@ enum WatchCompanionLink {
         guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
         let payload = WatchPayload.encode(message, under: WatchPayload.alertReplyKey)
         guard !payload.isEmpty else { return }
-        if WCSession.default.isReachable {
+        // BOREAL_DIALER_v820_WATCH - via the shared reachability check (the Watch core must not call
+        // WCSession reachability directly; ProductionSafetyTests guards that it stays independent).
+        if WatchCompanionLink.isReachable {
             WCSession.default.sendMessage(payload, replyHandler: nil) { _ in
                 WCSession.default.transferUserInfo(payload)
             }

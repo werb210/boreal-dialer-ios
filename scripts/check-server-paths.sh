@@ -78,6 +78,8 @@ UI/Messages/MayaSessionsView.swift|"/communications/maya-sessions"
 UI/Messages/MayaSessionsView.swift|"/communications/maya-sessions/\(TeamParityStore.pathSegment(sessionId))/messages"
 UI/Notifications/NotificationsView.swift|"/notifications/\(Self.pathSegment(id))/read", method: "POST"
 UI/Notifications/NotificationsView.swift|"/notifications/read-all", method: "POST"
+Sources/Notifications/AlertPushRouting.swift|path: "/staff/push-token", method: "POST"
+Sources/Notifications/AlertPushRouting.swift|path: "/staff/push-token", method: "DELETE"
 PATHS
 if [ "$missing" -ne 0 ]; then
   exit 1

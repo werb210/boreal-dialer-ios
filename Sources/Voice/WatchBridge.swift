@@ -135,6 +135,15 @@ extension WatchBridge: WCSessionDelegate {
     nonisolated public func session(_ session: WCSession,
                                     didReceiveMessage message: [String: Any],
                                     replyHandler: @escaping ([String: Any]) -> Void) {
+        // BOREAL_DIALER_v820_WATCH - the Watch is calling through this iPhone: place it as an ordinary VoIP/CallKit call
+        // and say whether it started, so the Watch can show "Calling via iPhone" or the reason it could not.
+        if let request = WatchPayload.decode(WatchPhoneCallRequest.self, from: message, key: WatchPayload.phoneCallKey) {
+            Task { @MainActor in
+                let reply = WatchPhoneCallBridge.place(request)
+                replyHandler(WatchPayload.encode(reply, under: WatchPayload.phoneCallReplyKey))
+            }
+            return
+        }
         guard message[WatchPayload.enrollRequestKey] != nil else {
             self.session(session, didReceiveMessage: message)
             replyHandler([:])
@@ -148,7 +157,19 @@ extension WatchBridge: WCSessionDelegate {
         }
     }
 
+    // BOREAL_DIALER_v820_WATCH - a notification Reply the Watch queued with transferUserInfo (iPhone was out of reach).
+    nonisolated public func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
+        guard let reply = WatchPayload.decode(WatchAlertReplyMessage.self, from: userInfo,
+                                              key: WatchPayload.alertReplyKey) else { return }
+        Task { @MainActor in await WatchPhoneCallBridge.sendReply(reply) }
+    }
+
     nonisolated public func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        // BOREAL_DIALER_v820_WATCH - a notification Reply typed on the Watch.
+        if let reply = WatchPayload.decode(WatchAlertReplyMessage.self, from: message, key: WatchPayload.alertReplyKey) {
+            Task { @MainActor in await WatchPhoneCallBridge.sendReply(reply) }
+            return
+        }
         // BOREAL_DIALER_WATCH_INCALL_v1 - the wrist asked for mute or a digit.
         // The phone owns the conference and participant ids these endpoints
         // need; the Watch only knows a callId.

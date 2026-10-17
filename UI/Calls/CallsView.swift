@@ -81,6 +81,12 @@ struct CallsView: View {
         .onChange(of: deepLinks.pending) { link in
             if link != nil { section = .keypad }
         }
+        // BOREAL_DIALER_v820_WATCH - missed-call alert -> Recents, voicemail alert -> Voicemail.
+        .onReceive(AlertNavigator.shared.$pending) { destination in
+            guard let destination, destination == .calls || destination == .voicemail else { return }
+            section = destination == AlertDestination.voicemail ? CallSection.voicemail : CallSection.recents
+            AlertNavigator.shared.finish(destination)
+        }
         .sheet(isPresented: $showAccount) { AccountSheet() } // BOREAL_DIALER_v803_UI
     }
 }

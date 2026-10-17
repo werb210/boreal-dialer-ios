@@ -57,6 +57,8 @@ final class AuthService: ObservableObject {
     /// never rang.
     func resumeSavedSession() {
         guard let token = TokenStorage.shared.getToken(), !token.isEmpty else { return }
+        // BOREAL_DIALER_v820_WATCH - alert pushes (missed call, voicemail, texts) reach every signed-in staff member.
+        Task { @MainActor in StaffPushTokenRegistrar.shared.uploadIfNeeded() }
         guard shouldInitializeVoice(from: token) else { return }
         Task { @MainActor in
             PushManager.shared.register()
@@ -83,6 +85,8 @@ final class AuthService: ObservableObject {
         }
 
         Task { await CallDirectoryManager.shared.refresh() }
+        // BOREAL_DIALER_v820_WATCH - a new sign-in may be a different staff member: always re-register the token.
+        await MainActor.run { StaffPushTokenRegistrar.shared.uploadIfNeeded(force: true) }
 
         if shouldInitializeVoice(from: token) {
             // BOREAL_DIALER_SDK_AND_ISOLATION_v5 - PushManager is main-actor.
@@ -103,6 +107,7 @@ final class AuthService: ObservableObject {
         }
 
         Task { await CallDirectoryManager.shared.refresh() }
+        await MainActor.run { StaffPushTokenRegistrar.shared.uploadIfNeeded(force: true) } // BOREAL_DIALER_v820_WATCH
 
         if shouldInitializeVoice(from: token) {
             await MainActor.run { PushManager.shared.register() }
@@ -180,6 +185,8 @@ final class AuthService: ObservableObject {
     }
 
     func logout() async {
+        // BOREAL_DIALER_v820_WATCH - stop this account's alert pushes to this phone while the staff token still works.
+        await StaffPushTokenRegistrar.shared.unregister()
         await VoiceManager.shared.logout()
         await PresenceHeartbeat.shared.goOffline()
         await FaceIDSignIn.shared.revokeAndClear() // BOREAL_DIALER_FACE_ID_SIGN_IN_v299

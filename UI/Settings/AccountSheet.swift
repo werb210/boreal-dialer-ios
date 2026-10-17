@@ -43,6 +43,15 @@ struct AccountSheet: View {
         return (joined.isEmpty ? obj["email"] as? String : joined, obj["phone"] as? String)
     }
 
+    // BOREAL_DIALER_v820_WATCH - BF-Server sets the verified callback number from the phone that passes the sign-in text
+    // code (BF_SERVER_WATCH_CALLBACK_FROM_OTP_v370). A Face ID sign-in does not re-verify it.
+    private var standaloneCellLine: String {
+        guard let phone = claims.phone, !phone.isEmpty else {
+            return "Your cell is verified when you sign in with a text code."
+        }
+        return "Cell it rings: \(PhoneFormat.display(phone)), verified when you sign in with a text code."
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -125,6 +134,21 @@ struct AccountSheet: View {
                             .rowSubtitle()
                     }
                     if let watchEnrollmentError { Text(watchEnrollmentError).foregroundStyle(.red).font(.caption) }
+                    // BOREAL_DIALER_v820_WATCH - where the standalone-Watch switch lives and what it needs. The switch
+                    // itself is on the Watch (BF-Server only accepts it from the Watch's own session); the cell number
+                    // it rings is the one this account signs in with, verified by the text code.
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("Answer calls on my Watch without iPhone", systemImage: "applewatch.radiowaves.left.and.right")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("When your iPhone isn't reachable, Boreal calls ring your cell number, which rings your Watch. Press 1 to accept.")
+                            .rowSubtitle()
+                        Text(standaloneCellLine).rowSubtitle()
+                        Text("Turn it on in Boreal on your Watch: Account > Answer calls on my Watch without iPhone.")
+                            .rowSubtitle()
+                    }
+                    .padding(.vertical, 4)
+                    Text("Calls you start on the Watch go through this iPhone when it's nearby (AirPods work), and through your cell when it isn't.")
+                        .rowSubtitle()
                 } header: { SectionLabel(text: "Apple Watch") }
                 .onAppear { if watchEnrollment == nil { generateWatchEnrollment() } }
 

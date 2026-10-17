@@ -21,8 +21,10 @@ struct AppNotificationRouter {
     }
 }
 
-/// Ordinary APNs boundary. No server upload is attempted because this repo has
-/// no verified standard-token registration endpoint.
+/// Ordinary APNs boundary.
+/// BOREAL_DIALER_v820_WATCH - BF-Server v820 added POST/DELETE /staff/push-token, so the token is now uploaded
+/// (StaffPushTokenRegistrar) and the five alert types (missed call, voicemail, SMS, client message, handoff) have
+/// categories, actions and tap routing.
 @MainActor
 final class StandardNotificationCoordinator: NSObject, UNUserNotificationCenterDelegate {
     static let shared = StandardNotificationCoordinator()
@@ -35,7 +37,9 @@ final class StandardNotificationCoordinator: NSObject, UNUserNotificationCenterD
         center.delegate = self
         // BOREAL_DIALER_MISSED_CALL_ACTIONS_v239 - the iPhone app registered no
         // categories, so a missed call could never show a Call Back button.
-        center.setNotificationCategories([MissedCallNotification.category()])
+        // BOREAL_DIALER_v820_WATCH - all five alert categories (MISSED_CALL among them), shared with the Watch app so
+        // mirrored notifications show the same Call back / Reply actions on the wrist.
+        center.setNotificationCategories(Set(BorealAlertCategories.all()))
         center.requestAuthorization(options: [.alert, .badge, .sound]) { granted, _ in
             guard granted else { return }
             DispatchQueue.main.async { UIApplication.shared.registerForRemoteNotifications() }
@@ -44,6 +48,7 @@ final class StandardNotificationCoordinator: NSObject, UNUserNotificationCenterD
 
     func didReceiveStandardPushToken(_ token: Data) {
         standardPushToken = .apns(token)
+        StaffPushTokenRegistrar.shared.didReceive(token) // BOREAL_DIALER_v820_WATCH
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
@@ -56,10 +61,35 @@ final class StandardNotificationCoordinator: NSObject, UNUserNotificationCenterD
                                             didReceive response: UNNotificationResponse,
                                             withCompletionHandler completion: @escaping () -> Void) {
         let userInfo = response.notification.request.content.userInfo
-        // BOREAL_DIALER_MISSED_CALL_ACTIONS_v239 - Call Back (or a tap on the
-        // missed-call banner) dials through the existing deep-link path.
-        if let url = MissedCallNotification.callBackURL(userInfo: userInfo) {
+        let actionId = response.actionIdentifier
+        // BOREAL_DIALER_v820_WATCH - a Reply typed on the banner, lock screen or the Watch. Sent in the background;
+        // the completion handler is held until the send finishes so iOS keeps the app alive for it.
+        if actionId == BorealAlertAction.reply, let text = (response as? UNTextInputNotificationResponse)?.userText {
+            guard let payload = BorealAlertPayload(userInfo: userInfo),
+                  let target = BorealAlertReplyTarget.target(for: payload) else {
+                AlertReplySender.postFailure()
+                completion()
+                return
+            }
+            Task {
+                do { try await AlertReplySender.send(text, to: target) }
+                catch { AlertReplySender.postFailure() }
+                completion()
+            }
+            return
+        }
+        // BOREAL_DIALER_MISSED_CALL_ACTIONS_v239 - Call Back dials through the existing deep-link path.
+        // BOREAL_DIALER_v820_WATCH - only the Call back BUTTON dials now (missed call and voicemail). A plain tap on the
+        // banner opens the Calls tab instead of ringing a client.
+        if actionId == BorealAlertAction.callBack, let url = MissedCallNotification.callBackURL(userInfo: userInfo) {
             Task { @MainActor in _ = DeepLinkCoordinator.shared.receive(url) }
+            completion()
+            return
+        }
+        // BOREAL_DIALER_v820_WATCH - a tap opens the tab / thread the alert is about.
+        if actionId == UNNotificationDefaultActionIdentifier,
+           let destination = AlertDestination.destination(userInfo: userInfo) {
+            Task { @MainActor in AlertNavigator.shared.open(destination) }
             completion()
             return
         }
@@ -76,13 +106,9 @@ enum MissedCallNotification {
     static let categoryId = "MISSED_CALL"
     static let callBackActionId = "CALL_BACK"
 
+    // BOREAL_DIALER_v820_WATCH - the shared definition, so the iPhone and the Watch register the same category.
     static func category() -> UNNotificationCategory {
-        let callBack = UNNotificationAction(
-            identifier: callBackActionId,
-            title: "Call Back",
-            options: [.foreground, .authenticationRequired]
-        )
-        return UNNotificationCategory(identifier: categoryId, actions: [callBack], intentIdentifiers: [], options: [])
+        BorealAlertCategories.category(for: .missedCall)
     }
 
     /// Returns nil for anything that is not a dialable number (client identities, "Unknown").
@@ -101,9 +127,10 @@ enum MissedCallNotification {
     }
 
     static func callBackURL(userInfo: [AnyHashable: Any]) -> URL? {
-        guard userInfo["type"] as? String == "missed_call",
-              let phone = userInfo["phone"] as? String,
-              !phone.isEmpty else { return nil }
+        // BOREAL_DIALER_v820_WATCH - voicemail pushes offer Call back too, and the phone is normalised to E.164 (the
+        // deep-link parser rejects anything else).
+        guard let payload = BorealAlertPayload(userInfo: userInfo), payload.kind.offersCallBack,
+              let phone = payload.phone else { return nil }
         var components = URLComponents()
         components.scheme = "borealdialer"
         components.host = "call"

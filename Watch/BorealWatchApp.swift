@@ -17,6 +17,13 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
         WatchPushTokenStore.shared.capture(deviceToken)
     }
     func didFailToRegisterForRemoteNotificationsWithError(_ error: Error) {}
+    // BOREAL_DIALER_v819_PUSH - with no willPresent handler a push that arrived while the Watch app was open was
+    // silently dropped by the system. Show it as a banner like any other notification.
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .list, .sound])
+    }
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         Task { @MainActor in
@@ -44,6 +51,11 @@ final class WatchPushTokenStore {
     private(set) var token: String?
     private let service = "financial.boreal.dialer.watch.apns"
     private let account = "watch-standard-token"
+    // BOREAL_DIALER_v819_PUSH - the token was uploaded only at launch and right after linking, both with try?. One
+    // failed upload (offline, expired session) left the server with no registration until the Watch app was next
+    // cold-launched, which on watchOS can be days. Re-send it when the app becomes active, at most every 6 hours.
+    private var lastUploadedToken: String?
+    private var lastUploadedAt: Date?
     private init() {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service, kSecAttrAccount as String: account,
@@ -77,9 +89,23 @@ final class WatchPushTokenStore {
 #endif
         _ = try await client.request(path: "/watch/devices/\(current.deviceId)/push-token", method: "PUT",
             body: JSONEncoder().encode(Body(pushType: "standard", token: token, environment: environment)))
+        await MainActor.run { WatchPushTokenStore.shared.markUploaded(token) } // BOREAL_DIALER_v819_PUSH - throttle state
+    }
+    // BOREAL_DIALER_v819_PUSH - see lastUploadedToken.
+    @MainActor func markUploaded(_ value: String) {
+        lastUploadedToken = value
+        lastUploadedAt = Date()
+    }
+    // BOREAL_DIALER_v819_PUSH - called whenever the Watch app becomes active.
+    @MainActor func refreshRegistrationIfNeeded() {
+        guard let token else { return }
+        if token == lastUploadedToken, let at = lastUploadedAt, Date().timeIntervalSince(at) < 6 * 60 * 60 { return }
+        Task { try? await WatchPushTokenStore.shared.uploadIfPossible() }
     }
     func clear() {
         token = nil
+        lastUploadedToken = nil // BOREAL_DIALER_v819_PUSH
+        lastUploadedAt = nil
         SecItemDelete([kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service, kSecAttrAccount as String: account] as CFDictionary)
     }
@@ -98,6 +124,7 @@ struct BorealWatchApp: App {
                 .onOpenURL { url in store.complicationTarget = WatchComplicationLink.target(for: url) }
                 .onChange(of: scenePhase) { phase in
                     guard phase == .active else { return }
+                    WatchPushTokenStore.shared.refreshRegistrationIfNeeded() // BOREAL_DIALER_v819_PUSH
                     Task { await WatchFaceSync.refresh() }
                     WatchFaceSync.scheduleNext()
                 }

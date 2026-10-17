@@ -20,6 +20,8 @@ struct RootTabView: View {
     @ObservedObject private var deepLinks = DeepLinkCoordinator.shared
     // BOREAL_DIALER_v803_UI - drives the green dot on the Messages pill.
     @ObservedObject private var inbox = InboxUnreadStore.shared
+    // BOREAL_DIALER_v820_WATCH - a tapped alert push picks the tab; the tab itself opens the thread.
+    @ObservedObject private var alerts = AlertNavigator.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -68,6 +70,10 @@ struct RootTabView: View {
         }
         .onChange(of: deepLinks.pending) { link in
             if link != nil { tab = .calls }
+        }
+        // BOREAL_DIALER_v820_WATCH - onReceive also delivers a value set before this view existed (cold launch from a tap).
+        .onReceive(alerts.$pending) { destination in
+            if let destination { tab = destination.tab }
         }
         // BOREAL_DIALER_v803_MENTIONS - keep the Team socket open on every tab so
         // an @mention can raise a local alert while the Team tab is not showing.

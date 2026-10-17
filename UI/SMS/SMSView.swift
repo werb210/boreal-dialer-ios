@@ -150,6 +150,8 @@ struct SMSView: View {
     @State private var showBroadcast = false
     // BOREAL_DIALER_SMS_NEW_MESSAGE_v33
     @State private var showNewMessage = false
+    // BOREAL_DIALER_v820_WATCH - the thread a tapped SMS / handoff alert opens.
+    @State private var alertThread: SMSThread?
 
     var body: some View {
         NavigationStack {
@@ -214,8 +216,29 @@ struct SMSView: View {
                     Task { await viewModel.load() }
                 }
             }
+            // BOREAL_DIALER_v820_WATCH
+            .navigationDestination(isPresented: Binding(
+                get: { alertThread != nil },
+                set: { if !$0 { alertThread = nil } }
+            )) {
+                if let thread = alertThread {
+                    SMSThreadView(thread: thread) {
+                        Task { await viewModel.load() }
+                    }
+                }
+            }
         }
         .task { await viewModel.load() }
+        // BOREAL_DIALER_v820_WATCH - an SMS (or SMS handoff) alert opens its thread. The list row, when loaded, supplies
+        // the contact's name; otherwise the thread opens from the number / contact id alone.
+        .onReceive(AlertNavigator.shared.$pending) { destination in
+            guard let destination, case .smsThread(let phone, let contactId) = destination else { return }
+            let known = viewModel.threads.first {
+                (contactId != nil && $0.contactId == contactId) || (phone != nil && $0.phone == phone)
+            }
+            alertThread = known ?? SMSThread(contactId: contactId, displayName: nil, phone: phone, unreadCount: nil)
+            AlertNavigator.shared.finish(destination)
+        }
     }
 }
 

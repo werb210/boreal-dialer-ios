@@ -56,6 +56,20 @@ struct MessageConversation: Identifiable, Decodable {
     }
 }
 
+// BOREAL_DIALER_v820_WATCH - lets a tapped client-message / handoff alert open the conversation by contact id.
+extension MessageConversation {
+    init(contactId: String, displayName: String?) {
+        self.threadKey = nil
+        self.contactId = contactId
+        self.displayName = displayName
+        self.phone = nil
+        self.email = nil
+        self.lastAt = nil
+        self.lastBody = nil
+        self.unreadCount = nil
+    }
+}
+
 private struct MessageConversationsEnvelope: Decodable {
     let conversations: [MessageConversation]
 }
@@ -185,6 +199,8 @@ struct MessagesView: View {
     @StateObject private var viewModel = MessagesViewModel()
     // BOREAL_DIALER_MAYA_SESSIONS_v789 - Maya's live chats, read-only.
     @State private var showMaya = false
+    // BOREAL_DIALER_v820_WATCH - the conversation a tapped client-message / handoff alert opens.
+    @State private var alertConversation: MessageConversation?
 
     var body: some View {
         NavigationStack {
@@ -209,8 +225,33 @@ struct MessagesView: View {
             .navigationDestination(isPresented: $showMaya) {
                 MayaSessionsView()
             }
+            // BOREAL_DIALER_v820_WATCH
+            .navigationDestination(isPresented: Binding(
+                get: { alertConversation != nil },
+                set: { if !$0 { alertConversation = nil } }
+            )) {
+                if let conversation = alertConversation {
+                    MessageThreadView(conversation: conversation) {
+                        Task { await viewModel.load() }
+                    }
+                }
+            }
         }
         .task { await viewModel.load() }
+        // BOREAL_DIALER_v820_WATCH - a client-message / handoff alert opens that contact's conversation (or just this tab).
+        .onReceive(AlertNavigator.shared.$pending) { destination in
+            guard let destination else { return }
+            switch destination {
+            case .messagesConversation(let contactId):
+                alertConversation = viewModel.conversations.first { $0.contactId == contactId }
+                    ?? MessageConversation(contactId: contactId, displayName: nil)
+                AlertNavigator.shared.finish(destination)
+            case .messages:
+                AlertNavigator.shared.finish(destination)
+            default:
+                return
+            }
+        }
     }
 
     @ViewBuilder

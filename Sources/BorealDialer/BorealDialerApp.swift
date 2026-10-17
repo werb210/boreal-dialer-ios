@@ -126,6 +126,8 @@ struct BorealDialerApp: App {
                     // keys the watch complication reads. This is that writer.
                     Task { await WatchSnapshotSync.refresh() }
                     Task { await DialerDashboardStore.refresh() } // BOREAL_DIALER_LARGE_WIDGET_v685
+                    // BOREAL_DIALER_v820_WATCH - re-send the alert-push token if it changed or is 6 h stale.
+                    if auth.isAuthenticated { StaffPushTokenRegistrar.shared.uploadIfNeeded() }
                     Task {
                         OfflineQueue.shared.reconcileBackground() // BOREAL_DIALER_BACKGROUND_SEND_v309
                         await OfflineQueue.shared.flush()

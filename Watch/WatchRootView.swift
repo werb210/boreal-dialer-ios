@@ -40,6 +40,12 @@ struct WatchRootView: View {
             // BOREAL_DIALER_WATCH_FACE_v371 - complication taps land on the screen they name.
             .navigationDestination(isPresented: complicationBinding("dial")) { WatchDialView() }
             .navigationDestination(isPresented: complicationBinding("recents")) { WatchRecentsView() }
+            // BOREAL_DIALER_v820_WATCH - "Call back" on a missed-call / voicemail notification opens the keypad with
+            // the number filled in; one tap places it (via iPhone when reachable).
+            .navigationDestination(isPresented: Binding(get: { store.pendingDialNumber != nil },
+                                                        set: { if !$0 { store.pendingDialNumber = nil } })) {
+                WatchDialView(initialNumber: store.pendingDialNumber ?? "")
+            }
         }.onAppear { store.startCompanionOptimization() }
     }
     // BOREAL_DIALER_v804_WATCH
@@ -98,9 +104,9 @@ struct WatchDialView: View {
     // which was unusable on the wrist (Scribble/tiny keyboard). Same call plumbing.
     @State private var number: String
     @State private var line: BorealLine = .BF
-    @State private var status: WatchCallStatus = .idle
     @State private var errorMessage: String?
-    private let transport: any WatchCallTransport = ServerBridgeWatchCallTransport()
+    // BOREAL_DIALER_v820_WATCH - iPhone VoIP when reachable, server callback bridge otherwise, with live status.
+    @StateObject private var call = WatchCallController()
     private let keys: [[String]] = [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"], ["*", "0", "#"]]
     init(initialNumber: String = "") { _number = State(initialValue: initialNumber) }
     /// BOREAL_DIALER_WATCH_DIALPAD_FIT_v314 - six rows (display, 4 key rows, actions)
@@ -162,7 +168,7 @@ struct WatchDialView: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .disabled(number.isEmpty || status == .requesting)
+                    .disabled(number.isEmpty || call.isSettingUp)
                 }
                 // BOREAL_DIALER_WATCH_DIAL_FIT_v173 - the default inline style
                 // renders a fixed-height wheel inside this VStack and clipped its
@@ -178,31 +184,15 @@ struct WatchDialView: View {
                     .pickerStyle(.navigationLink)
                     .font(.caption2)
                 }
-                if status != .idle { Text(statusText).font(.caption2).foregroundStyle(.secondary) }
+                WatchCallStatusView(controller: call) // BOREAL_DIALER_v820_WATCH
                 if let errorMessage { Text(errorMessage).font(.caption2).foregroundStyle(.red) }
             }.padding(.horizontal, 4)
         }.navigationTitle("Dial")
     }
-    private var statusText: String {
-        switch status {
-        case .requesting: "Requesting callback…"
-        case .waitingForCallback: "Waiting for carrier call…"
-        case .bridging: "Bridging…"
-        case .ringing: "Ringing…"
-        case .connected: "Connected"
-        case .ended: "Call ended"
-        default: status.rawValue.capitalized
-        }
-    }
     private func start() {
         guard let destination = PhoneNumberNormalizer.normalize(number) else { errorMessage = "Enter a valid number"; return }
-        let captured = CallRequest(destination: destination, line: line)
-        status = .requesting; errorMessage = nil
-        WKInterfaceDevice.current().play(.start)
-        Task { do { status = try await transport.startCall(captured) }
-            catch let error as WatchServiceError { status = .failed; errorMessage = error.safeMessage }
-            catch { status = .failed; errorMessage = "Call request failed" }
-        }
+        errorMessage = nil
+        call.start(CallRequest(destination: destination, line: line)) // BOREAL_DIALER_v820_WATCH
     }
 }
 
@@ -656,8 +646,17 @@ struct WatchAccountView: View {
     var body: some View { List {
         if linked {
             linkStatusPill // BOREAL_DIALER_v804_WATCH
-            Toggle("Standalone cellular fallback", isOn: $fallback).onChange(of: fallback) { enabled in updateRouting(enabled) }
-            Button("Sign Out", role: .destructive) { Task { do { try await WatchAuthService.shared.logout(client: WatchAPIClient()); await MainActor.run { store.clearSensitiveData(); linked = false; message = "Signed out on this Watch" } } catch { await MainActor.run { message = "Could not revoke this Watch. Try again." } } } }
+            // BOREAL_DIALER_v820_WATCH - say what the switch does. BF-Server only enables it when the staff member's cell
+            // number is verified, which happens automatically when they sign in on the iPhone with a text code.
+            Toggle("Answer calls on my Watch without iPhone", isOn: Binding(
+                get: { fallback },
+                set: { enabled in fallback = enabled; updateRouting(enabled) }
+            ))
+            Text("When your iPhone isn't reachable, Boreal calls ring your cell number, which rings this Watch. Press 1 to accept.")
+                .font(.caption2).foregroundStyle(.secondary)
+            Text("Your cell is the number you sign in to Boreal Dialer with on your iPhone; signing in with the text code verifies it.")
+                .font(.caption2).foregroundStyle(.secondary)
+            Button("Sign Out", role: .destructive) { Task { do { try await WatchAuthService.shared.logout(client: WatchAPIClient()); await MainActor.run { store.clearSensitiveData(); WatchStandaloneRouting.lastConfirmed = false; fallback = false; linked = false; message = "Signed out on this Watch" } } catch { await MainActor.run { message = "Could not revoke this Watch. Try again." } } } }
         } else {
             // BOREAL_DIALER_WATCH_LINK_COPY_v1
             // Auto-link already works: AccountSheet.swift:163 sends the code
@@ -679,7 +678,12 @@ struct WatchAccountView: View {
             }.font(.caption2)
         }
         if let message { Text(message).font(.caption).foregroundStyle(.secondary) }
-    }.navigationTitle("Account").task { linked = await WatchAuthService.shared.restore(); if linked { try? await WatchAPIClient().registerDevice() } } }
+    }.navigationTitle("Account").task {
+        linked = await WatchAuthService.shared.restore()
+        // BOREAL_DIALER_v820_WATCH - BF-Server has no read for this switch, so show the last state it confirmed.
+        fallback = linked && WatchStandaloneRouting.lastConfirmed
+        if linked { try? await WatchAPIClient().registerDevice() }
+    } }
     // BOREAL_DIALER_v804_WATCH
     private var linkStatusPill: some View {
         HStack(spacing: 4) {
@@ -694,7 +698,12 @@ struct WatchAccountView: View {
         guard let session = await WatchAuthService.shared.session else { return }
         struct Body: Encodable { let enabled: Bool }
         _ = try await WatchAPIClient().request(path: "/watch/devices/\(session.deviceId)/standalone-routing", method: "PUT", body: JSONEncoder().encode(Body(enabled: enabled)))
-    } catch let error as WatchServiceError { await MainActor.run { fallback = false; message = error.safeMessage } } catch { await MainActor.run { fallback = false; message = "Unable to update fallback" } } } }
+        // BOREAL_DIALER_v820_WATCH - remember what the server accepted and confirm it on the wrist.
+        await MainActor.run {
+            WatchStandaloneRouting.lastConfirmed = enabled
+            message = enabled ? "On. Boreal calls will ring this Watch when your iPhone isn't reachable." : "Off"
+        }
+    } catch let error as WatchServiceError { await MainActor.run { fallback = false; WatchStandaloneRouting.lastConfirmed = false; message = error.safeMessage } } catch { await MainActor.run { fallback = false; message = "Unable to update fallback" } } } }
 }
 
 
@@ -754,9 +763,8 @@ struct WatchVoiceCallView: View {
 struct ConfirmCallView: View {
     let contact: ContactSummary
     let line: BorealLine
-    @State private var status: WatchCallStatus = .idle
     @State private var errorMessage: String?
-    private let transport: any WatchCallTransport = ServerBridgeWatchCallTransport()
+    @StateObject private var call = WatchCallController() // BOREAL_DIALER_v820_WATCH
     var body: some View {
         List {
             VStack(alignment: .leading, spacing: 2) {
@@ -766,20 +774,15 @@ struct ConfirmCallView: View {
             }
             Button { start() } label: {
                 Label("Call \(contact.name)", systemImage: "phone.fill")
-            }.buttonStyle(.borderedProminent).tint(WatchTheme.green).disabled(status == .requesting) // BOREAL_DIALER_v804_WATCH
-            if status != .idle { Text(status.rawValue.capitalized).font(.caption2).foregroundStyle(.secondary) }
+            }.buttonStyle(.borderedProminent).tint(WatchTheme.green).disabled(call.isSettingUp) // BOREAL_DIALER_v804_WATCH
+            WatchCallStatusView(controller: call) // BOREAL_DIALER_v820_WATCH
             if let errorMessage { Text(errorMessage).font(.caption2).foregroundStyle(.red) }
         }.navigationTitle("Confirm")
     }
     private func start() {
         guard let destination = PhoneNumberNormalizer.normalize(contact.primaryPhone) else { errorMessage = "Invalid number"; return }
-        status = .requesting; errorMessage = nil
-        WKInterfaceDevice.current().play(.start)
-        Task {
-            do { status = try await transport.startCall(CallRequest(destination: destination, line: line, contactId: contact.id)) }
-            catch let error as WatchServiceError { status = .failed; errorMessage = error.safeMessage }
-            catch { status = .failed; errorMessage = "Call request failed" }
-        }
+        errorMessage = nil
+        call.start(CallRequest(destination: destination, line: line, contactId: contact.id)) // BOREAL_DIALER_v820_WATCH
     }
 }
 
@@ -866,5 +869,15 @@ struct WatchManualLinkView: View {
             if let message { Text(message).font(.caption2).foregroundStyle(.secondary) }
         }
         .navigationTitle("Manual link")
+    }
+}
+
+// BOREAL_DIALER_v820_WATCH - last standalone-routing state BF-Server accepted (PUT /watch/devices/:id/standalone-routing
+// is write-only). Cleared with the Watch session on sign-out.
+enum WatchStandaloneRouting {
+    private static let key = "boreal.watch.standaloneRouting.confirmed"
+    static var lastConfirmed: Bool {
+        get { UserDefaults.standard.bool(forKey: key) }
+        set { UserDefaults.standard.set(newValue, forKey: key) }
     }
 }

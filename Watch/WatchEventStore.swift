@@ -36,6 +36,8 @@ final class WatchEventStore: NSObject, ObservableObject {
     @Published var lastLinkError: String?
     // BOREAL_DIALER_WATCH_FACE_v371 - set by a complication tap, cleared on back.
     @Published var complicationTarget: String?
+    // BOREAL_DIALER_v820_WATCH - set by "Call back" on a notification; WatchRootView opens the prefilled keypad.
+    @Published var pendingDialNumber: String?
 
     func routeNotification(_ userInfo: [AnyHashable: Any]) { route = WatchNotificationRouter.route(userInfo: userInfo) }
     func sendCompanionAction(_ action: WatchAction) {
@@ -60,7 +62,7 @@ final class WatchEventStore: NSObject, ObservableObject {
 #endif
     }
 
-    func clearSensitiveData() { events.removeAll(); companionCall = nil; route = .home }
+    func clearSensitiveData() { events.removeAll(); companionCall = nil; route = .home; pendingDialNumber = nil }
 }
 
 #if canImport(WatchConnectivity)

@@ -26,8 +26,27 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
     }
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+        let userInfo = response.notification.request.content.userInfo
+        let actionId = response.actionIdentifier
+        let typed = (response as? UNTextInputNotificationResponse)?.userText
         Task { @MainActor in
-            WatchEventStore.shared.routeNotification(response.notification.request.content.userInfo)
+            // BOREAL_DIALER_v820_WATCH - Reply typed on the wrist (the Watch registers the same categories as the iPhone,
+            // so mirrored iPhone alerts offer it here too).
+            if actionId == BorealAlertAction.reply, let typed {
+                await WatchAlertReplies.send(typed, userInfo: userInfo)
+                completionHandler()
+                return
+            }
+            // BOREAL_DIALER_v820_WATCH - Call back: the keypad, prefilled. A Watch-only push carries no number, so it
+            // opens Recent Calls instead.
+            if actionId == BorealAlertAction.callBack {
+                if let phone = BorealAlertPayload(userInfo: userInfo)?.phone {
+                    WatchEventStore.shared.pendingDialNumber = phone
+                } else {
+                    WatchEventStore.shared.complicationTarget = "recents"
+                }
+            }
+            WatchEventStore.shared.routeNotification(userInfo)
             completionHandler()
         }
     }
@@ -35,14 +54,21 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
 
 enum WatchNotificationRegistration {
     static func registerCategories(on center: UNUserNotificationCenter) {
+        center.setNotificationCategories(categories())
+    }
+
+    // BOREAL_DIALER_v820_WATCH - the Watch-only categories plus the five iPhone alert categories (MISSED_CALL, VOICEMAIL,
+    // CLIENT_MESSAGE, SMS, HANDOFF) from the shared definition. A mirrored iPhone notification whose category the Watch app
+    // also registers is shown with the Watch app's actions, so leaving any of the five out would hide Call back / Reply.
+    static func categories() -> Set<UNNotificationCategory> {
         let open = UNNotificationAction(identifier: "OPEN", title: "Open", options: [.foreground])
-        let callback = UNNotificationAction(identifier: "CALL_BACK", title: "Call Back", options: [.foreground])
-        center.setNotificationCategories([
+        var all: Set<UNNotificationCategory> = [
             UNNotificationCategory(identifier: "MESSAGE", actions: [open], intentIdentifiers: []),
             UNNotificationCategory(identifier: "TASK", actions: [open], intentIdentifiers: []),
-            UNNotificationCategory(identifier: "MEETING", actions: [open], intentIdentifiers: []),
-            UNNotificationCategory(identifier: "MISSED_CALL", actions: [callback], intentIdentifiers: [])
-        ])
+            UNNotificationCategory(identifier: "MEETING", actions: [open], intentIdentifiers: [])
+        ]
+        for category in BorealAlertCategories.all() { all.insert(category) }
+        return all
     }
 }
 

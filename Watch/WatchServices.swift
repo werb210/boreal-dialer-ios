@@ -8,13 +8,20 @@ enum WatchServiceError: Error, Equatable {
     case offline, notAuthenticated, invalidLogin, invalidResponse
     case serverCapabilityUnavailable, duplicateRequest, invalidDestination, cancelled
     case server(code: String, message: String)
+    // BOREAL_DIALER_v820_WATCH - calling through the nearby iPhone: it could not be reached (fall back to the server
+    // bridge), or it answered and refused (busy, signed out, microphone) - shown, not retried.
+    case companionUnavailable
+    case companionRefused(reason: String)
 
     var safeMessage: String {
         switch self {
         case .server(let code, let message):
+            // BOREAL_DIALER_v820_WATCH - say how to fix it, not just what is missing.
             return code == "callback_not_verified"
-                ? "A verified cellular callback number is required for standalone Watch calling."
+                ? "Your cell number isn't verified yet. Sign in to Boreal Dialer on your iPhone with the text code sent to your cell, then try again."
                 : (message.isEmpty ? "The server could not complete the request." : message)
+        case .companionRefused(let reason): return WatchPhoneCallReply.message(for: reason)
+        case .companionUnavailable: return "Your iPhone isn't reachable"
         case .offline: return "Network unavailable"
         case .notAuthenticated, .invalidLogin: return "Link this Apple Watch to continue"
         case .invalidDestination: return "Enter a valid phone number"

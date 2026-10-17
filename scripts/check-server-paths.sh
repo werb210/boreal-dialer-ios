@@ -80,10 +80,19 @@ UI/Notifications/NotificationsView.swift|"/notifications/\(Self.pathSegment(id))
 UI/Notifications/NotificationsView.swift|"/notifications/read-all", method: "POST"
 Sources/Notifications/AlertPushRouting.swift|path: "/staff/push-token", method: "POST"
 Sources/Notifications/AlertPushRouting.swift|path: "/staff/push-token", method: "DELETE"
+Sources/Voice/AfterCallSummary.swift|"/calls/\($0)/summary"
+Sources/Voice/CallerCard.swift|"/voice/caller-card?phone=\(encoded)"
+Sources/WatchShared/QuickReplies.swift|"/templates/quick?channel=\(channel)"
+Watch/WatchQuickReplies.swift|path: "/templates/quick", query: [URLQueryItem(name: "channel", value: "sms")]
+Sources/DeepLink/StaffBriefingIntents.swift|nextFollowUpPath = "/staff/next-follow-up"
+Sources/DeepLink/StaffBriefingIntents.swift|missedSummaryPath = "/staff/missed-summary"
+Sources/Services/CallHours.swift|static let path = "/staff/call-hours"
+Sources/Services/CallHours.swift|makeRequest(path: path, method: "PUT"
 PATHS
 if [ "$missing" -ne 0 ]; then
   exit 1
 fi
 echo "v789 endpoints wired: team edit/delete/reactions/pin/pins/typing/search/reads, SMS typing, Maya sessions, notification read."
+echo "v821 endpoints wired: call summary, caller card, quick replies (iPhone + Watch), next follow-up, missed summary, call hours."
 
 echo "No known-dead paths."

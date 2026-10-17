@@ -119,6 +119,8 @@ final class TeamPhaseCStore: ObservableObject {
         content.title = "Reminder"
         content.body = body.isEmpty ? "A saved Team message" : body
         content.sound = .default
+        content.userInfo = ["type": "team_reminder"] // BOREAL_DIALER_v821
+        FocusAlertPolicy.tag(content, as: .internalStaff)
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "team-reminder-" + UUID().uuidString, content: content, trigger: nil))
         show("Reminder: " + (body.isEmpty ? "saved message" : body))
     }

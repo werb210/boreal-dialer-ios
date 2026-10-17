@@ -38,6 +38,9 @@ final class WatchEventStore: NSObject, ObservableObject {
     @Published var complicationTarget: String?
     // BOREAL_DIALER_v820_WATCH - set by "Call back" on a notification; WatchRootView opens the prefilled keypad.
     @Published var pendingDialNumber: String?
+    // BOREAL_DIALER_v821 - set by a notification; WatchRootView opens the quick-reply screen / the voicemail text.
+    @Published var pendingReply: WatchReplyTarget?
+    @Published var pendingVoicemail: WatchVoicemailAlert?
 
     func routeNotification(_ userInfo: [AnyHashable: Any]) { route = WatchNotificationRouter.route(userInfo: userInfo) }
     func sendCompanionAction(_ action: WatchAction) {
@@ -62,7 +65,10 @@ final class WatchEventStore: NSObject, ObservableObject {
 #endif
     }
 
-    func clearSensitiveData() { events.removeAll(); companionCall = nil; route = .home; pendingDialNumber = nil }
+    func clearSensitiveData() {
+        events.removeAll(); companionCall = nil; route = .home; pendingDialNumber = nil
+        pendingReply = nil; pendingVoicemail = nil; QuickReplyCache().clear() // BOREAL_DIALER_v821
+    }
 }
 
 #if canImport(WatchConnectivity)

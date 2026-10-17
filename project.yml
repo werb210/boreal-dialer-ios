@@ -115,6 +115,10 @@ targets:
         aps-environment: development
         com.apple.security.application-groups:
           - group.com.borealfinancial.dialer
+        # BOREAL_DIALER_v821 - client alerts (missed call, voicemail, texts, client messages, handoffs) are
+        # time-sensitive, so a Focus that allows Boreal Dialer lets them through. Needs the Time Sensitive
+        # Notifications capability on the com.borealfinancial.dialer App ID.
+        com.apple.developer.usernotifications.time-sensitive: true
     attributes:
       SystemCapabilities:
         com.apple.ApplicationGroups.iOS:

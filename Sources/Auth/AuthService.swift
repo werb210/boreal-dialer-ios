@@ -193,6 +193,11 @@ final class AuthService: ObservableObject {
         ResponseCache.clear() // BOREAL_DIALER_OFFLINE_v303 - nothing from this account stays on the phone
         OfflineQueue.shared.clear()
         ContactSpotlight.clear() // BOREAL_DIALER_v593_SPOTLIGHT
+        QuickReplyCache().clear() // BOREAL_DIALER_v821 - the next account must not see this one's quick replies
+        await MainActor.run {
+            AfterCallSummaryStore.shared.clear() // BOREAL_DIALER_v821
+            CallerCardStore.shared.clear()
+        }
         await Self.clearDeviceSurfaces()
         TokenStorage.shared.clear()
         awaitingUnlock = false

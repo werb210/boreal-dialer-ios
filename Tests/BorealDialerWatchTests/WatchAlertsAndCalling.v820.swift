@@ -13,7 +13,8 @@ final class WatchAlertsAndCallingV820Tests: XCTestCase {
         }
         XCTAssertEqual(byId["MISSED_CALL"]?.actions.map(\.identifier), ["CALL_BACK"])
         XCTAssertEqual(byId["VOICEMAIL"]?.actions.map(\.identifier), ["CALL_BACK"])
-        XCTAssertEqual(byId["SMS"]?.actions.map(\.identifier), ["REPLY"])
+        // BOREAL_DIALER_v821 - the Watch adds "Quick reply" after the shared Reply on reply-able alerts.
+        XCTAssertEqual(byId["SMS"]?.actions.map(\.identifier), ["REPLY", "QUICK_REPLY"])
         XCTAssertTrue(byId["HANDOFF"]?.actions.first is UNTextInputNotificationAction)
     }
 

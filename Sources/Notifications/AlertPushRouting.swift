@@ -11,6 +11,8 @@ enum AlertDestination: Equatable {
     case calls
     /// Calls tab, Voicemail.
     case voicemail
+    /// BOREAL_DIALER_v821 - Calls tab, Voicemail, with this voicemail opened (transcript, play, call back).
+    case voicemailMessage(id: String)
     /// SMS tab, the thread for this number / contact.
     case smsThread(phone: String?, contactId: String?)
     /// Messages tab, the portal conversation for this contact.
@@ -21,7 +23,10 @@ enum AlertDestination: Equatable {
     static func destination(for payload: BorealAlertPayload) -> AlertDestination {
         switch payload.kind {
         case .missedCall: return .calls
-        case .voicemail: return .voicemail
+        case .voicemail:
+            // BOREAL_DIALER_v821 - straight to the voicemail the alert is about.
+            if let id = payload.voicemailId { return .voicemailMessage(id: id) }
+            return .voicemail
         case .sms, .clientMessage, .handoff:
             if payload.opensSMSThread {
                 if payload.phone == nil && payload.contactId == nil { return .messages }
@@ -38,7 +43,7 @@ enum AlertDestination: Equatable {
 
     var tab: RootTabView.Tab {
         switch self {
-        case .calls, .voicemail: return .calls
+        case .calls, .voicemail, .voicemailMessage: return .calls
         case .smsThread: return .sms
         case .messagesConversation, .messages: return .messages
         }
@@ -181,6 +186,8 @@ enum AlertReplySender {
         content.title = "Reply not sent"
         content.body = "Open Boreal Dialer to try again."
         content.sound = .default
+        content.userInfo = ["type": "reply_failed"] // BOREAL_DIALER_v821 - a client reply: shown under the client-only Focus
+        FocusAlertPolicy.tag(content, as: .client)
         center.add(UNNotificationRequest(identifier: "reply-failed-\(UUID().uuidString)", content: content, trigger: nil),
                    withCompletionHandler: nil)
     }

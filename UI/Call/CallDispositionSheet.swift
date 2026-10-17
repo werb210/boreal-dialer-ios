@@ -41,23 +41,11 @@ struct CallDispositionSheet: View {
                 }
 
                 // BOREAL_DIALER_CALL_SUMMARY_v246
-                Section("Summary") {
-                    if let summary {
-                        Text(summary)
-                            .font(.subheadline)
-                            .textSelection(.enabled)
-                    } else if summaryUnavailable {
-                        Text("No summary for this call.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        HStack(spacing: 8) {
-                            ProgressView()
-                            Text("Summary will appear once the transcript is ready. It is also saved to the contact.")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+                // BOREAL_DIALER_v821 - the summary, next steps, "Open contact" and "Task created" come from
+                // GET /calls/{callSid}/summary, polled every 5 s for up to 2 minutes. The v246 poll below now only
+                // feeds the suggested follow-ups.
+                Section {
+                    AfterCallSummaryCard(callSid: callRef)
                 }
 
                 // BOREAL_DIALER_SUGGESTED_TASKS_v254
@@ -147,7 +135,7 @@ struct CallDispositionSheet: View {
             attempt += 1
             latest = try? await CallSummaryService.fetch(callSid: callRef)
             if let text = latest?.summary, latest?.status == "ready", !text.isEmpty {
-                summary = text
+                summary = text // BOREAL_DIALER_v821 - no longer displayed; AfterCallSummaryCard shows the summary.
                 suggestions = latest?.suggestedTasks ?? [] // BOREAL_DIALER_SUGGESTED_TASKS_v254
                 suggestionContactId = latest?.contactId
                 return

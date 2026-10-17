@@ -8,5 +8,7 @@
 	<array>
 		<string>group.com.borealfinancial.dialer</string>
 	</array>
+	<key>com.apple.developer.usernotifications.time-sensitive</key>
+	<true/>
 </dict>
 </plist>

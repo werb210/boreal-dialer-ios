@@ -76,16 +76,62 @@ func insertingTemplate(_ body: String, into current: String) -> String {
     return current + " " + body
 }
 
+// BOREAL_DIALER_v821 - the quick replies (GET /templates/quick?channel=sms), the same list and order the Watch shows,
+// cached for a day. Shown above the full template list in the SMS composers.
+@MainActor
+final class QuickReplyLibrary: ObservableObject {
+    @Published private(set) var replies: [QuickReply] = []
+    private let cache = QuickReplyCache()
+
+    func load() async {
+        if let cached = cache.load() {
+            replies = cached.items
+            if cached.fresh && !cached.items.isEmpty { return }
+        }
+        do {
+            let request = try APIClient.shared.makeRequest(path: QuickReplyOrdering.path(channel: "sms"))
+            let data = try await APIClient.shared.makeAuthorizedRequest(request)
+            let items = try JSONDecoder().decode(QuickReplyEnvelope.self, from: data).items
+            cache.store(items)
+            replies = QuickReplyOrdering.ordered(items)
+        } catch {
+            // The full template list below still works; the cached quick replies (if any) stay on screen.
+            Telemetry.event("quick_replies_load_failed")
+        }
+    }
+}
+
 struct TemplatePickerSheet: View {
     let channel: String
     @Binding var isPresented: Bool
     @Binding var text: String
 
     @StateObject private var library = TemplateLibrary()
+    @StateObject private var quick = QuickReplyLibrary() // BOREAL_DIALER_v821
 
     var body: some View {
         NavigationStack {
             List {
+                // BOREAL_DIALER_v821 - one tap drops a quick reply into the message.
+                if channel == "sms" && !quick.replies.isEmpty {
+                    Section("Quick replies") {
+                        ForEach(quick.replies) { reply in
+                            Button {
+                                text = insertingTemplate(reply.body, into: text)
+                                isPresented = false
+                            } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(reply.name).font(.headline)
+                                    Text(reply.body)
+                                        .font(.caption)
+                                        .foregroundColor(Theme.muted)
+                                        .lineLimit(2)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
                 if library.loading {
                     HStack { Spacer(); ProgressView(); Spacer() }
                 } else if let error = library.error {
@@ -133,5 +179,6 @@ struct TemplatePickerSheet: View {
             }
         }
         .task { await library.load(channel: channel) }
+        .task { if channel == "sms" { await quick.load() } } // BOREAL_DIALER_v821
     }
 }

@@ -262,6 +262,23 @@ struct BorealAppShortcuts: AppShortcutsProvider {
             "What is due in \(.applicationName)",
             "Show my \(.applicationName) callbacks"
         ])
+        // BOREAL_DIALER_v821 - Siri / Shortcuts briefings (StaffBriefingIntents.swift). Eight shortcuts in all; Apple's
+        // limit is ten per app.
+        AppShortcut(intent: CallNextFollowUpIntent(), phrases: [
+            "Call my next follow-up in \(.applicationName)",
+            "Call my next \(.applicationName) follow-up",
+            "Start my next follow-up call with \(.applicationName)"
+        ])
+        AppShortcut(intent: ReadMissedClientMessagesIntent(), phrases: [
+            "Read my missed client messages in \(.applicationName)",
+            "Read my \(.applicationName) messages",
+            "Any client messages in \(.applicationName)"
+        ])
+        AppShortcut(intent: WhoCalledMeIntent(), phrases: [
+            "Who called me on \(.applicationName)",
+            "Who called me in \(.applicationName)",
+            "Read my missed \(.applicationName) calls"
+        ])
     }
 }
 #endif

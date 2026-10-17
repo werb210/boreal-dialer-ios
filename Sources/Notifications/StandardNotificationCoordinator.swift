@@ -54,7 +54,10 @@ final class StandardNotificationCoordinator: NSObject, UNUserNotificationCenterD
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
                                             willPresent notification: UNNotification,
                                             withCompletionHandler completion: @escaping (UNNotificationPresentationOptions) -> Void) {
-        completion([.banner, .list, .sound])
+        // BOREAL_DIALER_v821 - with the "Only client calls and messages" Focus filter on, internal alerts are not shown
+        // while the app is open either (the system applies the same rule when it is not).
+        completion(FocusAlertPolicy.presentationOptions(userInfo: notification.request.content.userInfo,
+                                                        mode: FocusAlertPolicy.currentMode))
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
@@ -123,6 +126,7 @@ enum MissedCallNotification {
         content.sound = .default
         content.categoryIdentifier = categoryId
         content.userInfo = ["type": "missed_call", "phone": phone]
+        FocusAlertPolicy.tag(content, as: .client) // BOREAL_DIALER_v821 - time-sensitive client alert
         return content
     }
 

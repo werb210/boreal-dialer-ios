@@ -187,6 +187,7 @@ final class VoiceEngine: NSObject, ObservableObject {
         state = .dialing(uuid)
 
         currentHandle = PhoneFormat.display(number)
+        CallerCardStore.shared.clear() // BOREAL_DIALER_v821 - the in-call screen fetches this call's card.
         let capturedLine = activeLine
         pendingOutgoing[uuid] = .pstn(number: number, line: capturedLine)
         // BOREAL_DIALER_v817_CALLS - no Twilio audio until CallKit activates the session.
@@ -320,7 +321,9 @@ final class VoiceEngine: NSObject, ObservableObject {
     }
 
     /// `onResult` receives true once CallKit is ringing the call.
-    func reportIncoming(uuid: UUID, handle: String, onResult: ((Bool) -> Void)? = nil) {
+    /// BOREAL_DIALER_v821 - `card` comes from the Twilio invite's customParameters (callerName, callerCompany,
+    /// callerStage, contactId). It is local data, so the first CallKit report already shows the caller's name.
+    func reportIncoming(uuid: UUID, handle: String, card: CallerCard? = nil, onResult: ((Bool) -> Void)? = nil) {
         // BOREAL_DIALER_CALLKIT_REPORTER_v789 - this used to return silently
         // when not idle (including the 1.5 s cooldown after a call), which is a
         // VoIP push with no reported call. Report it and end it at once.
@@ -339,7 +342,14 @@ final class VoiceEngine: NSObject, ObservableObject {
         update.remoteHandle = CXHandle(type: .phoneNumber, value: handle)
         // BOREAL_DIALER_CALLKIT_IDENTITY_v38 - a readable number until the
         // contact lookup comes back. iOS shows this verbatim.
-        update.localizedCallerName = PhoneFormat.display(handle)
+        // BOREAL_DIALER_v821 - the invite's callerName when the server sent one.
+        let inviteCard = card?.isDisplayable == true ? card : nil
+        update.localizedCallerName = inviteCard?.callKitName ?? PhoneFormat.display(handle)
+        if let inviteCard {
+            CallerCardStore.shared.set(inviteCard, handle: handle)
+        } else {
+            CallerCardStore.shared.clear()
+        }
         update.hasVideo = false
         update.supportsHolding = true
         update.supportsGrouping = false
@@ -352,14 +362,19 @@ final class VoiceEngine: NSObject, ObservableObject {
             guard let self else { return }
             if succeeded {
                 self.state = .ringing(uuid)
+                // BOREAL_DIALER_v821 - the Watch shows the name and the stage (WatchEvent.preview) when known.
                 WatchBridge.shared.send(WatchEvent(kind: .incomingCall,
                                                    callId: uuid.uuidString,
-                                                   displayName: "",
-                                                   handle: handle))
+                                                   displayName: inviteCard?.callKitName ?? "",
+                                                   handle: handle,
+                                                   preview: inviteCard?.stage ?? ""))
                 // Named after the fact. Reporting must not wait on the network:
                 // iOS terminates the app if a VoIP push does not report a call
                 // almost immediately.
-                self.nameIncomingCall(uuid: uuid, handle: handle)
+                // BOREAL_DIALER_v821 - no lookup when the invite already named the caller.
+                if inviteCard == nil {
+                    self.nameIncomingCall(uuid: uuid, handle: handle)
+                }
             }
             onResult?(succeeded)
         }
@@ -370,6 +385,22 @@ final class VoiceEngine: NSObject, ObservableObject {
     private func nameIncomingCall(uuid: UUID, handle: String) {
         Task { [weak self] in
             guard let self else { return }
+            // BOREAL_DIALER_v821 - the caller card first (it also feeds the in-call screen and the Watch's stage line);
+            // the v45 resolve-caller lookup below is the fallback when it cannot be fetched or found nobody.
+            if let card = try? await CallerCardService.fetch(phone: handle), let display = card.callKitName {
+                // Answered already is fine (the in-call screen reads the card); a finished call is not.
+                guard self.liveCallUUID == uuid else { return }
+                CallerCardStore.shared.set(card, handle: handle)
+                let update = CXCallUpdate()
+                update.localizedCallerName = display
+                CallKitReporter.shared.reportUpdated(uuid: uuid, update: update)
+                WatchBridge.shared.send(WatchEvent(kind: .incomingCall,
+                                                   callId: uuid.uuidString,
+                                                   displayName: display,
+                                                   handle: handle,
+                                                   preview: card.stage ?? ""))
+                return
+            }
             // BOREAL_DIALER_RESOLVE_CALLER_CONTRACT_v45
             do {
                 let resolved = try await CallerResolver.resolve(phone: handle)
@@ -499,6 +530,8 @@ final class VoiceEngine: NSObject, ObservableObject {
     // delegate publishes its stable CallSid through this UI-neutral hook.
     func publishFinishedCall(callSid: String?) {
         finishedCall = callSid.map { FinishedCall(callSid: $0, endedAt: Date()) }
+        // BOREAL_DIALER_v821 - Calls > Recents offers this call's summary after the outcome sheet is closed.
+        AfterCallSummaryStore.shared.record(finishedCall)
     }
 
     func endReportedCall(uuid: UUID, reason: CXCallEndedReason = .remoteEnded) {

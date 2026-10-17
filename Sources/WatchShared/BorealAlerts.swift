@@ -39,12 +39,16 @@ public struct BorealAlertPayload: Equatable, Sendable {
     public let phone: String?
     /// "sms" or "messages" when the server says which thread a handoff belongs to.
     public let threadKind: String?
+    /// BOREAL_DIALER_v821 - VOICEMAIL alerts carry the voicemail's id (top-level "voicemailId"); a tap opens it.
+    public let voicemailId: String?
 
-    public init(kind: BorealAlertKind, contactId: String? = nil, phone: String? = nil, threadKind: String? = nil) {
+    public init(kind: BorealAlertKind, contactId: String? = nil, phone: String? = nil, threadKind: String? = nil,
+                voicemailId: String? = nil) {
         self.kind = kind
         self.contactId = contactId
         self.phone = phone
         self.threadKind = threadKind
+        self.voicemailId = voicemailId
     }
 
     public init?(userInfo: [AnyHashable: Any]) {
@@ -57,6 +61,8 @@ public struct BorealAlertPayload: Equatable, Sendable {
         self.phone = (userInfo["phone"] as? String).flatMap { PhoneNumberNormalizer.normalize($0) }
         let thread = (userInfo["threadKind"] as? String)?.lowercased()
         self.threadKind = (thread == "sms" || thread == "messages") ? thread : nil
+        // BOREAL_DIALER_v821 - only kept for voicemail alerts, and only when it is a plain identifier.
+        self.voicemailId = kind == .voicemail ? Self.safeIdentifier(userInfo["voicemailId"] as? String) : nil
     }
 
     /// A handoff lands in the SMS thread when the server says so (or only a phone is known); otherwise in Messages.

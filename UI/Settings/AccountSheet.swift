@@ -82,6 +82,21 @@ struct AccountSheet: View {
                     SectionLabel(text: "Activity")
                 }
 
+                // BOREAL_DIALER_v821 - do-not-disturb by hours, kept on BF-Server.
+                Section {
+                    NavigationLink {
+                        CallHoursView()
+                    } label: {
+                        Label("Call hours", systemImage: "moon.zzz")
+                    }
+                    .listRowBackground(Color.clear)
+                    Text("Outside your hours, Boreal calls go to voicemail; urgent callers can press 1.")
+                        .rowSubtitle()
+                        .listRowBackground(Color.clear)
+                } header: {
+                    SectionLabel(text: "Calls")
+                }
+
                 Section {
                     if callDirectory.enabledStatus == .enabled {
                         Label("Caller ID enabled", systemImage: "checkmark.circle.fill")

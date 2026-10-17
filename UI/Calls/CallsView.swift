@@ -38,6 +38,8 @@ struct CallsView: View {
     }
 
     @State private var section: CallSection = .keypad
+    // BOREAL_DIALER_v821 - the voicemail a tapped VOICEMAIL alert names; VoicemailView opens it once loaded.
+    @State private var focusVoicemailId: String?
     @ObservedObject private var deepLinks = DeepLinkCoordinator.shared
     // BOREAL_DIALER_v803_UI - account / settings moved here from the tab rail.
     @State private var showAccount = false
@@ -75,16 +77,27 @@ struct CallsView: View {
                 // BOREAL_DIALER_MOCKUP_LAYOUT_v60 - mockup order: number, Quick Call, keypad.
                 DialerView()
             case .recents: RecentCallsView()
-            case .voicemail: VoicemailView()
+            case .voicemail: VoicemailView(focusId: $focusVoicemailId) // BOREAL_DIALER_v821
             }
         }
         .onChange(of: deepLinks.pending) { link in
             if link != nil { section = .keypad }
         }
         // BOREAL_DIALER_v820_WATCH - missed-call alert -> Recents, voicemail alert -> Voicemail.
+        // BOREAL_DIALER_v821 - a voicemail alert that names its voicemail opens that one.
         .onReceive(AlertNavigator.shared.$pending) { destination in
-            guard let destination, destination == .calls || destination == .voicemail else { return }
-            section = destination == AlertDestination.voicemail ? CallSection.voicemail : CallSection.recents
+            guard let destination else { return }
+            switch destination {
+            case .calls:
+                section = CallSection.recents
+            case .voicemail:
+                section = CallSection.voicemail
+            case .voicemailMessage(let id):
+                focusVoicemailId = id
+                section = CallSection.voicemail
+            default:
+                return
+            }
             AlertNavigator.shared.finish(destination)
         }
         .sheet(isPresented: $showAccount) { AccountSheet() } // BOREAL_DIALER_v803_UI
@@ -102,6 +115,9 @@ struct RecentCall: Identifiable, Decodable {
     let phoneNumber: String?
     let contactId: String?
     let contactName: String?
+    // BOREAL_DIALER_v821 - for the row's "Call summary". Read when /voice/recent-calls includes it.
+    let callSid: String?
+    let twilioCallSid: String?
 
     enum CodingKeys: String, CodingKey {
         case id, direction, status
@@ -110,6 +126,15 @@ struct RecentCall: Identifiable, Decodable {
         case phoneNumber = "phone_number"
         case contactId = "contact_id"
         case contactName = "contact_name"
+        case callSid = "call_sid"
+        case twilioCallSid = "twilio_call_sid"
+    }
+
+    /// BOREAL_DIALER_v821 - the reference GET /calls/{callSid}/summary is asked with: the Twilio CallSid when the row
+    /// has one, otherwise the row's own id (BF-Server resolves either, as it does for dispositions).
+    var summaryRef: String? {
+        let candidates = [callSid, twilioCallSid, id]
+        return candidates.compactMap { $0 }.first { AfterCallSummaryService.pathSegment($0) != nil }
     }
 
     var isInbound: Bool { (direction ?? "").lowercased() == "inbound" }
@@ -176,10 +201,13 @@ final class RecentCallsViewModel: ObservableObject {
 
 struct RecentCallsView: View {
     @StateObject private var viewModel = RecentCallsViewModel()
+    @State private var summaryFor: RecentCall? // BOREAL_DIALER_v821
 
     var body: some View {
         // BOREAL_DIALER_CALLS_TAP_THROUGH_v35
         NavigationStack {
+        VStack(spacing: 0) {
+        AfterCallSummaryBanner() // BOREAL_DIALER_v821 - the call that just ended
         Group {
             if viewModel.loading && viewModel.calls.isEmpty {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -207,9 +235,14 @@ struct RecentCallsView: View {
                 .refreshable { await viewModel.load() }
             }
         }
+        }
         .toolbar(.hidden, for: .navigationBar) // BOREAL_DIALER_v803_UI - no empty bar above the list
         }
         .task { await viewModel.load() }
+        // BOREAL_DIALER_v821 - "Call summary" from a row's menu.
+        .sheet(item: $summaryFor) { call in
+            AfterCallSummarySheet(callSid: call.summaryRef ?? call.id, title: call.title)
+        }
     }
 
     // A row is navigable only when the call matched a CRM contact.
@@ -257,6 +290,16 @@ struct RecentCallsView: View {
         }
         .padding(.vertical, 5)
         .listRowBackground(Color.clear)
+        // BOREAL_DIALER_v821 - the row detail: long-press a call for its summary and next steps.
+        .contextMenu {
+            if call.summaryRef != nil {
+                Button {
+                    summaryFor = call
+                } label: {
+                    Label("Call summary", systemImage: "sparkles")
+                }
+            }
+        }
     }
 }
 
@@ -427,6 +470,9 @@ private final class VoicemailFinishObserver: NSObject, AVAudioPlayerDelegate {
 
 struct VoicemailView: View {
     @StateObject private var viewModel = VoicemailViewModel()
+    // BOREAL_DIALER_v821 - set by a tapped VOICEMAIL alert (its voicemailId); opened once the list has it.
+    @Binding var focusId: String?
+    @State private var opened: Voicemail?
 
     var body: some View {
         // BOREAL_DIALER_CALLS_TAP_THROUGH_v35
@@ -529,7 +575,122 @@ struct VoicemailView: View {
         }
         .toolbar(.hidden, for: .navigationBar) // BOREAL_DIALER_v803_UI - no empty bar above the list
         }
-        .task { await viewModel.load() }
+        .task {
+            await viewModel.load()
+            openFocused() // BOREAL_DIALER_v821
+        }
+        .onChange(of: focusId) { _ in
+            Task { @MainActor in
+                // An alert for a voicemail the list does not have yet: reload once, then open it.
+                if let id = focusId, !viewModel.voicemails.contains(where: { $0.id == id }) {
+                    await viewModel.load()
+                }
+                openFocused()
+            }
+        }
+        .sheet(item: $opened) { voicemail in
+            VoicemailDetailSheet(voicemail: voicemail, viewModel: viewModel)
+        }
         .onDisappear { viewModel.stop() }
+    }
+
+    // BOREAL_DIALER_v821
+    private func openFocused() {
+        guard let id = focusId else { return }
+        focusId = nil
+        if let match = viewModel.voicemails.first(where: { $0.id == id }) {
+            opened = match
+        } else {
+            viewModel.error = "That voicemail is no longer available."
+        }
+    }
+}
+
+// BOREAL_DIALER_v821 - one voicemail: who, when, the full transcript, play, call back and the contact.
+struct VoicemailDetailSheet: View {
+    let voicemail: Voicemail
+    @ObservedObject var viewModel: VoicemailViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    HStack(spacing: 12) {
+                        AvatarCircle(name: voicemail.title, size: 44)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(voicemail.title).rowTitle()
+                            Text([voicemail.subtitle, voicemail.durationLabel ?? ""]
+                                .filter { !$0.isEmpty }.joined(separator: " · "))
+                                .rowSubtitle()
+                        }
+                        Spacer()
+                    }
+                    .listRowBackground(Color.clear)
+                }
+
+                Section {
+                    if let transcript = voicemail.transcript,
+                       !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(transcript)
+                            .font(.system(size: 15))
+                            .foregroundColor(Theme.text)
+                            .textSelection(.enabled)
+                    } else {
+                        Text("No transcript for this voicemail.")
+                            .font(.system(size: 14))
+                            .foregroundColor(Theme.muted)
+                    }
+                } header: {
+                    SectionLabel(text: "Transcript")
+                }
+                .listRowBackground(Theme.surface)
+
+                Section {
+                    Button {
+                        Task { await viewModel.play(voicemail) }
+                    } label: {
+                        Label(viewModel.playingId == voicemail.id ? "Stop" : "Play voicemail",
+                              systemImage: viewModel.playingId == voicemail.id ? "stop.circle.fill" : "play.circle.fill")
+                    }
+                    if let phone = voicemail.contactPhone, !phone.isEmpty {
+                        Button {
+                            viewModel.stop()
+                            dismiss()
+                            CallManager.shared.startCall(to: phone)
+                        } label: {
+                            Label("Call back", systemImage: "phone.fill")
+                        }
+                    }
+                    if let contactId = voicemail.contactId, !contactId.isEmpty {
+                        NavigationLink {
+                            ContactDetailView(
+                                contact: stubContact(id: contactId, name: voicemail.contactName, phone: voicemail.contactPhone),
+                                onMessage: {}
+                            )
+                        } label: {
+                            Label("Open contact", systemImage: "person.crop.circle")
+                        }
+                    }
+                    if let error = viewModel.error {
+                        Text(error).font(.footnote).foregroundColor(Theme.red)
+                    }
+                }
+                .listRowBackground(Theme.surface)
+            }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(Theme.bg)
+            .navigationTitle("Voicemail")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        viewModel.stop()
+                        dismiss()
+                    }
+                }
+            }
+        }
     }
 }

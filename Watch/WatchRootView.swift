@@ -46,6 +46,16 @@ struct WatchRootView: View {
                                                         set: { if !$0 { store.pendingDialNumber = nil } })) {
                 WatchDialView(initialNumber: store.pendingDialNumber ?? "")
             }
+            // BOREAL_DIALER_v821 - Quick reply / a tapped text or client message: quick replies + dictation.
+            .navigationDestination(isPresented: Binding(get: { store.pendingReply != nil },
+                                                        set: { if !$0 { store.pendingReply = nil } })) {
+                if let target = store.pendingReply { WatchQuickReplyView(target: target) }
+            }
+            // BOREAL_DIALER_v821 - a tapped voicemail alert: the whole text and Call back.
+            .navigationDestination(isPresented: Binding(get: { store.pendingVoicemail != nil },
+                                                        set: { if !$0 { store.pendingVoicemail = nil } })) {
+                if let alert = store.pendingVoicemail { WatchVoicemailAlertView(alert: alert) }
+            }
         }.onAppear { store.startCompanionOptimization() }
     }
     // BOREAL_DIALER_v804_WATCH
@@ -267,7 +277,7 @@ struct ContactDetailView: View {
                 Label("Call", systemImage: "phone.fill").foregroundStyle(.white)
             }
             .listRowBackground(RoundedRectangle(cornerRadius: 12).fill(WatchTheme.green))
-            NavigationLink(destination: WatchQuickTextTemplatesView(recipient: textRecipient)) {
+            NavigationLink(destination: WatchQuickTextTemplatesView(recipient: textRecipient, contactId: contact.id)) {
                 Label("Text", systemImage: "message.fill")
             }
         }
@@ -412,69 +422,17 @@ struct WatchQuickTextRecipientsView: View {
     }
 }
 
+// BOREAL_DIALER_v821 - Quick Text and a contact's Text now open the quick-reply screen: GET /templates/quick (snippets
+// first, cached for a day; /watch/sms-templates as the fallback) plus dictation / Scribble. Sent via POST /watch/sms.
 struct WatchQuickTextTemplatesView: View {
     let recipient: WatchRecentCall
-    @Environment(\.dismiss) private var dismiss
-    @State private var templates: [WatchSMSTemplate] = []
-    @State private var loading = true
-    @State private var sendingTemplateID: String?
-    @State private var errorMessage: String?
-    private let service: any WatchSMSService = DirectWatchSMSService()
+    var contactId: String? = nil
 
     var body: some View {
-        List {
-            Text(recipient.name ?? recipient.number).font(.headline)
-            if loading { ProgressView() }
-            ForEach(templates) { template in
-                Button {
-                    send(template)
-                } label: {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(template.name)
-                        Text(template.body).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
-                    }
-                }
-                .disabled(sendingTemplateID != nil)
-            }
-            if let errorMessage {
-                Text(errorMessage).font(.caption2).foregroundStyle(.red)
-            }
-        }
-        .navigationTitle("Choose Text")
-        .task { await loadTemplates() }
-    }
-
-    private func loadTemplates() async {
-        do {
-            templates = try await service.fetchTemplates()
-            errorMessage = templates.isEmpty ? "No quick texts available" : nil
-        } catch let error as WatchServiceError {
-            errorMessage = error.safeMessage
-        } catch {
-            errorMessage = "Quick texts unavailable"
-        }
-        loading = false
-    }
-
-    private func send(_ template: WatchSMSTemplate) {
-        guard let number = PhoneNumberNormalizer.normalize(recipient.number) else {
-            errorMessage = "Invalid recipient number"
-            return
-        }
-        sendingTemplateID = template.id
-        errorMessage = nil
-        Task {
-            do {
-                try await service.send(to: number, body: template.body)
-                await MainActor.run {
-                    WKInterfaceDevice.current().play(.success)
-                    dismiss()
-                }
-            } catch let error as WatchServiceError {
-                await MainActor.run { sendingTemplateID = nil; errorMessage = error.safeMessage }
-            } catch {
-                await MainActor.run { sendingTemplateID = nil; errorMessage = "Could not send text" }
-            }
+        if let number = PhoneNumberNormalizer.normalize(recipient.number) {
+            WatchQuickReplyView(target: .sms(phone: number, contactId: contactId, name: recipient.name))
+        } else {
+            Text("Invalid recipient number").font(.caption2).foregroundStyle(.red)
         }
     }
 }
@@ -592,6 +550,12 @@ struct CompanionCallView: View {
     }
     var body: some View { Section("iPhone call") {
         Text(call.subtitle)
+        // BOREAL_DIALER_v821 - the iPhone sends the caller's pipeline stage in `preview` for incoming calls.
+        if call.kind == .incomingCall && !call.preview.isEmpty {
+            Text(call.preview)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(WatchTheme.greenBright)
+        }
         Button { store.sendCompanionAction(.answer) } label: {
             Label("Answer", systemImage: "phone.fill").frame(maxWidth: .infinity)
         }

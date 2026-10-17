@@ -29,6 +29,9 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
         let userInfo = response.notification.request.content.userInfo
         let actionId = response.actionIdentifier
         let typed = (response as? UNTextInputNotificationResponse)?.userText
+        // BOREAL_DIALER_v821 - the alert's title is the caller / sender, its body the full message or voicemail text.
+        let title = response.notification.request.content.title
+        let bodyText = response.notification.request.content.body
         Task { @MainActor in
             // BOREAL_DIALER_v820_WATCH - Reply typed on the wrist (the Watch registers the same categories as the iPhone,
             // so mirrored iPhone alerts offer it here too).
@@ -44,6 +47,17 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
                     WatchEventStore.shared.pendingDialNumber = phone
                 } else {
                     WatchEventStore.shared.complicationTarget = "recents"
+                }
+            }
+            // BOREAL_DIALER_v821 - "Quick reply", or a tap on a text / client message / handoff: the reply screen.
+            // A tap on a voicemail: its whole text with Call back.
+            if let payload = BorealAlertPayload(userInfo: userInfo),
+               actionId == WatchQuickReplyAction.identifier || actionId == UNNotificationDefaultActionIdentifier {
+                if payload.kind == .voicemail, actionId == UNNotificationDefaultActionIdentifier {
+                    WatchEventStore.shared.pendingVoicemail = WatchVoicemailAlert(
+                        caller: title.isEmpty ? "Voicemail" : title, text: bodyText, phone: payload.phone)
+                } else if let target = WatchReplyTarget.from(payload: payload, name: title) {
+                    WatchEventStore.shared.pendingReply = target
                 }
             }
             WatchEventStore.shared.routeNotification(userInfo)
@@ -67,7 +81,9 @@ enum WatchNotificationRegistration {
             UNNotificationCategory(identifier: "TASK", actions: [open], intentIdentifiers: []),
             UNNotificationCategory(identifier: "MEETING", actions: [open], intentIdentifiers: [])
         ]
-        for category in BorealAlertCategories.all() { all.insert(category) }
+        // BOREAL_DIALER_v821 - SMS / CLIENT_MESSAGE / HANDOFF also get "Quick reply" on the wrist (the quick-reply list
+        // and dictation); MISSED_CALL / VOICEMAIL keep exactly the iPhone's Call back.
+        for kind in BorealAlertKind.allCases { all.insert(WatchQuickReplyAction.category(for: kind)) }
         return all
     }
 }

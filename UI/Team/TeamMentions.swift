@@ -92,6 +92,7 @@ enum TeamMentionAlert {
             content.sound = .default
             content.threadIdentifier = "team-" + channel
             content.userInfo = ["type": "team_mention", "channelId": channel]
+            FocusAlertPolicy.tag(content, as: .internalStaff) // BOREAL_DIALER_v821 - held back by the client-only Focus
             let request = UNNotificationRequest(identifier: "team-mention-" + messageId, content: content, trigger: nil)
             UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
         }

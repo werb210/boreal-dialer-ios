@@ -297,7 +297,11 @@ extension TwilioVoiceManager: @preconcurrency NotificationDelegate {
         let decision = CallKitReporter.shared.receive(invite: callInvite, firstDelivery: firstDelivery) { invite in
             CallStateManager.shared.transition(to: .ringing)
             pendingCallInvite = callInvite
-            VoiceEngine.shared.reportIncoming(uuid: invite.uuid, handle: invite.from ?? "Unknown") { [weak self] accepted in
+            // BOREAL_DIALER_v821 - BF-Server puts the caller's name, company, stage and contact id on the invite
+            // (customParameters), so CallKit can name the caller without waiting on a lookup.
+            let card = CallerCard.fromInviteParameters(callInvite.customParameters)
+            VoiceEngine.shared.reportIncoming(uuid: invite.uuid, handle: invite.from ?? "Unknown",
+                                              card: card) { [weak self] accepted in
                 guard !accepted, let self else { return }
                 // CallKit refused the call (Do Not Disturb, blocked number):
                 // nothing is ringing, so the invite must not stay pending.

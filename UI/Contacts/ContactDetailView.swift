@@ -90,6 +90,7 @@ struct ContactDetailView: View {
     @Environment(\.openURL) private var openURL
     // BOREAL_DIALER_v822_CARPLAY - starred clients are the Favourites tab in CarPlay.
     @State private var favourite = false
+    @State private var voiceNote: VoiceNoteTarget? // BOREAL_DIALER_v823_VOICE_NOTES
 
     var body: some View {
         ScrollView {
@@ -117,7 +118,7 @@ struct ContactDetailView: View {
                 }
                 .padding(.top, 20)
 
-                HStack(spacing: 28) {
+                HStack(spacing: 18) { // BOREAL_DIALER_v823 - five actions fit an iPhone SE width
                     if let phone = contact.callablePhone {
                         ActionButton(icon: "phone.fill", label: "Call") {
                             CallManager.shared.startCall(to: phone)
@@ -127,6 +128,10 @@ struct ContactDetailView: View {
                     if let email = contact.emailAddress,
                        let url = URL(string: "mailto:\(email)") {
                         ActionButton(icon: "envelope.fill", label: "Email") { openURL(url) }
+                    }
+                    // BOREAL_DIALER_v823_VOICE_NOTES
+                    ActionButton(icon: "mic.fill", label: "Note") {
+                        voiceNote = VoiceNoteTarget(contactId: contact.id, name: contact.displayName)
                     }
                     // BOREAL_DIALER_v822_CARPLAY
                     if contact.callablePhone != nil {
@@ -196,6 +201,7 @@ struct ContactDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await viewModel.load(contactId: contact.id, silo: silo) }
         .onAppear { favourite = FavouriteContacts.shared.contains(contact.id) } // BOREAL_DIALER_v822_CARPLAY
+        .sheet(item: $voiceNote) { target in VoiceNoteSheet(target: target) } // BOREAL_DIALER_v823_VOICE_NOTES
     }
 }
 

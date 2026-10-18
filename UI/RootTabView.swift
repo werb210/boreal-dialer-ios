@@ -22,6 +22,8 @@ struct RootTabView: View {
     @ObservedObject private var inbox = InboxUnreadStore.shared
     // BOREAL_DIALER_v820_WATCH - a tapped alert push picks the tab; the tab itself opens the thread.
     @ObservedObject private var alerts = AlertNavigator.shared
+    // BOREAL_DIALER_v823_ACTIONS - Voice Note / Next Follow-up from the controls, Action Button and Siri.
+    @ObservedObject private var actions = StaffActionRouter.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -83,6 +85,18 @@ struct RootTabView: View {
         }
         // Signed out: RootTabView goes away, and so does the socket.
         .onDisappear { TeamStore.shared.disconnect() }
+        // BOREAL_DIALER_v823_ACTIONS
+        .sheet(item: $actions.voiceNote) { target in
+            VoiceNoteSheet(target: target)
+        }
+        .alert("Boreal", isPresented: Binding(
+            get: { actions.message != nil },
+            set: { if !$0 { actions.message = nil } }
+        )) {
+            Button("OK", role: .cancel) { actions.message = nil }
+        } message: {
+            Text(actions.message ?? "")
+        }
         // BOREAL_DIALER_v803_UI - unread dot for Messages, refreshed every two minutes.
         .task {
             while !Task.isCancelled {

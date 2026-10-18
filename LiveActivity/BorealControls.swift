@@ -51,3 +51,51 @@ struct BorealQuickCallControl: ControlWidget {
         .description("Calls your first quick-call contact from your Boreal line.")
     }
 }
+
+// BOREAL_DIALER_v823_WIDGET_ACTIONS - three more controls for Control Center, the Lock Screen and the Action Button:
+//   - "Boreal Busy": a switch; Busy sends callers to voicemail, without opening the app.
+//   - "Boreal Voice Note": opens the app recording a note for your last call's client.
+//   - "Boreal Next Follow-up": opens the app and calls the client on your next follow-up task.
+enum BorealActionLinks {
+    static let voiceNote = URL(string: "borealdialer://action/voice-note")!
+    static let nextFollowUp = URL(string: "borealdialer://action/next-follow-up")!
+}
+
+@available(iOS 18.0, *)
+struct BorealBusyControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: StaffWidgetActionKinds.busyControl) {
+            ControlWidgetToggle("Boreal Busy", isOn: StaffWidgetActionStore.isBusy, action: BorealBusyControlIntent()) { busy in
+                Label(busy ? "Busy" : "Available", systemImage: busy ? "phone.down.fill" : "phone.fill")
+            }
+        }
+        .displayName("Boreal Busy")
+        .description("Busy sends Boreal callers to voicemail. Turn it off to take calls again.")
+    }
+}
+
+@available(iOS 18.0, *)
+struct BorealVoiceNoteControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "financial.boreal.dialer.control.voice-note") {
+            ControlWidgetButton(action: OpenURLIntent(BorealActionLinks.voiceNote)) {
+                Label("Boreal Voice Note", systemImage: "mic.fill")
+            }
+        }
+        .displayName("Boreal Voice Note")
+        .description("Record a note for your last call's client. It is saved to their Boreal timeline.")
+    }
+}
+
+@available(iOS 18.0, *)
+struct BorealNextFollowUpControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "financial.boreal.dialer.control.next-follow-up") {
+            ControlWidgetButton(action: OpenURLIntent(BorealActionLinks.nextFollowUp)) {
+                Label("Next Follow-up", systemImage: "checklist")
+            }
+        }
+        .displayName("Boreal Next Follow-up")
+        .description("Calls the client on your next Boreal follow-up task.")
+    }
+}

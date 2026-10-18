@@ -24,6 +24,29 @@ final class NewContactViewModel: ObservableObject {
     @Published var companies: [CRMCompany] = []
     @Published var saving = false
     @Published var error: String?
+    // BOREAL_DIALER_v823_CARD_SCAN - the company printed on a scanned card that matched no CRM company.
+    @Published var scannedCompanyNote: String?
+
+    /// BOREAL_DIALER_v823_CARD_SCAN - fills the form from a scanned card; the person checks it before Save.
+    func apply(_ card: ScannedCard) {
+        if !card.firstName.isEmpty { firstName = card.firstName }
+        if !card.lastName.isEmpty { lastName = card.lastName }
+        if !card.phone.isEmpty { phone = card.phone }
+        if !card.email.isEmpty { email = card.email }
+        scannedCompanyNote = nil
+        guard !card.company.isEmpty else { return }
+        if let match = Self.matchCompany(card.company, in: companies) {
+            companyId = match.id
+        } else {
+            scannedCompanyNote = "Card says \(card.company). It isn't a company in Boreal yet."
+        }
+    }
+
+    static func matchCompany(_ name: String, in companies: [CRMCompany]) -> CRMCompany? {
+        let wanted = name.lowercased().filter { $0.isLetter || $0.isNumber }
+        guard !wanted.isEmpty else { return nil }
+        return companies.first { ($0.name ?? "").lowercased().filter { $0.isLetter || $0.isNumber } == wanted }
+    }
 
     var canSave: Bool {
         !saving
@@ -89,10 +112,27 @@ struct NewContactView: View {
 
     @StateObject private var viewModel = NewContactViewModel()
     @Environment(\.dismiss) private var dismiss
+    @State private var scanning = false // BOREAL_DIALER_v823_CARD_SCAN
+    @State private var reading = false
 
     var body: some View {
         NavigationStack {
             Form {
+                // BOREAL_DIALER_v823_CARD_SCAN
+                if CardCameraView.isAvailable {
+                    Section {
+                        Button {
+                            scanning = true
+                        } label: {
+                            Label(reading ? "Reading the card…" : "Scan business card", systemImage: "person.text.rectangle")
+                        }
+                        .disabled(reading)
+                        if let note = viewModel.scannedCompanyNote {
+                            Text(note).font(.system(size: 13)).foregroundColor(Theme.muted)
+                        }
+                    }
+                }
+
                 Section {
                     TextField("First name", text: $viewModel.firstName)
                         .textContentType(.givenName)
@@ -154,6 +194,20 @@ struct NewContactView: View {
                 }
             }
             .task { await viewModel.loadCompanies() }
+            .fullScreenCover(isPresented: $scanning) {
+                CardCameraView(onFinish: { images in
+                    scanning = false
+                    reading = true
+                    Task {
+                        let lines = await Task.detached(priority: .userInitiated) {
+                            BusinessCardParser.recognizeLines(in: images)
+                        }.value
+                        viewModel.apply(BusinessCardParser.parse(lines))
+                        reading = false
+                    }
+                }, onCancel: { scanning = false })
+                .ignoresSafeArea()
+            }
         }
     }
 }

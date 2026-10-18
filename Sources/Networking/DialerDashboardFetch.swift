@@ -11,11 +11,27 @@ private struct DashCall: Decodable {
 }
 private struct DashCalls: Decodable { let items: [DashCall] }
 private struct DashTask: Decodable {
+    let id: DashTaskID? // BOREAL_DIALER_v823_WIDGET_ACTIONS
     let title: String?
     let type: String?
     let status: String?
     let due_at: String?
     let contact_name: String?
+}
+/// BOREAL_DIALER_v823_WIDGET_ACTIONS - a task id as a string whether the server sends a uuid or a number; an
+/// unexpected shape must not empty the whole task list.
+private struct DashTaskID: Decodable {
+    let value: String?
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let text = try? container.decode(String.self) {
+            value = text
+        } else if let number = try? container.decode(Int.self) {
+            value = String(number)
+        } else {
+            value = nil
+        }
+    }
 }
 private struct DashTasksPayload: Decodable { let tasks: [DashTask] }
 private struct DashTasks: Decodable { let data: DashTasksPayload }
@@ -47,7 +63,8 @@ extension DialerDashboardStore {
            let tasks = try? JSONDecoder().decode(DashTasks.self, from: data).data.tasks {
             dashboard.tasks = tasks.filter { ($0.status ?? "").lowercased() != "done" }.prefix(3).map { task in
                 let who = task.contact_name.map { " · " + $0 } ?? ""
-                return DashboardItem(title: task.title ?? "Task", detail: time(date(task.due_at)) + who, number: nil)
+                return DashboardItem(title: task.title ?? "Task", detail: time(date(task.due_at)) + who, number: nil,
+                                     taskId: task.id?.value) // BOREAL_DIALER_v823_WIDGET_ACTIONS
             }
             changed = true
         }

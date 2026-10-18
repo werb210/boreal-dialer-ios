@@ -10,6 +10,8 @@ struct DashboardItem: Codable, Equatable {
     let title: String
     let detail: String
     let number: String?
+    /// BOREAL_DIALER_v823_WIDGET_ACTIONS - a task's id, so the large widget can tick it done. Nil for calls.
+    var taskId: String? = nil
 }
 
 struct DialerDashboard: Codable, Equatable {

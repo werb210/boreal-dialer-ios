@@ -211,6 +211,7 @@ final class AuthService: ObservableObject {
     static func clearDeviceSurfaces() async {
         WidgetSnapshotStore.clear()
         DialerDashboardStore.clear()
+        StaffWidgetActionStore.clear() // BOREAL_DIALER_v823_WIDGET_ACTIONS
         WatchSnapshotSync.clear()
         WatchBridge.shared.sendClear()
         await CallDirectoryManager.shared.clearAll()

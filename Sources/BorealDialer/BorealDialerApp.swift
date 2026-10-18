@@ -24,6 +24,7 @@ struct BorealDialerApp: App {
         PushManager.shared.register()
         StandardNotificationCoordinator.shared.register()
         WatchBridge.shared.activate() // BOREAL_DIALER_WATCH_v55
+        StaffQuickActions.shared.install() // BOREAL_DIALER_v823_WIDGET_ACTIONS - widget / Control Center buttons
         // BOREAL_DIALER_VOICE_RESUME_v789 - a saved session is a signed-in staff
         // member: register for VoIP and start the token refresh now, not only
         // after the next sign-in.
@@ -74,6 +75,7 @@ struct BorealDialerApp: App {
             // BOREAL_DIALER_SHARE_TO_BOREAL_v319 - a shared file opens the attach sheet; links still dial.
             .onOpenURL { url in
                 if SharedDocumentInbox.shared.receive(url) { return }
+                if StaffActionRouter.shared.receive(url) { return } // BOREAL_DIALER_v823_ACTIONS
                 _ = DeepLinkCoordinator.shared.receive(url)
             }
             // BOREAL_DIALER_v593_SPOTLIGHT
@@ -130,6 +132,8 @@ struct BorealDialerApp: App {
                     if auth.isAuthenticated { StaffPushTokenRegistrar.shared.uploadIfNeeded() }
                     // BOREAL_DIALER_v822_CARPLAY - Siri messaging (CarPlay replies) needs Siri permission once.
                     if auth.isAuthenticated { SiriMessageHandler.requestAuthorizationIfNeeded() }
+                    // BOREAL_DIALER_v823_WIDGET_ACTIONS - widget taps made before the app could run them.
+                    if auth.isAuthenticated { Task { await StaffQuickActions.shared.applyPending() } }
                     Task {
                         OfflineQueue.shared.reconcileBackground() // BOREAL_DIALER_BACKGROUND_SEND_v309
                         await OfflineQueue.shared.flush()

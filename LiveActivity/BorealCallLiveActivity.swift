@@ -41,6 +41,10 @@ struct BorealDialerWidgetsBundle: WidgetBundle {
         if #available(iOS 18.0, *) {
             BorealNewCallControl()
             BorealQuickCallControl()
+            // BOREAL_DIALER_v823_WIDGET_ACTIONS
+            BorealBusyControl()
+            BorealVoiceNoteControl()
+            BorealNextFollowUpControl()
         }
     }
 }

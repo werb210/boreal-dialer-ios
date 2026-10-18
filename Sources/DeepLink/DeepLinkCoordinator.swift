@@ -279,6 +279,29 @@ struct BorealAppShortcuts: AppShortcutsProvider {
             "Who called me in \(.applicationName)",
             "Read my missed \(.applicationName) calls"
         ])
+        // BOREAL_DIALER_v823_VOICE_NOTES - nine shortcuts in all (Apple's limit is ten).
+        AppShortcut(intent: RecordBorealNoteIntent(), phrases: [
+            "Record a note in \(.applicationName)",
+            "Add a \(.applicationName) note",
+            "Take a note with \(.applicationName)"
+        ])
+    }
+}
+#endif
+
+#if canImport(AppIntents)
+// BOREAL_DIALER_v823_VOICE_NOTES - "Record a note in Boreal Dialer": opens the app on the voice-note sheet for the
+// last call's client (the same as the "Boreal Voice Note" control and the Action Button).
+@available(iOS 16.0, *)
+struct RecordBorealNoteIntent: AppIntent {
+    static var title: LocalizedStringResource = "Record a Boreal Note"
+    static var description = IntentDescription("Dictate a note for your last call's client. It is saved to their Boreal timeline.")
+    static var openAppWhenRun: Bool = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        await StaffActionRouter.shared.run(.voiceNote)
+        return .result()
     }
 }
 #endif

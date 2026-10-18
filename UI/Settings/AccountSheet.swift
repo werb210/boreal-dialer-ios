@@ -52,6 +52,8 @@ struct AccountSheet: View {
         return "Cell it rings: \(PhoneFormat.display(phone)), verified when you sign in with a text code."
     }
 
+    @ObservedObject private var quickActions = StaffQuickActions.shared // BOREAL_DIALER_v823_WIDGET_ACTIONS
+
     var body: some View {
         NavigationStack {
             List {
@@ -84,6 +86,19 @@ struct AccountSheet: View {
 
                 // BOREAL_DIALER_v821 - do-not-disturb by hours, kept on BF-Server.
                 Section {
+                    // BOREAL_DIALER_v823_WIDGET_ACTIONS - the portal topbar's Busy switch; also on the widget and in
+                    // Control Center ("Boreal Busy").
+                    Toggle(isOn: Binding(
+                        get: { quickActions.isBusy },
+                        set: { busy in Task { await quickActions.setBusy(busy) } }
+                    )) {
+                        Label("Busy", systemImage: "phone.down")
+                    }
+                    .tint(Theme.green)
+                    .listRowBackground(Color.clear)
+                    if let error = quickActions.error {
+                        Text(error).rowSubtitle().listRowBackground(Color.clear)
+                    }
                     NavigationLink {
                         CallHoursView()
                     } label: {

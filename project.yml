@@ -99,6 +99,9 @@ targets:
                 UISceneConfigurationName: CarPlay
                 UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).CarPlaySceneDelegate
         NSFaceIDUsageDescription: Boreal Dialer uses Face ID to unlock your signed-in session.
+        # BOREAL_DIALER_v823 - voice notes after a call, and scanning business cards into new contacts.
+        NSSpeechRecognitionUsageDescription: Boreal Dialer turns your spoken notes into text for the client's Boreal timeline.
+        NSCameraUsageDescription: Boreal Dialer uses the camera to scan business cards into new contacts.
         ITSAppUsesNonExemptEncryption: false
         NSSupportsLiveActivities: true
         CFBundleURLTypes:

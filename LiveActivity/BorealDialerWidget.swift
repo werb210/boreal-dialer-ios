@@ -8,6 +8,7 @@ struct BorealDialerEntry: TimelineEntry {
     var dashboard: DialerDashboard = .empty
     var meetingTitle: String? = nil
     var meetingAt: Date? = nil
+    var isBusy: Bool = false // BOREAL_DIALER_v823_WIDGET_ACTIONS
 }
 
 struct BorealDialerProvider: TimelineProvider {
@@ -25,7 +26,8 @@ struct BorealDialerProvider: TimelineProvider {
         let meeting = WatchSnapshotSync.nextMeeting()
         return BorealDialerEntry(date: Date(), contacts: WidgetSnapshotStore.load().contacts,
                                  dashboard: DialerDashboardStore.load(),
-                                 meetingTitle: meeting?.title, meetingAt: meeting?.startsAt)
+                                 meetingTitle: meeting?.title, meetingAt: meeting?.startsAt,
+                                 isBusy: StaffWidgetActionStore.isBusy) // BOREAL_DIALER_v823_WIDGET_ACTIONS
     }
 }
 
@@ -39,6 +41,7 @@ enum DialerWidgetPalette {
     static let navy = Color(red: 11 / 255, green: 31 / 255, blue: 58 / 255)
     static let gold = Color(red: 201 / 255, green: 162 / 255, blue: 74 / 255)
     static let red = Color(red: 1.0, green: 107 / 255, blue: 107 / 255)
+    static let green = Color(red: 74 / 255, green: 222 / 255, blue: 128 / 255) // BOREAL_DIALER_v823_WIDGET_ACTIONS
     static let text = Color.white
     static let muted = Color.white.opacity(0.6)
 }
@@ -106,6 +109,58 @@ struct BorealDialerWidgetView: View {
                 .font(.caption)
                 .foregroundStyle(DialerWidgetPalette.muted)
                 .lineLimit(1)
+            presenceButton
+        }
+    }
+
+    /// BOREAL_DIALER_v823_WIDGET_ACTIONS - one tap switches Available / Busy without opening the app (iOS 17+).
+    @ViewBuilder
+    private var presenceButton: some View {
+        if #available(iOS 17.0, *) {
+            Button(intent: SetBorealBusyIntent(busy: !entry.isBusy)) {
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(entry.isBusy ? DialerWidgetPalette.red : DialerWidgetPalette.green)
+                        .frame(width: 6, height: 6)
+                    Text(entry.isBusy ? "Busy" : "Available")
+                        .font(.caption2.bold())
+                        .foregroundStyle(DialerWidgetPalette.text)
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(Color.white.opacity(0.14)))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(entry.isBusy ? "Busy. Tap to become available" : "Available. Tap to become busy")
+        }
+    }
+
+    /// BOREAL_DIALER_v823_WIDGET_ACTIONS - a task row with a tick box that completes the task (iOS 17+).
+    @ViewBuilder
+    private func taskRow(_ item: DashboardItem) -> some View {
+        if #available(iOS 17.0, *), let taskId = item.taskId {
+            HStack(spacing: 6) {
+                Button(intent: CompleteBorealTaskIntent(taskId: taskId)) {
+                    Image(systemName: "circle")
+                        .font(.caption.bold())
+                        .foregroundStyle(DialerWidgetPalette.gold)
+                        .frame(width: 16)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Mark \(item.title) done")
+                Text(item.title)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(DialerWidgetPalette.text)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Text(item.detail)
+                    .font(.caption)
+                    .foregroundStyle(DialerWidgetPalette.muted)
+                    .lineLimit(1)
+            }
+        } else {
+            row(icon: "checklist", iconColor: DialerWidgetPalette.gold, title: item.title, detail: item.detail)
         }
     }
 
@@ -271,8 +326,7 @@ struct BorealDialerWidgetView: View {
                     emptyText("No tasks due today")
                 } else {
                     ForEach(Array(d.tasks.prefix(3).enumerated()), id: \.offset) { _, item in
-                        row(icon: "checklist", iconColor: DialerWidgetPalette.gold,
-                            title: item.title, detail: item.detail)
+                        taskRow(item) // BOREAL_DIALER_v823_WIDGET_ACTIONS
                     }
                 }
             }

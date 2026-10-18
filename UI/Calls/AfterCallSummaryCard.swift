@@ -44,6 +44,7 @@ struct AfterCallSummaryCard: View {
     let callSid: String
     @StateObject private var model = AfterCallSummaryViewModel()
     @State private var openContact: SummaryContactLink?
+    @State private var voiceNote: VoiceNoteTarget? // BOREAL_DIALER_v823_VOICE_NOTES
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -62,6 +63,7 @@ struct AfterCallSummaryCard: View {
         }
         .padding(.vertical, 4)
         .task(id: callSid) { await model.run(callSid: callSid) }
+        .sheet(item: $voiceNote) { target in VoiceNoteSheet(target: target) } // BOREAL_DIALER_v823_VOICE_NOTES
         .sheet(item: $openContact) { link in
             NavigationStack {
                 ContactDetailView(
@@ -134,6 +136,16 @@ struct AfterCallSummaryCard: View {
                     .foregroundColor(Theme.greenBright)
             }
             Spacer()
+            // BOREAL_DIALER_v823_VOICE_NOTES - dictate a note for this client straight after the call.
+            if let contactId = result.contactId {
+                Button {
+                    voiceNote = VoiceNoteTarget(contactId: contactId, name: result.contactName)
+                } label: {
+                    Label("Voice note", systemImage: "mic")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+            }
             if let contactId = result.contactId {
                 Button {
                     openContact = SummaryContactLink(id: contactId, name: result.contactName)

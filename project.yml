@@ -83,6 +83,21 @@ targets:
         NSMicrophoneUsageDescription: Boreal Dialer needs the microphone to place and receive calls.
         NSUserActivityTypes:
           - INStartCallIntent
+          # BOREAL_DIALER_v822_CARPLAY - texts and client messages are communication notifications.
+          - INSendMessageIntent
+        # BOREAL_DIALER_v822_CARPLAY - Siri messaging is handled in the app (SiriMessageHandler).
+        INIntentsSupported:
+          - INSendMessageIntent
+        NSSiriUsageDescription: Siri reads your Boreal texts aloud in the car and sends your replies from your Boreal line.
+        # BOREAL_DIALER_v822_CARPLAY - the car screen. SwiftUI keeps its own iPhone window scene; only the CarPlay
+        # role is configured here, and it goes to CarPlaySceneDelegate.
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+          UISceneConfigurations:
+            CPTemplateApplicationSceneSessionRoleApplication:
+              - UISceneClassName: CPTemplateApplicationScene
+                UISceneConfigurationName: CarPlay
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).CarPlaySceneDelegate
         NSFaceIDUsageDescription: Boreal Dialer uses Face ID to unlock your signed-in session.
         ITSAppUsesNonExemptEncryption: false
         NSSupportsLiveActivities: true
@@ -119,6 +134,12 @@ targets:
         # time-sensitive, so a Focus that allows Boreal Dialer lets them through. Needs the Time Sensitive
         # Notifications capability on the com.borealfinancial.dialer App ID.
         com.apple.developer.usernotifications.time-sensitive: true
+        # BOREAL_DIALER_v822_CARPLAY - CarPlay Communication App (assigned by Apple Oct 17 2026), Siri messaging, and
+        # communication notifications (Siri reads texts aloud). Enable CarPlay Communication, SiriKit and
+        # Communication Notifications on the com.borealfinancial.dialer App ID.
+        com.apple.developer.carplay-communication: true
+        com.apple.developer.siri: true
+        com.apple.developer.usernotifications.communication: true
     attributes:
       SystemCapabilities:
         com.apple.ApplicationGroups.iOS:
@@ -130,6 +151,7 @@ targets:
         product: Sentry
       - target: BorealDialerLiveActivity
       - target: BorealDialerCallDirectory
+      - target: BorealDialerNotificationService # BOREAL_DIALER_v822_CARPLAY
       # BOREAL_DIALER_EMBED_WATCH_v375 - the Watch app ships inside the iPhone app.
       # Side-loaded separately, iOS never registered it as this app's companion:
       # WCSession.isWatchAppInstalled read false on a Watch running Boreal, the
@@ -348,6 +370,38 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.borealfinancial.dialer.calldirectory
+        SWIFT_VERSION: 5.9
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: NO
+
+  # BOREAL_DIALER_v822_CARPLAY - turns inbound text / client-message alerts into communication notifications (the
+  # sender attached as an INSendMessageIntent) so Siri reads them aloud in CarPlay and on AirPods.
+  BorealDialerNotificationService:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: NotificationService
+        excludes:
+          - PrivacyInfo.xcprivacy
+      - path: NotificationService/PrivacyInfo.xcprivacy
+        buildPhase: resources
+      - path: Sources/Shared/CommunicationSender.swift
+    info:
+      path: NotificationService/Info.plist
+      properties:
+        CFBundleDisplayName: Boreal Messages
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).BorealNotificationService
+          NSExtensionAttributes:
+            IntentsSupported:
+              - INSendMessageIntent
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.borealfinancial.dialer.notificationservice
         SWIFT_VERSION: 5.9
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic

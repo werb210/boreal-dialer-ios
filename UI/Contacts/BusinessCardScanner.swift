@@ -28,18 +28,15 @@ enum BusinessCardParser {
         let cleaned = lines.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         let joined = cleaned.joined(separator: "\n")
 
-        if let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.phoneNumber.rawValue) {
-            let range = NSRange(joined.startIndex..., in: joined)
-            // Prefer a number on a line that says mobile / cell; otherwise the first one.
-            var phones: [(number: String, line: String)] = []
-            for match in detector.matches(in: joined, options: [], range: range) {
-                guard let number = match.phoneNumber, let r = Range(match.range, in: joined) else { continue }
-                let line = joined[joined.lineRange(for: r)].lowercased()
-                phones.append((number, line))
-            }
-            let mobile = phones.first { $0.line.contains("cell") || $0.line.contains("mobile") || $0.line.hasPrefix("m:") || $0.line.hasPrefix("m ") }
-            if let pick = mobile ?? phones.first { card.phone = normalizedPhone(pick.number) }
+        // BOREAL_DIALER_v823b_CARD_PHONE - a plain pattern for North American numbers, line by line. NSDataDetector
+        // missed a number on its own line ("780-555-0100") on the CI simulator, so it is not used.
+        // Prefer a number on a line that says mobile / cell; otherwise the first one.
+        var phones: [(number: String, line: String)] = []
+        for line in cleaned {
+            if let number = phoneIn(line) { phones.append((number, line.lowercased())) }
         }
+        let mobile = phones.first { $0.line.contains("cell") || $0.line.contains("mobile") || $0.line.hasPrefix("m:") || $0.line.hasPrefix("m ") }
+        if let pick = mobile ?? phones.first { card.phone = pick.number }
 
         if let email = cleaned.lazy.compactMap({ emailIn($0) }).first {
             card.email = email
@@ -60,6 +57,16 @@ enum BusinessCardParser {
             card.lastName = parts.dropFirst().joined(separator: " ")
         }
         return card
+    }
+
+    /// "+1 (403) 555-0142", "780.555.0100", "4035550142" -> "+14035550142"; nil when the line holds no such number.
+    static func phoneIn(_ line: String) -> String? {
+        let pattern = "(?<![0-9])(?:\\+?1[\\s.-]?)?\\(?[2-9][0-9]{2}\\)?[\\s.-]?[0-9]{3}[\\s.-]?[0-9]{4}(?![0-9])"
+        guard let range = line.range(of: pattern, options: .regularExpression) else { return nil }
+        let digits = line[range].filter(\.isNumber)
+        if digits.count == 10 { return "+1" + digits }
+        if digits.count == 11, digits.hasPrefix("1") { return "+" + digits }
+        return nil
     }
 
     static func emailIn(_ line: String) -> String? {

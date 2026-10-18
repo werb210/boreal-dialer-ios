@@ -87,6 +87,15 @@ final class BusinessCardV823Tests: XCTestCase {
         XCTAssertEqual(card.phone, "+17805550100")
     }
 
+    // BOREAL_DIALER_v823b_CARD_PHONE
+    func testPhonePatterns() {
+        XCTAssertEqual(BusinessCardParser.phoneIn("T 780-555-0100"), "+17805550100")
+        XCTAssertEqual(BusinessCardParser.phoneIn("Cell (403) 555-0142"), "+14035550142")
+        XCTAssertEqual(BusinessCardParser.phoneIn("+1 403.555.0142"), "+14035550142")
+        XCTAssertNil(BusinessCardParser.phoneIn("Suite 1200, 10180 101 St"))
+        XCTAssertNil(BusinessCardParser.phoneIn("jane@northwind.ca"))
+    }
+
     func testNameRules() {
         XCTAssertTrue(BusinessCardParser.isPersonName("Mary-Anne O'Neil"))
         XCTAssertFalse(BusinessCardParser.isPersonName("Sales Manager"))

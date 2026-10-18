@@ -88,6 +88,8 @@ struct ContactDetailView: View {
 
     @StateObject private var viewModel = ContactDetailViewModel()
     @Environment(\.openURL) private var openURL
+    // BOREAL_DIALER_v822_CARPLAY - starred clients are the Favourites tab in CarPlay.
+    @State private var favourite = false
 
     var body: some View {
         ScrollView {
@@ -125,6 +127,14 @@ struct ContactDetailView: View {
                     if let email = contact.emailAddress,
                        let url = URL(string: "mailto:\(email)") {
                         ActionButton(icon: "envelope.fill", label: "Email") { openURL(url) }
+                    }
+                    // BOREAL_DIALER_v822_CARPLAY
+                    if contact.callablePhone != nil {
+                        ActionButton(icon: favourite ? "star.fill" : "star", label: "Favourite") {
+                            favourite = FavouriteContacts.shared.toggle(
+                                id: contact.id, name: contact.displayName, phone: contact.callablePhone
+                            )
+                        }
                     }
                 }
 
@@ -185,6 +195,7 @@ struct ContactDetailView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .task { await viewModel.load(contactId: contact.id, silo: silo) }
+        .onAppear { favourite = FavouriteContacts.shared.contains(contact.id) } // BOREAL_DIALER_v822_CARPLAY
     }
 }
 

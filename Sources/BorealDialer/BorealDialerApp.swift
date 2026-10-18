@@ -128,6 +128,8 @@ struct BorealDialerApp: App {
                     Task { await DialerDashboardStore.refresh() } // BOREAL_DIALER_LARGE_WIDGET_v685
                     // BOREAL_DIALER_v820_WATCH - re-send the alert-push token if it changed or is 6 h stale.
                     if auth.isAuthenticated { StaffPushTokenRegistrar.shared.uploadIfNeeded() }
+                    // BOREAL_DIALER_v822_CARPLAY - Siri messaging (CarPlay replies) needs Siri permission once.
+                    if auth.isAuthenticated { SiriMessageHandler.requestAuthorizationIfNeeded() }
                     Task {
                         OfflineQueue.shared.reconcileBackground() // BOREAL_DIALER_BACKGROUND_SEND_v309
                         await OfflineQueue.shared.flush()
@@ -169,6 +171,12 @@ final class DialerAppDelegate: NSObject, UIApplicationDelegate {
     func application(_ app: UIApplication, open url: URL,
                      options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
         DeepLinkCoordinator.shared.receive(url)
+    }
+
+    // BOREAL_DIALER_v822_CARPLAY - SiriKit messaging handled in the app: "send a message with Boreal Dialer" and
+    // "Reply" after Siri reads an inbound text in CarPlay. Info.plist lists INSendMessageIntent in INIntentsSupported.
+    func application(_ application: UIApplication, handlerFor intent: INIntent) -> Any? {
+        intent is INSendMessageIntent ? SiriMessageHandler.shared : nil
     }
 
     func application(_ application: UIApplication,

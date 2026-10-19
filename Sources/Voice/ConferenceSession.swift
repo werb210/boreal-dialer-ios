@@ -21,6 +21,37 @@ final class ConferenceSession: ObservableObject {
     @Published private(set) var participants: [ConferenceParticipant] = []
     @Published private(set) var remoteOnHold = false
     @Published var lastError: String?
+    // BOREAL_DIALER_v829_RELIABILITY - this call's other party is dialled / ringing and has not answered yet. BF-Server
+    // keeps the staff leg waiting (ringback) until they join; VoiceEngine counts the call as connected only then.
+    @Published private(set) var awaitingCallee = false
+
+    enum CalleeOutcome: Equatable {
+        case ringing
+        case answered
+        case unanswered(String)
+    }
+
+    /// Where the other party's leg is, from the last refresh().
+    var calleeOutcome: CalleeOutcome {
+        guard let remoteParticipantId,
+              let remote = participants.first(where: { $0.id == remoteParticipantId }) else { return .ringing }
+        return ConferenceSession.outcome(forStatus: remote.status)
+    }
+
+    nonisolated static func outcome(forStatus status: String?) -> CalleeOutcome {
+        switch (status ?? "").lowercased() {
+        case "joined", "answered", "connected", "in-progress":
+            return .answered
+        case "busy":
+            return .unanswered("The line is busy.")
+        case "no-answer":
+            return .unanswered("There was no answer.")
+        case "failed", "left", "canceled", "completed":
+            return .unanswered("The call could not be completed.")
+        default:
+            return .ringing
+        }
+    }
 
     var isActive: Bool { conferenceId != nil }
 
@@ -34,6 +65,8 @@ final class ConferenceSession: ObservableObject {
         let phoneNumber: String?
         let muted: Bool?
         let onHold: Bool?
+        // BOREAL_DIALER_v829_RELIABILITY - pending_dial / invited / ringing / joined / busy / no-answer / failed / left.
+        let status: String?
 
         enum CodingKeys: String, CodingKey {
             case id
@@ -41,6 +74,7 @@ final class ConferenceSession: ObservableObject {
             case phoneNumber = "phone_number"
             case muted
             case onHold = "on_hold"
+            case status
         }
 
         var label: String { displayName ?? phoneNumber ?? "Participant" }
@@ -61,7 +95,9 @@ final class ConferenceSession: ObservableObject {
     @discardableResult
     func start(to number: String, contactId: String? = nil) async -> Bool {
         clear()
-        var payload: [String: Any] = ["to": number]
+        // BOREAL_DIALER_v829_RELIABILITY - dialOnJoin: BF-Server dials the customer only once this phone's leg is in
+        // the call, so a setup that fails (token, signal, hanging up early) never leaves them ringing into silence.
+        var payload: [String: Any] = ["to": number, "dialOnJoin": true]
         if let contactId { payload["contactId"] = contactId }
         do {
             let body = try JSONSerialization.data(withJSONObject: payload)
@@ -72,6 +108,7 @@ final class ConferenceSession: ObservableObject {
             conferenceFriendly = decoded.conferenceFriendly
             selfParticipantId = decoded.callerParticipantId
             remoteParticipantId = decoded.calleeParticipantId
+            awaitingCallee = decoded.calleeParticipantId != nil // BOREAL_DIALER_v829_RELIABILITY
             await refresh()
             return true
         } catch {
@@ -96,6 +133,7 @@ final class ConferenceSession: ObservableObject {
             conferenceFriendly = decoded.conferenceFriendly
             selfParticipantId = decoded.callerParticipantId
             remoteParticipantId = decoded.calleeParticipantId
+            awaitingCallee = decoded.calleeParticipantId != nil // BOREAL_DIALER_v829_RELIABILITY
             await refresh()
             return true
         } catch {
@@ -112,6 +150,7 @@ final class ConferenceSession: ObservableObject {
         participants = []
         remoteOnHold = false
         lastError = nil
+        awaitingCallee = false // BOREAL_DIALER_v829_RELIABILITY
     }
 
     func refresh() async {

@@ -108,6 +108,19 @@ final class VoiceEngine: NSObject, ObservableObject {
     // BOREAL_DIALER_v817_CALLS - why the last call could not be placed (shown by
     // the dialer). Cleared when the alert is dismissed.
     @Published var callError: String?
+    // BOREAL_DIALER_v829_RELIABILITY - answered, but Twilio has not connected the audio yet. The call used to show
+    // "connected" with the timer running from the tap, so the normal second or two of setup looked like a dead call.
+    @Published private(set) var isConnecting = false
+    // BOREAL_DIALER_v829_RELIABILITY - an outgoing call whose customer's phone is ringing (the staff leg is in the
+    // call hearing ringback). The call counts as connected only when they answer.
+    @Published private(set) var remoteRinging = false
+    private var answerTappedAt: Date?
+    private var connectWatchdog: Task<Void, Never>?
+    private var calleeWatch: Task<Void, Never>?
+    /// The number of the call in progress, kept for the call log (Twilio's copy is cleared on hang-up).
+    private var currentNumber: String?
+    /// How long an answered call may take to connect before it is ended with a reason.
+    static let connectTimeoutSeconds: UInt64 = 12
 
     var activeCallSid: String? {
         if case .active(let uuid) = state {
@@ -185,6 +198,7 @@ final class VoiceEngine: NSObject, ObservableObject {
         guard microphoneReady(retry: { VoiceEngine.shared.startCall(to: number, uuid: uuid) }) else { return }
         callError = nil
         state = .dialing(uuid)
+        currentNumber = number // BOREAL_DIALER_v829_RELIABILITY
 
         currentHandle = PhoneFormat.display(number)
         CallerCardStore.shared.clear() // BOREAL_DIALER_v821 - the in-call screen fetches this call's card.
@@ -362,6 +376,7 @@ final class VoiceEngine: NSObject, ObservableObject {
             guard let self else { return }
             if succeeded {
                 self.state = .ringing(uuid)
+                self.currentNumber = handle // BOREAL_DIALER_v829_RELIABILITY
                 // BOREAL_DIALER_v821 - the Watch shows the name and the stage (WatchEvent.preview) when known.
                 WatchBridge.shared.send(WatchEvent(kind: .incomingCall,
                                                    callId: uuid.uuidString,
@@ -481,14 +496,100 @@ final class VoiceEngine: NSObject, ObservableObject {
     }
 
     func handleCallConnected(uuid: UUID) {
+        connectWatchdog?.cancel()
+        connectWatchdog = nil
+        let sid = TwilioVoiceManager.shared.lastCallSid
+        if isConnecting {
+            // BOREAL_DIALER_v829_RELIABILITY - an answered incoming call: audio is up now, so the timer starts now.
+            isConnecting = false
+            let ms = answerTappedAt.map { Int(Date().timeIntervalSince($0) * 1000) } ?? -1
+            Telemetry.event("call_connected", metadata: ["direction": "inbound", "answerToConnectMs": "\(ms)"], callRef: sid)
+        }
+        // BOREAL_DIALER_v829_RELIABILITY - an outgoing conference call: the staff leg is in the call, but the customer's
+        // phone is still ringing. Stay "Calling" (with ringback) until they answer, then count it as connected.
+        if case .dialing(let dialing) = state, dialing == uuid, ConferenceSession.shared.awaitingCallee {
+            remoteRinging = true
+            Telemetry.event("staff_leg_joined", metadata: ["direction": "outbound"], callRef: sid)
+            watchCallee(uuid: uuid)
+            return
+        }
+        markOutgoingConnected(uuid: uuid)
+    }
+
+    /// The customer answered (or the call needed no wait): CallKit timer, Recents duration and our timer start now.
+    private func markOutgoingConnected(uuid: UUID) {
+        remoteRinging = false
         // BOREAL_DIALER_v817_CALLS - an outgoing call is "connected" for CallKit
         // (lock screen timer, Recents duration) once Twilio connects.
         if case .dialing(let dialing) = state, dialing == uuid {
             provider.reportOutgoingCall(with: uuid, connectedAt: Date())
+            Telemetry.event("call_connected", metadata: ["direction": "outbound"], callRef: TwilioVoiceManager.shared.lastCallSid)
         }
         stopTimer()
         startTimer()
         state = .active(uuid)
+    }
+
+    // BOREAL_DIALER_v829_RELIABILITY - follows the customer's leg on the server (GET /voice/conferences/:id) while it
+    // rings: answered -> connected; busy / no answer / failed -> the reason is shown (BF-Server tells the staff leg and
+    // hangs it up; if that does not arrive, the call is ended here).
+    private func watchCallee(uuid: UUID) {
+        calleeWatch?.cancel()
+        calleeWatch = Task { @MainActor [weak self] in
+            var endedAt: Date?
+            for _ in 0..<180 {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard let self, !Task.isCancelled, self.isDialing(uuid) else { return }
+                await ConferenceSession.shared.refresh()
+                guard self.isDialing(uuid) else { return }
+                switch ConferenceSession.shared.calleeOutcome {
+                case .answered:
+                    self.markOutgoingConnected(uuid: uuid)
+                    return
+                case .unanswered(let reason):
+                    if endedAt == nil {
+                        endedAt = Date()
+                        self.callError = reason
+                        Telemetry.event("callee_unanswered", metadata: ["reason": reason], callRef: TwilioVoiceManager.shared.lastCallSid)
+                    } else if let since = endedAt, Date().timeIntervalSince(since) > 6 {
+                        self.hangUp()
+                        return
+                    }
+                case .ringing:
+                    break
+                }
+            }
+            // Three minutes and still not answered (or no word from the server): end it with a reason, never stuck.
+            guard let self, self.isDialing(uuid) else { return }
+            self.callError = "There was no answer."
+            self.hangUp()
+        }
+    }
+
+    // BOREAL_DIALER_v829_RELIABILITY - why a call could not connect, in words (Twilio error codes).
+    func noteConnectFailure(code: Int) {
+        // A late failure for a call already ended here (staff hung up while it was calling) is not news.
+        guard liveCallUUID != nil else { return }
+        callError = VoiceEngine.connectFailureMessage(code: code)
+    }
+
+    static func connectFailureMessage(code: Int) -> String {
+        switch code {
+        case 20101, 20103, 20104, 20107, 20151, 20157:
+            return "Your calling session expired. Close and reopen the app, then try again."
+        case 31005, 31009, 31530, 53000, 53001, 53405:
+            return "The call couldn't connect: the network dropped. Check your signal and try again."
+        case 31208, 31401:
+            return "The call couldn't use the microphone. Check Settings > Boreal Dialer > Microphone."
+        case 31486:
+            return "The line is busy."
+        case 31480:
+            return "There was no answer."
+        case 31603:
+            return "The call was declined."
+        default:
+            return "The call couldn't connect (error \(code)). Try again."
+        }
     }
 
     // BOREAL_DIALER_LIVE_ACTIVITY_WIRE_v1 - one hook off state: show on connect, clear on end.
@@ -547,6 +648,14 @@ final class VoiceEngine: NSObject, ObservableObject {
     private func finishCall(status: State) {
         pendingOutgoing.removeAll() // BOREAL_DIALER_v817_CALLS
         stopTimer()
+        // BOREAL_DIALER_v829_RELIABILITY
+        connectWatchdog?.cancel()
+        connectWatchdog = nil
+        calleeWatch?.cancel()
+        calleeWatch = nil
+        isConnecting = false
+        remoteRinging = false
+        answerTappedAt = nil
         state = status
         isMuted = false
         isOnHold = false
@@ -555,8 +664,11 @@ final class VoiceEngine: NSObject, ObservableObject {
         // BOREAL_DIALER_DEAD_VOICE_ROUTES_v15 - the number and SID come from the
         // Twilio manager; without a number there is nothing to resolve a
         // contact against and the server would reject the event.
-        let number = TwilioVoiceManager.shared.activeNumber
-        let sid = activeCallSid
+        // BOREAL_DIALER_v829_RELIABILITY - a local hang-up clears Twilio's number before this runs, and activeCallSid
+        // (the CallKit UUID) is nil once the state is ended: calls staff ended themselves were never logged.
+        let number = TwilioVoiceManager.shared.activeNumber ?? currentNumber
+        let sid = TwilioVoiceManager.shared.lastCallSid ?? activeCallSid
+        currentNumber = nil
         let seconds = callDuration
         Task {
             // BOREAL_DIALER_OFFLINE_v303 - a call that ends with no signal is logged when it returns.
@@ -672,10 +784,35 @@ extension VoiceEngine: @preconcurrency CXProviderDelegate {
         MicrophonePermission.requestIfNeeded()
         audioDevice.isEnabled = false
         TwilioVoiceManager.shared.configureAudioSessionForCall()
-        TwilioVoiceManager.shared.accept()
-        startTimer()
+        answerTappedAt = Date()
+        Telemetry.event("answer_tapped", callRef: TwilioVoiceManager.shared.pendingInviteSid)
+        // BOREAL_DIALER_v829_RELIABILITY - nothing to answer (the caller hung up, or the ring moved to the cell as the
+        // tap landed): fail the action and say so, instead of a "connected" call with no audio.
+        guard TwilioVoiceManager.shared.accept() else {
+            action.fail()
+            callError = "The caller had already hung up, or the call moved to another phone."
+            handleFailure()
+            return
+        }
+        // BOREAL_DIALER_v829_RELIABILITY - "Connecting…" until Twilio connects; the timer starts then
+        // (handleCallConnected). A call that never connects is ended with a reason, not left silent.
+        isConnecting = true
         state = .active(action.callUUID)
         action.fulfill()
+        startConnectWatchdog(uuid: action.callUUID)
+    }
+
+    // BOREAL_DIALER_v829_RELIABILITY
+    private func startConnectWatchdog(uuid: UUID) {
+        connectWatchdog?.cancel()
+        connectWatchdog = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: VoiceEngine.connectTimeoutSeconds * 1_000_000_000)
+            guard let self, !Task.isCancelled, self.isConnecting, self.liveCallUUID == uuid else { return }
+            Telemetry.event("connect_timeout", metadata: ["seconds": "\(VoiceEngine.connectTimeoutSeconds)"],
+                            callRef: TwilioVoiceManager.shared.lastCallSid)
+            self.callError = "The call couldn't connect. Check your signal and try again."
+            self.hangUp()
+        }
     }
 
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
@@ -695,6 +832,11 @@ extension VoiceEngine: @preconcurrency CXProviderDelegate {
     // may Twilio start audio.
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
         audioDevice.isEnabled = true
+        // BOREAL_DIALER_v829_RELIABILITY - how long iOS took to hand over the audio after Answer.
+        if isConnecting, let tapped = answerTappedAt {
+            Telemetry.event("audio_activated", metadata: ["answerToAudioMs": "\(Int(Date().timeIntervalSince(tapped) * 1000))"],
+                            callRef: TwilioVoiceManager.shared.lastCallSid)
+        }
     }
 
     // BOREAL_DIALER_v817_CALLS - CallKit took the audio session back.

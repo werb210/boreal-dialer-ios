@@ -6,6 +6,68 @@ enum APIError: Error {
     case notAuthenticated
     case serverError
     case invalidToken
+    // BOREAL_DIALER_v829_RELIABILITY - an HTTP error that keeps the server's reason. Every 4xx/5xx used to become a bare
+    // .serverError, so staff saw "The operation couldn't be completed. (BorealDialer.APIError error 3.)" and the
+    // server's own explanation (e.g. call_not_found) was thrown away.
+    case http(status: Int, code: String?, message: String?)
+}
+
+// BOREAL_DIALER_v829_RELIABILITY - readable messages wherever an error is shown (error.localizedDescription).
+extension APIError: LocalizedError {
+    /// Codes BF-Server returns, in words staff understand.
+    static let knownCodes: [String: String] = [
+        "call_not_found": "This call isn't linked to you yet, so the outcome wasn't saved.",
+        "invalid_call_id": "This call has no reference the server recognises.",
+        "unknown_disposition": "That call outcome isn't recognised.",
+        "invalid_to": "That phone number isn't valid.",
+        "caller_id_unconfigured": "No outgoing caller ID is set up for your line. Ask an admin.",
+        "call_setup_failed": "The call couldn't be set up. Try again.",
+        "forbidden": "You don't have access to that.",
+        "not_found": "That item no longer exists.",
+    ]
+
+    var errorDescription: String? {
+        switch self {
+        case .unauthorized:
+            return "Your session has expired. Sign in again."
+        case .notAuthenticated:
+            return "You're signed out. Sign in again."
+        case .invalidToken:
+            return "Sign-in failed. Try again."
+        case .invalidResponse, .serverError:
+            return "The server didn't respond properly. Try again."
+        case .http(let status, let code, let message):
+            if let code, let known = APIError.knownCodes[code] { return known }
+            if let message, APIError.isReadable(message) { return message }
+            if status >= 500 { return "The server had a problem (\(status)). Try again in a moment." }
+            if let code, !code.isEmpty { return "The server refused that (\(code))." }
+            return "The server refused that (\(status))."
+        }
+    }
+
+    /// A sentence written for people, not a stack trace or SQL error.
+    static func isReadable(_ message: String) -> Bool {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 8, trimmed.count <= 200, trimmed.contains(" ") else { return false }
+        let technical = ["relation ", "column ", "syntax", "violates", "undefined", "null value", "ECONN", "Error:", "at /", "stack"]
+        return !technical.contains(where: { trimmed.localizedCaseInsensitiveContains($0) })
+    }
+
+    /// `{error: "code", message}` or `{error: {code, message}}` or `{message}` from a BF-Server error body.
+    static func serverReason(from data: Data) -> (code: String?, message: String?) {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return (nil, nil) }
+        var code: String?
+        var message = object["message"] as? String
+        if let error = object["error"] as? String {
+            code = error
+        } else if let error = object["error"] as? [String: Any] {
+            code = error["code"] as? String
+            message = message ?? (error["message"] as? String)
+        } else if let c = object["code"] as? String {
+            code = c
+        }
+        return (code, message)
+    }
 }
 
 final class APIClient {
@@ -131,7 +193,9 @@ final class APIClient {
         }
 
         if http.statusCode >= 400 {
-            throw APIError.serverError
+            // BOREAL_DIALER_v829_RELIABILITY - keep the server's reason.
+            let reason = APIError.serverReason(from: data)
+            throw APIError.http(status: http.statusCode, code: reason.code, message: reason.message)
         }
 
         return data

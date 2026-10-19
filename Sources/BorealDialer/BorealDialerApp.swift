@@ -121,9 +121,11 @@ struct BorealDialerApp: App {
                 if phase == .background {
                     appLock.didEnterBackground()
                     OfflineQueue.shared.handOffToBackground() // BOREAL_DIALER_BACKGROUND_SEND_v309
+                    DialerEventLog.shared.flush() // BOREAL_DIALER_v829_RELIABILITY
                 }
                 if phase == .active {
                     WidgetSnapshotStore.refreshStoredSnapshot()
+                    DialerEventLog.shared.flush() // BOREAL_DIALER_v829_RELIABILITY
                     // BOREAL_DIALER_WATCH_SNAPSHOT_WRITER_v210 - nothing has ever written the
                     // keys the watch complication reads. This is that writer.
                     Task { await WatchSnapshotSync.refresh() }

@@ -31,6 +31,11 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
     private var callStartDate: Date?
     private var callDirection: String = "outbound"
     private var inviteLedger = CallInviteLedger()
+    // BOREAL_DIALER_v829_RELIABILITY - the Twilio CallSid of the latest call. Kept after the call ends (cleanup clears
+    // activeCall first), so the call log and telemetry carry the real sid instead of nil / the CallKit UUID.
+    private(set) var lastCallSid: String?
+    /// The CallSid of the call ringing now (telemetry for the answer tap).
+    var pendingInviteSid: String? { pendingCallInvite?.callSid }
 
     private override init() {
         super.init()
@@ -55,6 +60,7 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
 
         // BOREAL_DIALER_v817_CALLS - Twilio dials E.164 only.
         let dialled = PhoneFormat.e164(number)
+        lastCallSid = nil // BOREAL_DIALER_v829_RELIABILITY
         CallStateManager.shared.transition(to: .connecting)
         activeUUID = uuid
         activeNumber = dialled
@@ -98,8 +104,17 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
         }
     }
 
-    func accept() {
-        guard CallStateManager.shared.current() == .ringing else { return }
+    /// BOREAL_DIALER_v829_RELIABILITY - false when there was nothing to answer (the caller already hung up, or the
+    /// ring went elsewhere); the answer used to "succeed" silently into a call with no audio.
+    @discardableResult
+    func accept() -> Bool {
+        guard CallStateManager.shared.current() == .ringing else {
+            Telemetry.event("answer_without_invite", metadata: ["state": "\(CallStateManager.shared.current())"])
+            // The caller must not keep hearing ringback for an answer that failed here.
+            pendingCallInvite?.reject()
+            pendingCallInvite = nil
+            return false
+        }
 
         CallStateManager.shared.transition(to: .connecting)
 
@@ -111,14 +126,17 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
 
             configureAudioSessionForCall()
 
+            lastCallSid = invite.callSid
             activeCall = invite.accept(with: self)
             pendingCallInvite = nil
-            return
+            return true
         }
 
         // BOREAL_DIALER_SDK_AND_ISOLATION_v5 - no pending invite means there is
         // nothing to answer; Call has no accept(). Put the state machine back.
         CallStateManager.shared.reset()
+        Telemetry.event("answer_without_invite", metadata: ["state": "no_invite"])
+        return false
     }
 
     func reject() {
@@ -237,8 +255,8 @@ extension TwilioVoiceManager: @preconcurrency CallDelegate {
 
     func callDidConnect(call: Call) {
         activeUUID = call.uuid
+        lastCallSid = call.sid // BOREAL_DIALER_v829_RELIABILITY
         CallStateManager.shared.transition(to: .connected)
-        Telemetry.event("call_connected")
 #if canImport(Sentry)
         SentrySDK.capture(message: "Call started")
 #endif
@@ -258,7 +276,8 @@ extension TwilioVoiceManager: @preconcurrency CallDelegate {
         if error == nil {
             VoiceEngine.shared.handleDisconnect()
         } else {
-            Telemetry.event("call_error", metadata: ["message": error?.localizedDescription ?? "unknown"])
+            Telemetry.event("call_error", metadata: ["message": error?.localizedDescription ?? "unknown",
+                                                    "code": "\((error as NSError?)?.code ?? 0)"], callRef: call.sid)
 #if canImport(Sentry)
             if let error {
                 SentrySDK.capture(error: error)
@@ -271,7 +290,10 @@ extension TwilioVoiceManager: @preconcurrency CallDelegate {
     }
 
     func callDidFailToConnect(call: Call, error: Error) {
-        Telemetry.event("call_failed", metadata: ["error": error.localizedDescription])
+        // BOREAL_DIALER_v829_RELIABILITY - the Twilio error code (31xxx / 20xxx) says why; it is also shown to staff.
+        let code = (error as NSError).code
+        Telemetry.event("call_failed", metadata: ["error": error.localizedDescription, "code": "\(code)"], callRef: call.sid)
+        VoiceEngine.shared.noteConnectFailure(code: code)
 #if canImport(Sentry)
         SentrySDK.capture(error: error)
 #endif
@@ -297,6 +319,7 @@ extension TwilioVoiceManager: @preconcurrency NotificationDelegate {
         let decision = CallKitReporter.shared.receive(invite: callInvite, firstDelivery: firstDelivery) { invite in
             CallStateManager.shared.transition(to: .ringing)
             pendingCallInvite = callInvite
+            lastCallSid = callInvite.callSid // BOREAL_DIALER_v829_RELIABILITY - a missed call logs its own sid
             // BOREAL_DIALER_v821 - BF-Server puts the caller's name, company, stage and contact id on the invite
             // (customParameters), so CallKit can name the caller without waiting on a lookup.
             let card = CallerCard.fromInviteParameters(callInvite.customParameters)

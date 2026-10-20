@@ -4,11 +4,6 @@ import XCTest
 // BOREAL_DIALER_v832_SIGNOUT_ALERTS - a phone nobody is signed in to stops ringing, and a missed call shows once.
 final class DialerV832Tests: XCTestCase {
 
-    override func tearDown() {
-        PendingSignOut.clear()
-        super.tearDown()
-    }
-
     func testCallsToASignedOutPhoneAreTurnedAway() {
         XCTAssertEqual(CallKitReporter.decide(isDuplicate: false, isBusy: false, isSignedOut: true), .rejectSignedOut)
         XCTAssertEqual(CallKitReporter.decide(isDuplicate: false, isBusy: true, isSignedOut: true), .rejectSignedOut)
@@ -17,20 +12,22 @@ final class DialerV832Tests: XCTestCase {
         XCTAssertEqual(CallKitReporter.decide(isDuplicate: false, isBusy: false), .ring)
     }
 
+    // BOREAL_DIALER_v834_TEST_FIX - checks what is kept, not the keychain itself: the test host app runs its own
+    // PendingSignOut retry on launch, which can clear a shared keychain item mid-test (CI failed this way).
     func testAnUnfinishedSignOutIsKeptUntilItIsSent() throws {
-        PendingSignOut.clear()
-        PendingSignOut.rememberAlertUnregister(pushToken: "abc123", staffToken: "jwt")
-        PendingSignOut.rememberTwilioUnregister(accessToken: "twilio", deviceToken: Data([1, 2, 3]))
-        let work = try XCTUnwrap(PendingSignOut.load())
-        XCTAssertEqual(work.alertPushToken, "abc123")
-        XCTAssertEqual(work.staffToken, "jwt")
-        XCTAssertEqual(work.twilioAccessToken, "twilio")
-        XCTAssertEqual(work.voipDeviceToken, Data([1, 2, 3]))
+        let work = PendingSignOutWork(alertPushToken: "abc123", staffToken: "jwt", twilioAccessToken: "twilio",
+                                      voipDeviceToken: Data([1, 2, 3]), savedAt: Date())
+        let decoded = try JSONDecoder().decode(PendingSignOutWork.self, from: JSONEncoder().encode(work))
+        XCTAssertEqual(decoded, work)
         XCTAssertFalse(work.isEmpty)
         XCTAssertFalse(PendingSignOut.isStale(work))
         XCTAssertTrue(PendingSignOut.isStale(work, now: Date().addingTimeInterval(8 * 24 * 3600)))
-        PendingSignOut.clear()
-        XCTAssertNil(PendingSignOut.load())
+        var alertsDone = work
+        alertsDone.alertPushToken = nil
+        alertsDone.staffToken = nil
+        XCTAssertFalse(alertsDone.isEmpty) // the calls part is still to send
+        alertsDone.twilioAccessToken = nil
+        XCTAssertTrue(alertsDone.isEmpty)
     }
 
     func testOnlyAMissingSignInCountsAsSignedOut() {

@@ -84,7 +84,7 @@ final class AuthService: ObservableObject {
             }
         }
 
-        Task { await CallDirectoryManager.shared.refresh() }
+        Task { await CallDirectoryManager.shared.refresh(force: true) } // BOREAL_DIALER_v831_DIALER_POLISH - a new sign-in loads caller ID now
         // BOREAL_DIALER_v820_WATCH - a new sign-in may be a different staff member: always re-register the token.
         await MainActor.run { StaffPushTokenRegistrar.shared.uploadIfNeeded(force: true) }
 
@@ -106,7 +106,7 @@ final class AuthService: ObservableObject {
             self.isAuthenticated = true
         }
 
-        Task { await CallDirectoryManager.shared.refresh() }
+        Task { await CallDirectoryManager.shared.refresh(force: true) } // BOREAL_DIALER_v831_DIALER_POLISH - a new sign-in loads caller ID now
         await MainActor.run { StaffPushTokenRegistrar.shared.uploadIfNeeded(force: true) } // BOREAL_DIALER_v820_WATCH
 
         if shouldInitializeVoice(from: token) {
@@ -131,6 +131,12 @@ final class AuthService: ObservableObject {
             throw APIError.invalidToken
         }
 
+        // BOREAL_DIALER_v831_DIALER_POLISH - an older server hands a non-staff number a client sign-in. Refuse it here
+        // too: it "worked", the app looked normal, and the phone never rang.
+        guard AuthService.isCallingRole(JWTClaims.role(of: token)) else {
+            throw APIError.http(status: 403, code: "not_staff", message: nil)
+        }
+
         TokenStorage.shared.save(token: token)
 
         // BOREAL_DIALER_TESTS_v40 - removed a POST to /auth/device-token, which
@@ -140,6 +146,12 @@ final class AuthService: ObservableObject {
         // calls TwilioVoiceSDK.register. That path already works.
 
         return token
+    }
+
+    // BOREAL_DIALER_v831_DIALER_POLISH
+    static func isCallingRole(_ role: String?) -> Bool {
+        guard let role else { return false }
+        return callingRoles.contains(role.trimmingCharacters(in: .whitespaces).lowercased())
     }
 
     private func shouldInitializeVoice(from token: String) -> Bool {
@@ -197,6 +209,7 @@ final class AuthService: ObservableObject {
         await MainActor.run {
             AfterCallSummaryStore.shared.clear() // BOREAL_DIALER_v821
             CallerCardStore.shared.clear()
+            VoiceEngine.shared.clearOutcomes() // BOREAL_DIALER_v831_DIALER_POLISH
         }
         await Self.clearDeviceSurfaces()
         TokenStorage.shared.clear()
@@ -218,7 +231,22 @@ final class AuthService: ObservableObject {
     }
 
     func invalidateSessionAfterIdentityMismatch() async {
+        // BOREAL_DIALER_v831_DIALER_POLISH - a sign-out forced by the server (expired or revoked) only dropped the token:
+        // the phone stayed registered for calls, so it kept ringing for a signed-out app, and cached contacts stayed on
+        // the phone. Now it stops calls and clears what the account left on the phone. Changes saved with no signal are
+        // kept: they are tagged with their owner and only that person's next sign-in sends them.
         TokenStorage.shared.clear()
+        await VoiceManager.shared.logout()
+        ResponseCache.clear()
+        ContactSpotlight.clear()
+        QuickReplyCache().clear()
+        await MainActor.run {
+            AfterCallSummaryStore.shared.clear()
+            CallerCardStore.shared.clear()
+            VoiceEngine.shared.clearOutcomes() // BOREAL_DIALER_v831_DIALER_POLISH
+        }
+        await Self.clearDeviceSurfaces()
+        awaitingUnlock = false
         await MainActor.run { isAuthenticated = false }
     }
 }

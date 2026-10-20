@@ -12,8 +12,12 @@ final class CallLogStore: ObservableObject {
         load()
     }
 
+    /// BOREAL_DIALER_v831_DIALER_POLISH - this on-phone log (Recents reads the server) grew with every call, forever.
+    static let maxLogs = 100
+
     func add(_ log: CallLog) {
         logs.insert(log, at: 0)
+        if logs.count > Self.maxLogs { logs.removeLast(logs.count - Self.maxLogs) }
         save()
     }
 

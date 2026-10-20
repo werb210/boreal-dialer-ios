@@ -140,6 +140,7 @@ struct BorealDialerApp: App {
                     // BOREAL_DIALER_v823_WIDGET_ACTIONS - widget taps made before the app could run them.
                     if auth.isAuthenticated { Task { await StaffQuickActions.shared.applyPending() } }
                     Task {
+                        await SessionRenewal.renewIfNeeded() // BOREAL_DIALER_v831_DIALER_POLISH - no weekly sign-out
                         OfflineQueue.shared.reconcileBackground() // BOREAL_DIALER_BACKGROUND_SEND_v309
                         await OfflineQueue.shared.flush()
                         await CallDirectoryManager.shared.refresh()

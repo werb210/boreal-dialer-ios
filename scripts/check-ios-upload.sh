@@ -14,6 +14,10 @@ for s in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8; do grep -q "secrets.$s" "$wf" || f
 if grep -q "BEGIN PRIVATE KEY" "$wf"; then fail "a private key is written into the workflow"; fi
 grep -q 'CURRENT_PROJECT_VERSION="$BUILD_NUMBER"' "$wf" || fail "every target must get the run's build number"
 grep -A1 "if: always()" "$wf" | grep 'rm -rf "$RUNNER_TEMP/asc"' >/dev/null || fail "the key must be removed at the end"
+# BOREAL_v833_CERT_CLEANUP - leftover cloud development certificates are deleted before each archive, never failing the run.
+grep -B2 "node scripts/asc-cleanup-dev-certs.mjs" "$wf" | grep "continue-on-error: true" >/dev/null || fail "certificate cleanup must run (and never fail the run)"
+awk '/asc-cleanup-dev-certs/{c=NR} /xcodebuild archive/{a=NR} END{exit !(c && a && c < a)}' "$wf" || fail "certificate cleanup must run before the archive"
+grep -q 'DEV_TYPES = new Set(\["DEVELOPMENT", "IOS_DEVELOPMENT"\])' scripts/asc-cleanup-dev-certs.mjs || fail "certificate cleanup may only touch development certificates"
 python3 - "$plist" <<'PY' || fail "ExportOptions.plist must upload to App Store Connect for team 76VAY7UJKJ"
 import plistlib, sys
 p = plistlib.load(open(sys.argv[1], "rb"))

@@ -21,7 +21,6 @@ final class DialerV831Tests: XCTestCase {
 
     override func tearDown() {
         OfflineQueue.shared.clear()
-        TokenStorage.shared.clear()
         super.tearDown()
     }
 
@@ -63,11 +62,15 @@ final class DialerV831Tests: XCTestCase {
     // MARK: Offline queue
 
     func testASavedChangeKnowsWhoSavedItAndKeepsItsKey() {
-        TokenStorage.shared.save(token: token(["sub": "user-1", "role": "Staff"]))
+        let suite = "DialerV831Tests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let session = token(["sub": "user-1", "role": "Staff"])
+        let queue = OfflineQueue(defaults: defaults, tokenProvider: { session })
         let key = UUID()
-        OfflineQueue.shared.enqueue(label: "Call outcome", path: "/telephony/calls/CA1/disposition", body: Data("{}".utf8), id: key)
-        OfflineQueue.shared.enqueue(label: "Call outcome", path: "/telephony/calls/CA1/disposition", body: Data("{}".utf8), id: key)
-        let items = OfflineQueue.shared.load()
+        queue.enqueue(label: "Call outcome", path: "/telephony/calls/CA1/disposition", body: Data("{}".utf8), id: key)
+        queue.enqueue(label: "Call outcome", path: "/telephony/calls/CA1/disposition", body: Data("{}".utf8), id: key)
+        let items = queue.load()
         XCTAssertEqual(items.count, 1) // the same change is never queued twice
         XCTAssertEqual(items.first?.id, key)
         XCTAssertEqual(items.first?.ownerId, "user-1")

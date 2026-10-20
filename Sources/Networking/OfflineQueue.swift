@@ -64,6 +64,8 @@ final class OfflineQueue: ObservableObject {
 
     private let legacyKey = "offline_queue"
     private let storageKey = "offline_requests_v303"
+    private let defaults: UserDefaults
+    private let tokenProvider: () -> String?
     private let lock = NSLock()
     private var flushing = false
 
@@ -72,8 +74,12 @@ final class OfflineQueue: ObservableObject {
     /// Refused by the server; shown to staff (OfflineStatusBar).
     @Published private(set) var failedItems: [QueuedRequest] = []
 
-    private init() {
-        UserDefaults.standard.removeObject(forKey: legacyKey)
+    // Injectable storage and session reads keep queue tests independent of simulator Keychain entitlements.
+    init(defaults: UserDefaults = .standard,
+         tokenProvider: @escaping () -> String? = { TokenStorage.shared.getToken() }) {
+        self.defaults = defaults
+        self.tokenProvider = tokenProvider
+        defaults.removeObject(forKey: legacyKey)
         publish(load())
     }
 
@@ -90,14 +96,14 @@ final class OfflineQueue: ObservableObject {
     }
 
     func load() -> [QueuedRequest] {
-        guard let data = UserDefaults.standard.data(forKey: storageKey),
+        guard let data = defaults.data(forKey: storageKey),
               let decoded = try? JSONDecoder().decode([QueuedRequest].self, from: data) else { return [] }
         return decoded
     }
 
     private func save(_ items: [QueuedRequest]) {
         let encoded = try? JSONEncoder().encode(items)
-        UserDefaults.standard.set(encoded, forKey: storageKey)
+        defaults.set(encoded, forKey: storageKey)
         publish(items)
     }
 
@@ -125,7 +131,7 @@ final class OfflineQueue: ObservableObject {
     /// `id` is also the Idempotency-Key. Pass the key a direct send already used, so a send that did arrive (its reply
     /// was lost) is not made twice when the queue resends it.
     func enqueue(label: String, path: String, method: String = "POST", body: Data?, id: UUID = UUID()) {
-        let owner = JWTClaims.subject(of: TokenStorage.shared.getToken())
+        let owner = JWTClaims.subject(of: tokenProvider())
         let silo = APIConfig.siloHeader(for: APIConfig.activeSilo)
         mutate { items in
             guard !items.contains(where: { $0.id == id }) else { return }
@@ -183,7 +189,7 @@ final class OfflineQueue: ObservableObject {
 
     /// Replays everything saved while offline, oldest first, once each per run. Stops while offline or signed out.
     func flush() async {
-        guard NetworkMonitor.shared.isConnected, let token = TokenStorage.shared.getToken(), !token.isEmpty else { return }
+        guard NetworkMonitor.shared.isConnected, let token = tokenProvider(), !token.isEmpty else { return }
         guard claimFlush() else { return }
         defer { releaseFlush() }
         let me = JWTClaims.subject(of: token)
@@ -254,7 +260,7 @@ final class OfflineQueue: ObservableObject {
 
     // BOREAL_DIALER_BACKGROUND_SEND_v309 - leaving the app hands saved changes to iOS.
     func handOffToBackground() {
-        guard let token = TokenStorage.shared.getToken(), !token.isEmpty else { return }
+        guard let token = tokenProvider(), !token.isEmpty else { return }
         let me = JWTClaims.subject(of: token)
         mutate { items in
             for index in items.indices where items[index].handedAt == nil && items[index].failure == nil {

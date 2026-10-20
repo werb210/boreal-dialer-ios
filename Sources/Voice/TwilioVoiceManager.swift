@@ -360,6 +360,11 @@ extension TwilioVoiceManager: @preconcurrency NotificationDelegate {
                 CallStateManager.shared.reset()
             }
         }
+        if decision == .rejectSignedOut { // BOREAL_DIALER_v832_SIGNOUT_ALERTS
+            inviteLedger.finish(callInvite.callSid)
+            Telemetry.event("call_rejected_signed_out", callRef: callInvite.callSid)
+            Task { await PendingSignOut.retryIfNeeded() } // and try again to stop these calls coming
+        }
         if decision == .rejectBusy {
             inviteLedger.finish(callInvite.callSid)
             // BOREAL_DIALER_v831_DIALER_POLISH - one call at a time, but the second caller is no longer turned away

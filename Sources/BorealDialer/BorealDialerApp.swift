@@ -112,6 +112,7 @@ struct BorealDialerApp: App {
                 if connected {
                     Task {
                         await OfflineQueue.shared.flush()
+                        await PendingSignOut.retryIfNeeded() // BOREAL_DIALER_v832_SIGNOUT_ALERTS
                     }
                     VoiceManager.shared.handleNetworkReconnect()
                     Telemetry.event("network_recovered")
@@ -141,6 +142,7 @@ struct BorealDialerApp: App {
                     if auth.isAuthenticated { Task { await StaffQuickActions.shared.applyPending() } }
                     Task {
                         await SessionRenewal.renewIfNeeded() // BOREAL_DIALER_v831_DIALER_POLISH - no weekly sign-out
+                        await PendingSignOut.retryIfNeeded() // BOREAL_DIALER_v832_SIGNOUT_ALERTS
                         OfflineQueue.shared.reconcileBackground() // BOREAL_DIALER_BACKGROUND_SEND_v309
                         await OfflineQueue.shared.flush()
                         await CallDirectoryManager.shared.refresh()

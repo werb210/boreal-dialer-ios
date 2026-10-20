@@ -281,11 +281,13 @@ final class VoiceManager: NSObject, ObservableObject {
         tokenRefreshTask?.cancel()
         tokenRefreshTask = nil
         if let token = registeredToken ?? latestToken, let deviceToken {
-            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                TwilioVoiceSDK.unregister(accessToken: token, deviceToken: deviceToken) { _ in
-                    continuation.resume()
+            let failed: Bool = await withCheckedContinuation { continuation in
+                TwilioVoiceSDK.unregister(accessToken: token, deviceToken: deviceToken) { error in
+                    continuation.resume(returning: error != nil)
                 }
             }
+            // BOREAL_DIALER_v832_SIGNOUT_ALERTS - with no signal Twilio kept sending calls here; try again later.
+            if failed { PendingSignOut.rememberTwilioUnregister(accessToken: token, deviceToken: deviceToken) }
         }
         accessToken = nil
         latestToken = nil

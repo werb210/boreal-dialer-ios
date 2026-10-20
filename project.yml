@@ -390,6 +390,7 @@ targets:
       - path: NotificationService/PrivacyInfo.xcprivacy
         buildPhase: resources
       - path: Sources/Shared/CommunicationSender.swift
+      - path: Sources/Shared/MissedCallDedupe.swift # BOREAL_DIALER_v832_SIGNOUT_ALERTS
     info:
       path: NotificationService/Info.plist
       properties:

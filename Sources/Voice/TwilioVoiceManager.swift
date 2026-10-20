@@ -265,6 +265,16 @@ extension TwilioVoiceManager: @preconcurrency CallDelegate {
         }
     }
 
+    // BOREAL_DIALER_v830_DIALER_CONTROLS - a signal drop mid-call: Twilio reconnects the media itself. Say so on the
+    // call screen instead of silence that looks like the other side hung up.
+    func callIsReconnecting(call: Call, error: Error) {
+        VoiceEngine.shared.setReconnecting(true)
+    }
+
+    func callDidReconnect(call: Call) {
+        VoiceEngine.shared.setReconnecting(false)
+    }
+
     func callDidDisconnect(call: Call, error: Error?) {
         appendCallLog()
 

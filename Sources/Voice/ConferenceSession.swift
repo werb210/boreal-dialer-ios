@@ -196,6 +196,14 @@ final class ConferenceSession: ObservableObject {
         await refresh()
     }
 
+    // BOREAL_DIALER_v830_DIALER_CONTROLS - keypad tones to the other party on a Boreal call. A conference does not pass
+    // tones between participants, so BF-Server plays them into that person's leg (needs BF-Server v830).
+    @discardableResult
+    func sendTones(_ digits: String) async -> Bool {
+        guard let conferenceId, let pid = remoteParticipantId else { return false }
+        return await post("/voice/conferences/\(conferenceId)/participants/\(pid)/dtmf", ["digits": digits], failure: "Couldn't send those keypad tones.")
+    }
+
     func recording(op: String) async {
         guard let conferenceId else { return }
         _ = await post("/voice/conferences/\(conferenceId)/recording", ["op": op], failure: "Couldn't change recording.")

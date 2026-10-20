@@ -54,6 +54,8 @@ struct BorealDialerApp: App {
             Group {
                 if auth.isAuthenticated {
                     RootTabView()
+                // BOREAL_DIALER_v830_DIALER_CONTROLS - "You won't receive calls right now" + Retry, when that is true.
+                .safeAreaInset(edge: .top, spacing: 0) { CallReadinessBanner() }
                 // BOREAL_DIALER_THEME_v27 - the concept is a dark theme; the
                 // app was rendering in default light SwiftUI.
                 .preferredColorScheme(.dark)
@@ -126,6 +128,7 @@ struct BorealDialerApp: App {
                 if phase == .active {
                     WidgetSnapshotStore.refreshStoredSnapshot()
                     DialerEventLog.shared.flush() // BOREAL_DIALER_v829_RELIABILITY
+                    VoiceManager.shared.recoverIfNeeded() // BOREAL_DIALER_v830_DIALER_CONTROLS
                     // BOREAL_DIALER_WATCH_SNAPSHOT_WRITER_v210 - nothing has ever written the
                     // keys the watch complication reads. This is that writer.
                     Task { await WatchSnapshotSync.refresh() }

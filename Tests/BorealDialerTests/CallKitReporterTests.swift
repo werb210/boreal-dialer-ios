@@ -157,7 +157,7 @@ final class CallKitReporterTests: XCTestCase {
     }
 
     @MainActor
-    func testDuplicateInviteIsRejectedReportedAndEndedUnanswered() {
+    func testDuplicateInviteIsReportedAndEndedUnansweredButNotRejected() {
         let invite = FakeInvite()
         var reporter: CallKitReporter?
         var rang = false
@@ -171,7 +171,8 @@ final class CallKitReporterTests: XCTestCase {
         made.handleVoIPPush(twilioPayload) { completions += 1 }
 
         XCTAssertFalse(rang)
-        XCTAssertEqual(invite.rejected, 1)
+        // BOREAL_DIALER_v830_DIALER_CONTROLS - the ringing call is the same call: never rejected.
+        XCTAssertEqual(invite.rejected, 0)
         XCTAssertEqual(provider.reported.count, 1)
         XCTAssertNotEqual(provider.reported.first?.uuid, invite.uuid,
                           "a placeholder never reuses the UUID of the call already ringing")

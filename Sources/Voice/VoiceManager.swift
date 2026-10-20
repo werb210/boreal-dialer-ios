@@ -18,7 +18,22 @@ final class VoiceManager: NSObject, ObservableObject {
 
     static let shared = VoiceManager()
 
-    @Published private(set) var registrationState: RegistrationState = .unregistered
+    @Published private(set) var registrationState: RegistrationState = .unregistered {
+        // BOREAL_DIALER_v830_DIALER_CONTROLS - when this phone stopped being able to receive calls (nil while it can).
+        didSet {
+            if registrationState == .registered {
+                notReceivingSince = nil
+            } else if notReceivingSince == nil {
+                notReceivingSince = Date()
+            }
+        }
+    }
+    // BOREAL_DIALER_v830_DIALER_CONTROLS - drives the "You won't receive calls" banner (CallReadinessBanner).
+    @Published private(set) var notReceivingSince: Date? = Date()
+    /// The last attempt to get calling ready failed (no token from BF-Server, or Twilio refused the registration).
+    @Published private(set) var lastSetupFailed = false
+    private var setupRetryTask: Task<Void, Never>?
+    private var setupRetryCount = 0
 
     private var accessToken: String?
     private var tokenRefreshTask: Task<Void, Never>?
@@ -51,7 +66,18 @@ final class VoiceManager: NSObject, ObservableObject {
         guard !isInitializing else { return }
         isInitializing = true
         defer { isInitializing = false }
-        guard let token = await fetchToken() else { return }
+        guard let token = await fetchToken() else {
+            // BOREAL_DIALER_v830_DIALER_CONTROLS - this used to give up silently: a launch with no signal (or a server
+            // blip) left the phone unable to ring until the app was killed and reopened. Retry with backoff.
+            lastSetupFailed = true
+            Telemetry.event("voice_setup_failed", metadata: ["stage": "token", "attempt": "\(setupRetryCount)"])
+            scheduleSetupRetry()
+            return
+        }
+        lastSetupFailed = false
+        setupRetryCount = 0
+        setupRetryTask?.cancel()
+        setupRetryTask = nil
 
         let firstInitialize = !hasInitialized
         hasInitialized = true
@@ -75,11 +101,9 @@ final class VoiceManager: NSObject, ObservableObject {
         scheduleTokenRefresh()
         PushManager.shared.register()
         PushManager.shared.registerDeviceTokenWithTwilio()
-        if firstInitialize && Self.noCallActive() {
-            // BOREAL_DIALER_v817_CALLS - the server's presence value is
-            // "available"; "online" was rejected, so no call was ever routed here.
-            sendPresence(status: "available")
-        }
+        // BOREAL_DIALER_v830_DIALER_CONTROLS - no "available" here any more: it switched Busy off on every launch and
+        // sign-in. The token fetch and the heartbeat (PresenceHeartbeat) keep presence current; only the Busy switch
+        // posts a status.
     }
 
     /// BOREAL_DIALER_VOICE_REFRESH_v789 - the 50-minute refresh. It used to
@@ -96,6 +120,33 @@ final class VoiceManager: NSObject, ObservableObject {
         // registration; retry only a prior retryable failure.
         if registrationState == .failed { registrationState = .unregistered }
         attemptRegistrationIfPossible()
+        recoverIfNeeded() // BOREAL_DIALER_v830_DIALER_CONTROLS
+    }
+
+    // BOREAL_DIALER_v830_DIALER_CONTROLS - make sure this phone can ring: called on foreground, on reconnect and from
+    // the banner's Retry. Fetches a token if there is none, else retries a failed registration.
+    func recoverIfNeeded() {
+        guard AuthService.shared.isAuthenticated, registrationState != .registered else { return }
+        if latestToken == nil {
+            Task { await self.initialize() }
+        } else {
+            if registrationState == .failed { registrationState = .unregistered }
+            attemptRegistrationIfPossible()
+        }
+    }
+
+    private func scheduleSetupRetry() {
+        guard setupRetryTask == nil else { return }
+        let delays: [UInt64] = [15, 30, 60, 120, 300]
+        let delay = delays[min(setupRetryCount, delays.count - 1)]
+        setupRetryCount += 1
+        setupRetryTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: delay * 1_000_000_000)
+            guard let self, !Task.isCancelled else { return }
+            self.setupRetryTask = nil
+            guard AuthService.shared.isAuthenticated, self.latestToken == nil else { return }
+            await self.initialize()
+        }
     }
 
     func updateAccessToken(_ token: String) {
@@ -200,6 +251,8 @@ final class VoiceManager: NSObject, ObservableObject {
             print("Twilio push registration failed:", failure)
 #endif
             registrationState = .failed
+            lastSetupFailed = true // BOREAL_DIALER_v830_DIALER_CONTROLS
+            Telemetry.event("voice_setup_failed", metadata: ["stage": "twilio_register", "error": String(failure.prefix(200))])
         } else {
             registeredToken = token
             registrationState = .registered
@@ -239,6 +292,10 @@ final class VoiceManager: NSObject, ObservableObject {
         registeredToken = nil
         registrationState = .unregistered
         hasInitialized = false
+        setupRetryTask?.cancel() // BOREAL_DIALER_v830_DIALER_CONTROLS
+        setupRetryTask = nil
+        setupRetryCount = 0
+        lastSetupFailed = false
         cleanup()
         IdentityManager.shared.clear()
     }

@@ -16,6 +16,19 @@ final class BorealNotificationService: UNNotificationServiceExtension {
         self.contentHandler = contentHandler
         fallback = request.content
         let content = request.content
+        // BOREAL_DIALER_v832_SIGNOUT_ALERTS - the server's "Missed call" replaces the one the phone posted itself.
+        if MissedCallDedupe.isMissedCall(content.userInfo), !MissedCallDedupe.isLocal(content.userInfo) {
+            let phone = content.userInfo["phone"] as? String
+            let center = UNUserNotificationCenter.current()
+            center.getDeliveredNotifications { [weak self] delivered in
+                let ids = MissedCallDedupe.localAlertIds(for: phone, in: delivered.map {
+                    MissedCallDedupe.Delivered(id: $0.request.identifier, userInfo: $0.request.content.userInfo, date: $0.date)
+                })
+                if !ids.isEmpty { center.removeDeliveredNotifications(withIdentifiers: ids) }
+                self?.deliver(content)
+            }
+            return
+        }
         guard let sender = CommunicationSender.from(userInfo: content.userInfo, body: content.body,
                                                      threadId: content.threadIdentifier) else {
             deliver(content)

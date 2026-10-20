@@ -155,6 +155,13 @@ final class StaffPushTokenRegistrar {
             _ = try await APIClient.shared.makeAuthorizedRequest(request)
         } catch {
             Telemetry.event("push_token_delete_failed")
+            // BOREAL_DIALER_v832_SIGNOUT_ALERTS - sent again when the signal returns (PendingSignOut), unless the server
+            // refused it outright.
+            if case APIError.http(let status, _, _) = error, PendingSignOut.alertUnregisterIsDone(status: status) { return }
+            if case APIError.unauthorized = error { return } // the server already refuses this sign-in
+            if let staffToken = TokenStorage.shared.getToken() {
+                PendingSignOut.rememberAlertUnregister(pushToken: token, staffToken: staffToken)
+            }
         }
     }
 }

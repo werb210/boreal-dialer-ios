@@ -64,6 +64,7 @@ final class CallKitReporter {
         case ring
         case rejectDuplicate
         case rejectBusy
+        case rejectSignedOut // BOREAL_DIALER_v832_SIGNOUT_ALERTS
     }
 
     static let shared = CallKitReporter()
@@ -76,6 +77,11 @@ final class CallKitReporter {
     /// Hands an eligible payload to the Twilio SDK. Twilio calls its
     /// NotificationDelegate synchronously on this (main) queue.
     var handleTwilioPayload: @MainActor ([AnyHashable: Any]) -> Bool
+    /// BOREAL_DIALER_v832_SIGNOUT_ALERTS - nobody is signed in on this phone. A sign-out done with no signal could not
+    /// tell Twilio to stop sending calls here, so the phone kept ringing for an app nobody was signed in to. Those calls
+    /// are now turned away at once (the caller moves on to the rest of the ring or voicemail). A keychain that is only
+    /// locked (just restarted, not yet unlocked) is not "signed out".
+    var isSignedOut: @MainActor () -> Bool
 
     /// Creates the app's CXProvider (VoiceEngine) if it does not exist yet.
     var ensureProvider: @MainActor () -> Void = { _ = VoiceEngine.shared }
@@ -85,8 +91,17 @@ final class CallKitReporter {
 
     init(provider: CallKitProviding? = nil,
          isLineBusy: (@MainActor () -> Bool)? = nil,
-         handleTwilioPayload: (@MainActor ([AnyHashable: Any]) -> Bool)? = nil) {
+         handleTwilioPayload: (@MainActor ([AnyHashable: Any]) -> Bool)? = nil,
+         isSignedOut: (@MainActor () -> Bool)? = nil) {
         self.provider = provider
+        // An injected provider (tests) starts signed in unless told otherwise.
+        if let isSignedOut {
+            self.isSignedOut = isSignedOut
+        } else if provider == nil {
+            self.isSignedOut = { PendingSignOut.isDefinitelySignedOut() }
+        } else {
+            self.isSignedOut = { false }
+        }
         self.isLineBusy = isLineBusy ?? {
             // BOREAL_DIALER_v831_DIALER_POLISH - isOnCall, not !isIdle: the 1.5 s pause after a call turned callers away.
             CallStateManager.shared.current() != .idle || VoiceEngine.shared.isOnCall
@@ -96,8 +111,9 @@ final class CallKitReporter {
         }
     }
 
-    nonisolated static func decide(isDuplicate: Bool, isBusy: Bool) -> InviteDecision {
+    nonisolated static func decide(isDuplicate: Bool, isBusy: Bool, isSignedOut: Bool = false) -> InviteDecision {
         if isDuplicate { return .rejectDuplicate }
+        if isSignedOut { return .rejectSignedOut } // BOREAL_DIALER_v832_SIGNOUT_ALERTS
         if isBusy { return .rejectBusy }
         return .ring
     }
@@ -133,7 +149,7 @@ final class CallKitReporter {
     @discardableResult
     func receive(invite: IncomingCallInvite, firstDelivery: Bool,
                  ring: (IncomingCallInvite) -> Void) -> InviteDecision {
-        let decision = Self.decide(isDuplicate: !firstDelivery, isBusy: isLineBusy())
+        let decision = Self.decide(isDuplicate: !firstDelivery, isBusy: isLineBusy(), isSignedOut: isSignedOut())
         switch decision {
         case .ring:
             ring(invite)
@@ -142,7 +158,7 @@ final class CallKitReporter {
             // for it, but never reject the invite - that is the same call, and rejecting it sent the caller to
             // voicemail while the phone kept ringing.
             reportPlaceholder(handle: invite.from, reason: .unanswered, push: claimPush())
-        case .rejectBusy:
+        case .rejectBusy, .rejectSignedOut:
             invite.reject()
             reportPlaceholder(handle: invite.from, reason: .unanswered, push: claimPush())
         }

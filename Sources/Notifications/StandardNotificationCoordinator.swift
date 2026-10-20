@@ -133,7 +133,7 @@ enum MissedCallNotification {
         }
         content.sound = .default
         content.categoryIdentifier = categoryId
-        content.userInfo = ["type": "missed_call", "phone": phone]
+        content.userInfo = ["type": "missed_call", "phone": phone, MissedCallDedupe.localKey: true] // BOREAL_DIALER_v832_SIGNOUT_ALERTS
         FocusAlertPolicy.tag(content, as: .client) // BOREAL_DIALER_v821 - time-sensitive client alert
         return content
     }
@@ -156,6 +156,14 @@ enum MissedCallNotification {
     static func post(handle: String, name: String? = nil, whileOnCall: Bool = false, center: UNUserNotificationCenter = .current()) {
         guard let content = content(handle: handle, name: name, whileOnCall: whileOnCall) else { return }
         let request = UNNotificationRequest(identifier: "missed-call-\(UUID().uuidString)", content: content, trigger: nil)
-        center.add(request, withCompletionHandler: nil)
+        // BOREAL_DIALER_v832_SIGNOUT_ALERTS - not when the server's alert for this caller is already showing.
+        let phone = content.userInfo["phone"] as? String
+        center.getDeliveredNotifications { delivered in
+            let entries = delivered.map {
+                MissedCallDedupe.Delivered(id: $0.request.identifier, userInfo: $0.request.content.userInfo, date: $0.date)
+            }
+            guard !MissedCallDedupe.serverAlerted(for: phone, in: entries) else { return }
+            center.add(request, withCompletionHandler: nil)
+        }
     }
 }

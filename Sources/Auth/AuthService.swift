@@ -101,6 +101,7 @@ final class AuthService: ObservableObject {
     func loginWithFaceID() async throws {
         let token = try await FaceIDSignIn.shared.signIn()
         TokenStorage.shared.save(token: token)
+        PendingSignOut.clear() // BOREAL_DIALER_v832_SIGNOUT_ALERTS - this sign-in registers itself; the old one's leftovers go
 
         await MainActor.run {
             self.isAuthenticated = true
@@ -138,6 +139,7 @@ final class AuthService: ObservableObject {
         }
 
         TokenStorage.shared.save(token: token)
+        PendingSignOut.clear() // BOREAL_DIALER_v832_SIGNOUT_ALERTS - this sign-in registers itself; the old one's leftovers go
 
         // BOREAL_DIALER_TESTS_v40 - removed a POST to /auth/device-token, which
         // does not exist on BF-Server. It ran on every login and 404'd silently.

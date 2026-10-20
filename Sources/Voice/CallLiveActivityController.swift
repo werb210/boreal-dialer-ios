@@ -9,7 +9,16 @@ final class CallLiveActivityController {
     func start(handle: String, line: String, status: String = "Dialing") {
         guard #available(iOS 16.1, *) else { return }
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-        end()
+        // BOREAL_DIALER_v830_DIALER_CONTROLS - already showing this call: just update it. end() here queued a task
+        // that ended EVERY activity (its id was nil by then), including the one requested just below.
+        if activityID != nil {
+            update(status: status)
+            return
+        }
+        let stale = Activity<CallActivityAttributes>.activities
+        if !stale.isEmpty {
+            Task { for activity in stale { await activity.end(dismissalPolicy: .immediate) } }
+        }
         let attrs = CallActivityAttributes(handle: handle, line: line)
         let state = CallActivityAttributes.ContentState(status: status, startedAt: Date())
         do {

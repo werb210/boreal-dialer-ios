@@ -136,7 +136,12 @@ final class CallKitReporter {
         switch decision {
         case .ring:
             ring(invite)
-        case .rejectDuplicate, .rejectBusy:
+        case .rejectDuplicate:
+            // BOREAL_DIALER_v830_DIALER_CONTROLS - a second delivery of the push for the call that is ringing: account
+            // for it, but never reject the invite - that is the same call, and rejecting it sent the caller to
+            // voicemail while the phone kept ringing.
+            reportPlaceholder(handle: invite.from, reason: .unanswered, push: claimPush())
+        case .rejectBusy:
             invite.reject()
             reportPlaceholder(handle: invite.from, reason: .unanswered, push: claimPush())
         }

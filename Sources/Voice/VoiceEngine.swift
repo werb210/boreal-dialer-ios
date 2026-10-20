@@ -121,6 +121,16 @@ final class VoiceEngine: NSObject, ObservableObject {
     private var currentNumber: String?
     /// How long an answered call may take to connect before it is ended with a reason.
     static let connectTimeoutSeconds: UInt64 = 12
+    // BOREAL_DIALER_v830_DIALER_CONTROLS
+    /// An extension to send as tones once the outgoing call is answered.
+    private var pendingTones: String?
+    /// The call's audio is on the iPhone speaker.
+    @Published private(set) var isSpeakerOn = false
+    /// Twilio lost the media connection and is reconnecting (bad signal); the call is not over.
+    @Published private(set) var isReconnecting = false
+    /// Tones typed on the in-call keypad, shown above it.
+    @Published private(set) var sentTones = ""
+    private var routeObserver: NSObjectProtocol?
 
     var activeCallSid: String? {
         if case .active(let uuid) = state {
@@ -189,15 +199,18 @@ final class VoiceEngine: NSObject, ObservableObject {
 
     func startCall(to rawNumber: String, uuid: UUID = UUID()) {
         guard case .idle = state else { return }
+        // BOREAL_DIALER_v830_DIALER_CONTROLS - "403-555-0142 ext 123": dial the number, send 123 once connected.
+        let parts = DialString.split(rawNumber)
         // BOREAL_DIALER_v817_CALLS - Twilio dials E.164 only.
-        let number = PhoneFormat.e164(rawNumber)
+        let number = PhoneFormat.e164(parts.number)
         guard !number.isEmpty else { return }
         // BOREAL_DIALER_v817_CALLS - no microphone, no call: fail fast with a
         // reason instead of connecting a silent call. An undetermined
         // permission prompts and places the call once granted.
-        guard microphoneReady(retry: { VoiceEngine.shared.startCall(to: number, uuid: uuid) }) else { return }
+        guard microphoneReady(retry: { VoiceEngine.shared.startCall(to: rawNumber, uuid: uuid) }) else { return }
         callError = nil
         state = .dialing(uuid)
+        pendingTones = parts.extensionDigits // BOREAL_DIALER_v830_DIALER_CONTROLS
         currentNumber = number // BOREAL_DIALER_v829_RELIABILITY
 
         currentHandle = PhoneFormat.display(number)
@@ -440,8 +453,76 @@ final class VoiceEngine: NSObject, ObservableObject {
     }
 
     func toggleMute() {
-        isMuted = TwilioVoiceManager.shared.setMuted(!isMuted)
-        Telemetry.event("call_mute_toggled", metadata: ["isMuted": "\(isMuted)"])
+        // BOREAL_DIALER_v830_DIALER_CONTROLS - through CallKit, so the lock screen and the app agree on mute.
+        let wanted = !isMuted
+        guard let uuid = liveCallUUID else {
+            isMuted = TwilioVoiceManager.shared.setMuted(wanted)
+            return
+        }
+        callController.request(CXTransaction(action: CXSetMutedCallAction(call: uuid, muted: wanted))) { error in
+            guard error != nil else { return }
+            Task { @MainActor in
+                VoiceEngine.shared.isMuted = TwilioVoiceManager.shared.setMuted(wanted)
+            }
+        }
+        Telemetry.event("call_mute_toggled", metadata: ["isMuted": "\(wanted)"])
+    }
+
+    // BOREAL_DIALER_v830_DIALER_CONTROLS - the in-call keypad: tones go through CallKit (CXPlayDTMFCallAction), which
+    // sends them on the Twilio leg (provider perform CXPlayDTMFCallAction).
+    func sendTones(_ digits: String) {
+        let tones = digits.filter { $0.isNumber || $0 == "*" || $0 == "#" }
+        guard !tones.isEmpty, let uuid = liveCallUUID else { return }
+        sentTones = String((sentTones + tones).suffix(24))
+        // A Boreal (conference) call: the other party's leg gets the tones from BF-Server.
+        if ConferenceSession.shared.isActive {
+            Task { @MainActor in _ = await ConferenceSession.shared.sendTones(tones) }
+            return
+        }
+        let action = CXPlayDTMFCallAction(call: uuid, digits: tones, type: .singleTone)
+        callController.request(CXTransaction(action: action)) { error in
+            guard error != nil else { return }
+            Task { @MainActor in _ = TwilioVoiceManager.shared.sendDigits(tones) }
+        }
+    }
+
+    // BOREAL_DIALER_v830_DIALER_CONTROLS - resume a call iOS put on hold (e.g. "Hold & Accept" for a mobile call).
+    func resumeFromHold() {
+        guard let uuid = liveCallUUID else { return }
+        callController.request(CXTransaction(action: CXSetHeldCallAction(call: uuid, onHold: false))) { error in
+            guard error != nil else { return }
+            Task { @MainActor in
+                VoiceEngine.shared.isOnHold = TwilioVoiceManager.shared.setOnHold(false)
+            }
+        }
+    }
+
+    // BOREAL_DIALER_v830_DIALER_CONTROLS - speakerphone. Bluetooth / AirPods are picked with the route button.
+    func toggleSpeaker() {
+        let wanted = !isSpeakerOn
+        do {
+            try AVAudioSession.sharedInstance().overrideOutputAudioPort(wanted ? .speaker : .none)
+            isSpeakerOn = wanted
+        } catch {
+            Telemetry.event("speaker_toggle_failed", metadata: ["error": error.localizedDescription])
+        }
+    }
+
+    /// Keeps the speaker button true to the real route (AirPods connecting, the route picker, CallKit's own button).
+    private func observeAudioRoute() {
+        guard routeObserver == nil else { return }
+        routeObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main
+        ) { _ in
+            let onSpeaker = AVAudioSession.sharedInstance().currentRoute.outputs.contains { $0.portType == .builtInSpeaker }
+            Task { @MainActor in VoiceEngine.shared.isSpeakerOn = onSpeaker }
+        }
+    }
+
+    // BOREAL_DIALER_v830_DIALER_CONTROLS - Twilio's reconnect callbacks (TwilioVoiceManager).
+    func setReconnecting(_ reconnecting: Bool) {
+        isReconnecting = reconnecting
+        Telemetry.event(reconnecting ? "call_reconnecting" : "call_reconnected", callRef: TwilioVoiceManager.shared.lastCallSid)
     }
 
     func toggleHold(onHold: Bool) {
@@ -528,6 +609,15 @@ final class VoiceEngine: NSObject, ObservableObject {
         stopTimer()
         startTimer()
         state = .active(uuid)
+        // BOREAL_DIALER_v830_DIALER_CONTROLS - the extension, after the far end has had a moment to answer.
+        if let tones = pendingTones, !tones.isEmpty {
+            pendingTones = nil
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                guard let self, self.liveCallUUID == uuid else { return }
+                self.sendTones(tones)
+            }
+        }
     }
 
     // BOREAL_DIALER_v829_RELIABILITY - follows the customer's leg on the server (GET /voice/conferences/:id) while it
@@ -656,6 +746,11 @@ final class VoiceEngine: NSObject, ObservableObject {
         isConnecting = false
         remoteRinging = false
         answerTappedAt = nil
+        // BOREAL_DIALER_v830_DIALER_CONTROLS
+        pendingTones = nil
+        isReconnecting = false
+        isSpeakerOn = false
+        sentTones = ""
         state = status
         isMuted = false
         isOnHold = false
@@ -832,6 +927,7 @@ extension VoiceEngine: @preconcurrency CXProviderDelegate {
     // may Twilio start audio.
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
         audioDevice.isEnabled = true
+        observeAudioRoute() // BOREAL_DIALER_v830_DIALER_CONTROLS
         // BOREAL_DIALER_v829_RELIABILITY - how long iOS took to hand over the audio after Answer.
         if isConnecting, let tapped = answerTappedAt {
             Telemetry.event("audio_activated", metadata: ["answerToAudioMs": "\(Int(Date().timeIntervalSince(tapped) * 1000))"],

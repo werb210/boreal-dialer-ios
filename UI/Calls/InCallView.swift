@@ -78,7 +78,11 @@ struct InCallView: View {
         // BOREAL_DIALER_v829_RELIABILITY - "Ringing…" once their phone rings; "Connecting…" between Answer and audio.
         case .dialing: return voiceEngine.remoteRinging ? "Ringing…" : "Calling…"
         case .ringing: return "Ringing…"
-        case .active: return voiceEngine.isConnecting ? "Connecting…" : formatDuration(voiceEngine.callDuration)
+        case .active:
+            // BOREAL_DIALER_v830_DIALER_CONTROLS - a signal drop or a hold is not a dead call: say which it is.
+            if voiceEngine.isReconnecting { return "Reconnecting…" }
+            if voiceEngine.isOnHold { return "On hold · " + formatDuration(voiceEngine.callDuration) }
+            return voiceEngine.isConnecting ? "Connecting…" : formatDuration(voiceEngine.callDuration)
         case .ended: return "Call ended"
         case .failed: return "Call failed"
         case .idle: return ""

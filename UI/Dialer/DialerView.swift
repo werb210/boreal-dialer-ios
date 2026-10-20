@@ -200,79 +200,83 @@ struct DialerView: View {
 }
 
 // Active call controls — shown when call is in progress
+// BOREAL_DIALER_v830_DIALER_CONTROLS - rebuilt from the audit: a working in-call keypad (the button did nothing),
+// speaker and audio-route buttons, Hold that resumes a call iOS held, Add / Transfer with a choice between staying on
+// the line and handing the call over, and each person's status (ringing, busy, no answer). The "Consent" button,
+// which only changed a local flag, is gone; recording can be paused and resumed.
 struct ActiveCallControls: View {
     @ObservedObject var voiceEngine = VoiceEngine.shared
-    @ObservedObject var recordingManager = RecordingManager.shared
     // BOREAL_DIALER_CONFERENCE_CONTROLS_v14
     @ObservedObject var conference = ConferenceSession.shared
     @State private var addParticipantNumber = ""
     @State private var showAddParticipant = false
+    @State private var recordingPaused = false
 
     var body: some View {
         VStack(spacing: 16) {
-            // Main control row
-            HStack(spacing: 20) {
-                // Mute
-                DialerButton(
-                    icon: "mic.slash",
-                    label: "Mute",
-                    isActive: voiceEngine.isMuted
-                ) {
-                    voiceEngine.toggleMute()
+            if voiceEngine.showKeypad {
+                InCallKeypad()
+            } else {
+                // Main control row
+                HStack(spacing: 20) {
+                    DialerButton(icon: voiceEngine.isMuted ? "mic.slash.fill" : "mic.slash", label: "Mute", isActive: voiceEngine.isMuted) {
+                        voiceEngine.toggleMute()
+                    }
+                    DialerButton(icon: "circle.grid.3x3.fill", label: "Keypad", isActive: false) {
+                        voiceEngine.showKeypad = true
+                    }
+                    DialerButton(icon: "speaker.wave.2.fill", label: "Speaker", isActive: voiceEngine.isSpeakerOn) {
+                        voiceEngine.toggleSpeaker()
+                    }
+                    AudioRouteButton()
                 }
 
-                // Hold the remote participant through the conference API.
-                DialerButton(icon: "pause.circle", label: "Hold", isActive: conference.remoteOnHold) {
-                    Task { await conference.setRemoteHold(!conference.remoteOnHold) }
-                }
-                .disabled(!conference.isActive)
+                // Second control row
+                HStack(spacing: 20) {
+                    // Hold: a call iOS held (e.g. for a mobile call) is resumed; otherwise the other party is held
+                    // through the conference API.
+                    DialerButton(icon: "pause.circle", label: voiceEngine.isOnHold ? "Resume" : "Hold",
+                                 isActive: voiceEngine.isOnHold || conference.remoteOnHold) {
+                        if voiceEngine.isOnHold {
+                            voiceEngine.resumeFromHold()
+                        } else {
+                            Task { await conference.setRemoteHold(!conference.remoteOnHold) }
+                        }
+                    }
+                    .disabled(!conference.isActive && !voiceEngine.isOnHold)
 
-                // Record
-                DialerButton(
-                    icon: "pause.rectangle",
-                    label: "Pause rec",
-                    isActive: false,
-                    activeColor: .red
-                ) {
-                    Task { await conference.recording(op: "pause") }
-                }
-                .disabled(!conference.isActive || recordingManager.consentState != "granted")
+                    DialerButton(icon: "person.badge.plus", label: "Add", isActive: showAddParticipant) {
+                        showAddParticipant.toggle()
+                    }
+                    .disabled(!conference.isActive)
 
-                // Recording consent
-                DialerButton(
-                    icon: "checkmark.seal",
-                    label: "Consent",
-                    isActive: recordingManager.consentState == "granted"
-                ) {
-                    recordingManager.setConsentState("granted")
-                }
-            }
-
-            // Second control row
-            HStack(spacing: 20) {
-                // Transfer
-                DialerButton(icon: "arrow.right.circle", label: "Transfer", isActive: false) {
-                    showAddParticipant = true
-                }
-
-                // Add participant
-                DialerButton(icon: "person.badge.plus", label: "Add", isActive: false) {
-                    showAddParticipant = true
-                }
-
-                // Keypad
-                DialerButton(icon: "rectangle.grid.3x2", label: "Keypad", isActive: false) {
-                    voiceEngine.showKeypad.toggle()
+                    DialerButton(icon: recordingPaused ? "record.circle" : "pause.rectangle",
+                                 label: recordingPaused ? "Resume rec" : "Pause rec",
+                                 isActive: recordingPaused, activeColor: .red) {
+                        let op = recordingPaused ? "resume" : "pause"
+                        Task {
+                            await conference.recording(op: op)
+                            if conference.lastError == nil { recordingPaused.toggle() }
+                        }
+                    }
+                    .disabled(!conference.isActive)
                 }
             }
 
             // Participants are live from the conference; adding a number joins it.
-            if !conference.participants.isEmpty {
+            if !conference.participants.isEmpty && !voiceEngine.showKeypad {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(conference.participants) { participant in
                         HStack {
                             Image(systemName: "person.circle")
-                            Text(participant.label)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(participant.label)
+                                if let status = ActiveCallControls.statusText(participant.status) {
+                                    Text(status)
+                                        .font(.caption)
+                                        .foregroundColor(Theme.muted)
+                                }
+                            }
                             Spacer()
                             Button {
                                 Task {
@@ -285,6 +289,7 @@ struct ActiveCallControls: View {
                                 Image(systemName: (participant.muted ?? false) ? "mic.slash.fill" : "mic")
                             }
                             .buttonStyle(.borderless)
+                            .accessibilityLabel((participant.muted ?? false) ? "Unmute \(participant.label)" : "Mute \(participant.label)")
 
                             Button {
                                 Task { await conference.kick(participantId: participant.id) }
@@ -292,6 +297,7 @@ struct ActiveCallControls: View {
                                 Image(systemName: "person.fill.xmark").foregroundColor(.red)
                             }
                             .buttonStyle(.borderless)
+                            .accessibilityLabel("Remove \(participant.label) from the call")
                         }
                         .padding(.horizontal)
                     }
@@ -303,37 +309,48 @@ struct ActiveCallControls: View {
                     .font(.caption)
                     .foregroundColor(.red)
                     .padding(.horizontal)
-            } else if !conference.isActive {
-                Text("Call controls need the call to be placed through the server.")
+            } else if !conference.isActive && !voiceEngine.showKeypad {
+                Text("Hold, add and transfer need the call to be placed through Boreal.")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .padding(.horizontal)
             }
 
-            // Add participant input
-            if showAddParticipant {
-                HStack {
-                    TextField("Enter number or search...", text: $addParticipantNumber)
+            // Add participant / transfer input
+            if showAddParticipant && !voiceEngine.showKeypad {
+                VStack(spacing: 8) {
+                    TextField("Number to add or transfer to", text: $addParticipantNumber)
                         .textFieldStyle(.roundedBorder)
                         .keyboardType(.phonePad)
 
-                    Button("Add") {
-                        let number = addParticipantNumber
-                        Task { await conference.addParticipant(phone: number) }
-                        addParticipantNumber = ""
-                        showAddParticipant = false
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!conference.isActive)
+                    HStack(spacing: 8) {
+                        Button("Add to call") {
+                            let number = addParticipantNumber
+                            Task { await conference.addParticipant(phone: number) }
+                            addParticipantNumber = ""
+                            showAddParticipant = false
+                        }
+                        .buttonStyle(.borderedProminent)
 
-                    Button("Transfer") {
-                        let number = addParticipantNumber
-                        Task { await conference.transfer(toPhone: number, mode: "warm") }
-                        addParticipantNumber = ""
-                        showAddParticipant = false
+                        // Warm: they join, you stay to introduce them, then hang up - the call carries on.
+                        Button("Transfer, stay on") {
+                            let number = addParticipantNumber
+                            Task { await conference.transfer(toPhone: number, mode: "warm") }
+                            addParticipantNumber = ""
+                            showAddParticipant = false
+                        }
+                        .buttonStyle(.bordered)
+
+                        // Cold: they are rung and you leave the call now.
+                        Button("Hand over") {
+                            let number = addParticipantNumber
+                            Task { await conference.transfer(toPhone: number, mode: "cold") }
+                            addParticipantNumber = ""
+                            showAddParticipant = false
+                        }
+                        .buttonStyle(.bordered)
                     }
-                    .buttonStyle(.bordered)
-                    .disabled(!conference.isActive)
+                    .disabled(!conference.isActive || addParticipantNumber.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
                 .padding(.horizontal)
             }
@@ -352,6 +369,19 @@ struct ActiveCallControls: View {
                 }
                 .padding(.horizontal)
             }
+        }
+    }
+
+    // BOREAL_DIALER_v830_DIALER_CONTROLS - a participant's state in words (nil when they are simply on the call).
+    nonisolated static func statusText(_ status: String?) -> String? {
+        switch (status ?? "").lowercased() {
+        case "pending_dial", "invited", "queued", "initiated": return "Calling…"
+        case "ringing": return "Ringing…"
+        case "busy": return "Busy"
+        case "no-answer": return "No answer"
+        case "failed": return "Couldn't connect"
+        case "left", "canceled", "completed": return "Left the call"
+        default: return nil
         }
     }
 
@@ -389,6 +419,28 @@ struct DialerButton: View {
     }
 }
 
+
+// BOREAL_DIALER_v830_DIALER_CONTROLS - the keypad during a call: tones for phone menus, extensions and PINs.
+struct InCallKeypad: View {
+    @ObservedObject var voiceEngine = VoiceEngine.shared
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Text(voiceEngine.sentTones.isEmpty ? " " : voiceEngine.sentTones)
+                .font(.system(size: 26, weight: .medium, design: .monospaced))
+                .foregroundColor(Theme.text)
+                .lineLimit(1)
+                .accessibilityLabel(voiceEngine.sentTones.isEmpty ? "No tones sent yet" : "Sent \(voiceEngine.sentTones)")
+            KeypadGrid(onDigit: { key in
+                guard key != "+" else { return }
+                voiceEngine.sendTones(key)
+            }, onBackspace: {}, onClear: {})
+            Button("Hide keypad") { voiceEngine.showKeypad = false }
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(Theme.greenBright)
+        }
+    }
+}
 
 // BOREAL_DIALER_KEYPAD_ICON_PLIST_v22
 // The 3x4 grid, letters and all, matching the concept mockup. Long-pressing 0

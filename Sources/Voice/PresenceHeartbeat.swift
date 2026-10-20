@@ -28,7 +28,9 @@ final class PresenceHeartbeat {
         stop()
         task = Task { [weak self] in
             guard let self else { return }
-            await self.publish(status: "available")
+            // BOREAL_DIALER_v830_DIALER_CONTROLS - a heartbeat, not "available": posting a status every time the app
+            // came to the front switched Busy off (Busy lasted only until the next app switch).
+            await self.beat()
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: self.interval)
                 guard !Task.isCancelled else { break }

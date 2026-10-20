@@ -53,6 +53,14 @@ jobs:
           mkdir -p "$RUNNER_TEMP/asc"
           printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey_${ASC_KEY_ID}.p8"
           chmod 600 "$RUNNER_TEMP/asc/AuthKey_${ASC_KEY_ID}.p8"
+      # BOREAL_v833_CERT_CLEANUP - each cloud run makes Xcode create an "Apple Development" certificate ("Created via
+      # API") and Apple allows only a few, so archiving started failing. This deletes the leftover API-made development
+      # certificates from earlier runs (older than 75 minutes, in any of the three apps) and nothing else: the
+      # Distribution Managed certificate, Andrew Polturak's development certificate and the VoIP certificates are kept.
+      # It never fails the run.
+      - name: Delete leftover cloud development certificates
+        continue-on-error: true
+        run: node scripts/asc-cleanup-dev-certs.mjs
       - name: Archive (signed with the company team)
         run: >-
           xcodebuild archive

@@ -66,6 +66,9 @@ targets:
       - path: Assets.xcassets
       - path: Config/PrivacyInfo.xcprivacy
         buildPhase: resources
+      # BOREAL_DIALER_v836_SIRI_PHRASES - Siri example phrases (App Store Connect ITMS-90626).
+      - path: Config/en.lproj/AppIntentVocabulary.plist
+        buildPhase: resources
     info:
       path: Config/Info.plist
       # XcodeGen GENERATES this file from the properties below. A hand-written

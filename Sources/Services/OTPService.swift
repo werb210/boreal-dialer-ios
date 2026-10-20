@@ -22,7 +22,10 @@ final class OTPService {
     func verifyOTP(phone: String, code: String) async throws -> Data {
         let body = try JSONSerialization.data(withJSONObject: [
             "phone": phone,
-            "code": code
+            "code": code,
+            // BOREAL_DIALER_v831_DIALER_POLISH - BF-Server v831 answers 403 not_staff for a number that isn't staff,
+            // instead of a client sign-in that looked normal and never rang.
+            "userType": "staff"
         ])
 
         return try await APIClient.shared.performUnauthenticated(

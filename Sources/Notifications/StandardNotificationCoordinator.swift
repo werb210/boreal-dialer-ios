@@ -115,14 +115,22 @@ enum MissedCallNotification {
     }
 
     /// Returns nil for anything that is not a dialable number (client identities, "Unknown").
-    static func content(handle: String) -> UNMutableNotificationContent? {
+    /// BOREAL_DIALER_v831_DIALER_POLISH - `whileOnCall`: a call that came in while you were on another one. It used to be
+    /// turned away with no trace on the phone.
+    static func content(handle: String, name: String? = nil, whileOnCall: Bool = false) -> UNMutableNotificationContent? {
         let trimmed = handle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.lowercased().hasPrefix("client:") else { return nil }
         let phone = String(trimmed.filter { $0.isNumber || $0 == "+" })
         guard phone.filter({ $0.isNumber }).count >= 7 else { return nil }
         let content = UNMutableNotificationContent()
-        content.title = "Missed call"
-        content.body = trimmed
+        content.title = whileOnCall ? "Missed while you were on a call" : "Missed call"
+        let display = PhoneFormat.display(trimmed)
+        let shown = display.isEmpty ? trimmed : display
+        if let name = name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            content.body = "\(name) · \(shown)"
+        } else {
+            content.body = trimmed
+        }
         content.sound = .default
         content.categoryIdentifier = categoryId
         content.userInfo = ["type": "missed_call", "phone": phone]
@@ -145,8 +153,8 @@ enum MissedCallNotification {
         return components.url
     }
 
-    static func post(handle: String, center: UNUserNotificationCenter = .current()) {
-        guard let content = content(handle: handle) else { return }
+    static func post(handle: String, name: String? = nil, whileOnCall: Bool = false, center: UNUserNotificationCenter = .current()) {
+        guard let content = content(handle: handle, name: name, whileOnCall: whileOnCall) else { return }
         let request = UNNotificationRequest(identifier: "missed-call-\(UUID().uuidString)", content: content, trigger: nil)
         center.add(request, withCompletionHandler: nil)
     }

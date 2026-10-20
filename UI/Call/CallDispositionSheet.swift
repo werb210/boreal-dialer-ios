@@ -22,6 +22,10 @@ struct CallDispositionSheet: View {
     @State private var addedSuggestions: Set<String> = []
     @State private var addingSuggestion: String?
     @State private var suggestionError: String?
+    // BOREAL_DIALER_v831_DIALER_POLISH - one Idempotency-Key per outcome and per suggested task, shared by the direct
+    // send and its offline copy.
+    @State private var outcomeKey = UUID()
+    @State private var taskKeys: [String: UUID] = [:]
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -157,14 +161,16 @@ struct CallDispositionSheet: View {
     private func addSuggestion(_ task: SuggestedCallTask) async {
         addingSuggestion = task.id
         suggestionError = nil
+        let key = taskKeys[task.id] ?? UUID()
+        taskKeys[task.id] = key
         do {
-            try await SuggestedTaskService.add(task, contactId: suggestionContactId)
+            try await SuggestedTaskService.add(task, contactId: suggestionContactId, key: key)
             addedSuggestions.insert(task.id)
         } catch {
             // BOREAL_DIALER_OFFLINE_v303
             if OfflineQueue.isOffline(error),
                let data = try? JSONSerialization.data(withJSONObject: SuggestedTaskService.body(for: task, contactId: suggestionContactId)) {
-                OfflineQueue.shared.enqueue(label: "Task", path: "/tasks", body: data)
+                OfflineQueue.shared.enqueue(label: "Task", path: "/tasks", body: data, id: key)
                 addedSuggestions.insert(task.id)
             } else {
                 suggestionError = "Could not add that task. Try again."
@@ -177,13 +183,13 @@ struct CallDispositionSheet: View {
         saving = option
         failure = nil
         do {
-            _ = try await CallDispositionService.record(callRef: callRef, disposition: option)
+            _ = try await CallDispositionService.record(callRef: callRef, disposition: option, key: outcomeKey)
             onFinished(option)
             dismiss()
         } catch {
             // BOREAL_DIALER_OFFLINE_v303 - no signal: keep the outcome on the phone and move on.
             if OfflineQueue.isOffline(error) {
-                CallDispositionService.queueOffline(callRef: callRef, disposition: option)
+                CallDispositionService.queueOffline(callRef: callRef, disposition: option, key: outcomeKey)
                 onFinished(option)
                 dismiss()
                 return
@@ -192,6 +198,7 @@ struct CallDispositionSheet: View {
             // is the failure staff would actually notice.
             failure = error.localizedDescription
             saving = nil
+            outcomeKey = UUID() // BOREAL_DIALER_v831_DIALER_POLISH - the refused attempt's key is not reused
         }
     }
 }

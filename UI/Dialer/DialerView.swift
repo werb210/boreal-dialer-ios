@@ -127,11 +127,13 @@ struct DialerView: View {
             }
         }
         // BOREAL_DIALER_PRESENT_DISPOSITION_v224
-        .sheet(item: $voiceEngine.finishedCall) { finished in
+        // BOREAL_DIALER_v831_DIALER_POLISH - names the call and its length; the next waiting outcome follows on close
+        // (onDismiss also covers a swipe-down).
+        .sheet(item: $voiceEngine.finishedCall, onDismiss: { voiceEngine.outcomeSheetClosed() }) { finished in
             CallDispositionSheet(
                 callRef: finished.callSid,
-                contactName: nil,
-                durationText: nil
+                contactName: finished.contactName,
+                durationText: finished.durationText
             ) { _ in voiceEngine.finishedCall = nil }
         }
         // BOREAL_DIALER_v817_CALLS - say why a call could not be placed (e.g.

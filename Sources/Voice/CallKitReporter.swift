@@ -88,7 +88,8 @@ final class CallKitReporter {
          handleTwilioPayload: (@MainActor ([AnyHashable: Any]) -> Bool)? = nil) {
         self.provider = provider
         self.isLineBusy = isLineBusy ?? {
-            CallStateManager.shared.current() != .idle || !VoiceEngine.shared.isIdle
+            // BOREAL_DIALER_v831_DIALER_POLISH - isOnCall, not !isIdle: the 1.5 s pause after a call turned callers away.
+            CallStateManager.shared.current() != .idle || VoiceEngine.shared.isOnCall
         }
         self.handleTwilioPayload = handleTwilioPayload ?? { payload in
             PushManager.shared.handlePushPayload(payload)

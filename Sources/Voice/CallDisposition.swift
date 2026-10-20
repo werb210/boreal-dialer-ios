@@ -72,7 +72,9 @@ enum CallDispositionService {
     /// `id` may be our call id or the Twilio CallSid - the server accepts either
     /// (BF_SERVER_CALL_REF_v161), which matters because the dialer usually only
     /// has the CallSid.
-    static func record(callRef: String, disposition: CallDisposition) async throws -> DispositionResult {
+    /// BOREAL_DIALER_v831_DIALER_POLISH - `key` (Idempotency-Key) is shared with the offline copy, so an outcome that
+    /// did arrive (its reply was lost) writes one CRM note, not two.
+    static func record(callRef: String, disposition: CallDisposition, key: UUID = UUID()) async throws -> DispositionResult {
         let trimmed = callRef.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw DispositionError.missingCallReference }
 
@@ -81,7 +83,8 @@ enum CallDispositionService {
         let request = try APIClient.shared.makeRequest(
             path: "/telephony/calls/\(trimmed)/disposition",
             method: "POST",
-            body: body
+            body: body,
+            headers: ["Idempotency-Key": key.uuidString]
         )
         let data = try await APIClient.shared.makeAuthorizedRequest(request)
         let envelope = try JSONDecoder().decode(DispositionEnvelope.self, from: data)
@@ -94,11 +97,11 @@ enum CallDispositionService {
 
 // BOREAL_DIALER_OFFLINE_v303 - no signal: keep the outcome and send it when back online.
 extension CallDispositionService {
-    static func queueOffline(callRef: String, disposition: CallDisposition) {
+    static func queueOffline(callRef: String, disposition: CallDisposition, key: UUID = UUID()) {
         let trimmed = callRef.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty,
               let body = try? JSONSerialization.data(withJSONObject: ["disposition": disposition.rawValue]) else { return }
-        OfflineQueue.shared.enqueue(label: "Call outcome", path: "/telephony/calls/\(trimmed)/disposition", body: body)
+        OfflineQueue.shared.enqueue(label: "Call outcome", path: "/telephony/calls/\(trimmed)/disposition", body: body, id: key)
     }
 }
 
@@ -180,9 +183,10 @@ enum SuggestedTaskService {
         return body
     }
 
-    static func add(_ task: SuggestedCallTask, contactId: String?) async throws {
+    static func add(_ task: SuggestedCallTask, contactId: String?, key: UUID = UUID()) async throws {
         let data = try JSONSerialization.data(withJSONObject: body(for: task, contactId: contactId))
-        let request = try APIClient.shared.makeRequest(path: "/tasks", method: "POST", body: data)
+        let request = try APIClient.shared.makeRequest(path: "/tasks", method: "POST", body: data,
+                                                       headers: ["Idempotency-Key": key.uuidString]) // BOREAL_DIALER_v831_DIALER_POLISH
         _ = try await APIClient.shared.makeAuthorizedRequest(request)
     }
 }
@@ -197,9 +201,11 @@ enum CallSummaryService {
     static let maxAttempts = 15
 
     static func decode(_ data: Data) throws -> CallSummaryResult {
-        let envelope = try JSONDecoder().decode(CallSummaryEnvelope.self, from: data)
-        guard let result = envelope.data else { throw URLError(.cannotParseResponse) }
-        return result
+        if let envelope = try? JSONDecoder().decode(CallSummaryEnvelope.self, from: data), let result = envelope.data {
+            return result
+        }
+        // BOREAL_DIALER_v831_DIALER_POLISH - GET /calls/{sid}/summary answers with the bare object.
+        return try JSONDecoder().decode(CallSummaryResult.self, from: data)
     }
 
     static func shouldKeepPolling(_ result: CallSummaryResult?, attempt: Int) -> Bool {
@@ -208,13 +214,11 @@ enum CallSummaryService {
         return result.status == "pending"
     }
 
+    // BOREAL_DIALER_v831_DIALER_POLISH - the per-call route (it checks the viewer was on the call, and BF-Server v831
+    // adds the suggested follow-ups to it). The old /calls/summary?callSid= let anyone read any call.
     static func fetch(callSid: String) async throws -> CallSummaryResult {
-        let trimmed = callSid.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty,
-              let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else {
-            throw URLError(.badURL)
-        }
-        let request = try APIClient.shared.makeRequest(path: "/calls/summary?callSid=\(encoded)", method: "GET")
+        guard let path = AfterCallSummaryService.path(callSid: callSid) else { throw URLError(.badURL) }
+        let request = try APIClient.shared.makeRequest(path: path, method: "GET")
         let data = try await APIClient.shared.makeAuthorizedRequest(request)
         return try decode(data)
     }

@@ -44,8 +44,19 @@ struct QueuedRequest: Codable, Equatable {
     let createdAt: Date
     var attempts: Int
     var handedAt: Date? = nil // BOREAL_DIALER_BACKGROUND_SEND_v309 - the phone is sending it
+    // BOREAL_DIALER_v831_DIALER_POLISH
+    /// The staff member who saved it. Only their session sends it; it is never sent as someone else.
+    var ownerId: String? = nil
+    /// Why the server refused it for good. Kept (not silently dropped) so staff can see it, then retry or discard.
+    var failure: String? = nil
 }
 
+// BOREAL_DIALER_v831_DIALER_POLISH - the queue is safe to use from anywhere.
+// Before: flush() read the list once and wrote its own copy back after each send, so anything saved while it was
+// sending was wiped (lost outcomes), two flushes could start together (sent twice), and a change the server refused
+// was dropped after 10 tries without a word. Now every change to the list happens under one lock and touches items by
+// id, only one flush runs at a time, every send carries the item's id as its Idempotency-Key (BF-Server v831 runs a
+// resent change once), and a refused change stays in the list with the reason.
 final class OfflineQueue: ObservableObject {
 
     static let shared = OfflineQueue()
@@ -56,11 +67,14 @@ final class OfflineQueue: ObservableObject {
     private let lock = NSLock()
     private var flushing = false
 
+    /// Waiting to send.
     @Published private(set) var pendingCount: Int = 0
+    /// Refused by the server; shown to staff (OfflineStatusBar).
+    @Published private(set) var failedItems: [QueuedRequest] = []
 
     private init() {
         UserDefaults.standard.removeObject(forKey: legacyKey)
-        pendingCount = load().count
+        publish(load())
     }
 
     /// True for the errors URLSession raises when there is no usable connection.
@@ -84,105 +98,203 @@ final class OfflineQueue: ObservableObject {
     private func save(_ items: [QueuedRequest]) {
         let encoded = try? JSONEncoder().encode(items)
         UserDefaults.standard.set(encoded, forKey: storageKey)
-        let count = items.count
-        DispatchQueue.main.async { self.pendingCount = count }
+        publish(items)
     }
 
-    func enqueue(label: String, path: String, method: String = "POST", body: Data?) {
+    private func publish(_ items: [QueuedRequest]) {
+        let pending = items.filter { $0.failure == nil }.count
+        let failed = items.filter { $0.failure != nil }
+        DispatchQueue.main.async {
+            self.pendingCount = pending
+            self.failedItems = failed
+        }
+    }
+
+    /// The only way the stored list changes: read, change and write under the lock.
+    @discardableResult
+    private func mutate<T>(_ change: (inout [QueuedRequest]) -> T) -> T {
         lock.lock()
         defer { lock.unlock() }
         var items = load()
-        items.append(QueuedRequest(
-            id: UUID(),
-            label: label,
-            path: path,
-            method: method,
-            body: body,
-            silo: APIConfig.siloHeader(for: APIConfig.activeSilo),
-            createdAt: Date(),
-            attempts: 0
-        ))
-        save(items)
+        let before = items
+        let result = change(&items)
+        if items != before { save(items) }
+        return result
     }
 
-    /// Replays everything saved while offline, oldest first. Stops while still offline
-    /// or signed out; a request the server keeps refusing is dropped after maxAttempts.
-    func flush() async {
-        guard NetworkMonitor.shared.isConnected, TokenStorage.shared.getToken() != nil else { return }
-        if flushing { return }
-        flushing = true
-        defer { flushing = false }
+    /// `id` is also the Idempotency-Key. Pass the key a direct send already used, so a send that did arrive (its reply
+    /// was lost) is not made twice when the queue resends it.
+    func enqueue(label: String, path: String, method: String = "POST", body: Data?, id: UUID = UUID()) {
+        let owner = JWTClaims.subject(of: TokenStorage.shared.getToken())
+        let silo = APIConfig.siloHeader(for: APIConfig.activeSilo)
+        mutate { items in
+            guard !items.contains(where: { $0.id == id }) else { return }
+            items.append(QueuedRequest(
+                id: id,
+                label: label,
+                path: path,
+                method: method,
+                body: body,
+                silo: silo,
+                createdAt: Date(),
+                attempts: 0,
+                ownerId: owner
+            ))
+        }
+    }
 
-        var items = load()
-        var index = 0
-        while index < items.count {
-            let item = items[index]
-            if item.handedAt != nil { index += 1; continue } // v309: the phone is already sending it
+    /// What the server's refusal means for a saved change.
+    enum SendResult: Equatable { case sent, stop, retry, refused(String) }
+
+    static func classify(_ error: Error) -> SendResult {
+        if isOffline(error) { return .stop }
+        if let apiError = error as? APIError {
+            switch apiError {
+            case .unauthorized, .notAuthenticated:
+                return .stop
+            case .http(let status, _, _):
+                // 409 request_in_progress: an earlier send of this same change is still being saved.
+                if status == 409 { return .retry }
+                switch BackgroundSender.outcome(for: status) {
+                case .sent: return .sent
+                case .retry: return .retry
+                case .refused: return .refused(apiError.localizedDescription)
+                }
+            default:
+                return .retry
+            }
+        }
+        return .retry
+    }
+
+    private func claimFlush() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if flushing { return false }
+        flushing = true
+        return true
+    }
+
+    private func releaseFlush() {
+        lock.lock()
+        flushing = false
+        lock.unlock()
+    }
+
+    /// Replays everything saved while offline, oldest first, once each per run. Stops while offline or signed out.
+    func flush() async {
+        guard NetworkMonitor.shared.isConnected, let token = TokenStorage.shared.getToken(), !token.isEmpty else { return }
+        guard claimFlush() else { return }
+        defer { releaseFlush() }
+        let me = JWTClaims.subject(of: token)
+
+        // Saved under another sign-in: never sent as this person.
+        mutate { items in items.removeAll { $0.ownerId != nil && $0.ownerId != me } }
+
+        var tried = Set<UUID>()
+        while true {
+            let next: QueuedRequest? = mutate { items in
+                items.first { $0.handedAt == nil && $0.failure == nil && !tried.contains($0.id) }
+            }
+            guard let item = next else { return }
+            tried.insert(item.id)
+            let result: SendResult
             do {
                 var request = try APIClient.shared.makeRequest(path: item.path, method: item.method, body: item.body)
                 request.setValue(item.silo, forHTTPHeaderField: "X-Silo")
+                request.setValue(item.id.uuidString, forHTTPHeaderField: "Idempotency-Key")
                 _ = try await APIClient.shared.makeAuthorizedRequest(request)
-                items.remove(at: index)
-                save(items)
+                result = .sent
             } catch {
-                if Self.isOffline(error) { break }
-                if let apiError = error as? APIError, case .unauthorized = apiError { break }
-                items[index].attempts += 1
-                if items[index].attempts >= Self.maxAttempts {
-                    items.remove(at: index)
-                } else {
-                    index += 1
+                result = Self.classify(error)
+            }
+            switch result {
+            case .sent:
+                mutate { items in items.removeAll { $0.id == item.id } }
+            case .stop:
+                return
+            case .retry:
+                mutate { items in
+                    guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
+                    items[index].attempts += 1
+                    if items[index].attempts >= Self.maxAttempts {
+                        items[index].failure = "It couldn't be saved after several tries."
+                    }
                 }
-                save(items)
+            case .refused(let reason):
+                mutate { items in
+                    guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
+                    items[index].failure = reason
+                }
+                DialerEventLog.shared.record("offline_change_refused", metadata: ["label": item.label, "path": item.path])
             }
         }
     }
 
+    /// Try a refused change again.
+    func retry(_ id: UUID) {
+        mutate { items in
+            guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+            items[index].failure = nil
+            items[index].attempts = 0
+            items[index].handedAt = nil
+        }
+        Task { await flush() }
+    }
+
+    /// Give up on a refused change.
+    func discard(_ id: UUID) {
+        mutate { items in items.removeAll { $0.id == id } }
+    }
+
     func clear() {
-        save([])
+        mutate { items in items.removeAll() }
         BackgroundSender.shared.cancelAll() // BOREAL_DIALER_BACKGROUND_SEND_v309
     }
 
     // BOREAL_DIALER_BACKGROUND_SEND_v309 - leaving the app hands saved changes to iOS.
     func handOffToBackground() {
         guard let token = TokenStorage.shared.getToken(), !token.isEmpty else { return }
-        lock.lock()
-        defer { lock.unlock() }
-        var items = load()
-        var changed = false
-        for index in items.indices where items[index].handedAt == nil {
-            let item = items[index]
-            guard var request = try? APIClient.shared.makeRequest(path: item.path, method: item.method, body: nil) else { continue }
-            request.setValue(item.silo, forHTTPHeaderField: "X-Silo")
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            do {
-                try BackgroundSender.shared.enqueue(id: item.id.uuidString, request: request, body: item.body ?? Data())
-                items[index].handedAt = Date()
-                changed = true
-            } catch {
-                continue
+        let me = JWTClaims.subject(of: token)
+        mutate { items in
+            for index in items.indices where items[index].handedAt == nil && items[index].failure == nil {
+                let item = items[index]
+                if let owner = item.ownerId, owner != me { continue }
+                guard var request = try? APIClient.shared.makeRequest(path: item.path, method: item.method, body: nil) else { continue }
+                request.setValue(item.silo, forHTTPHeaderField: "X-Silo")
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                request.setValue(item.id.uuidString, forHTTPHeaderField: "Idempotency-Key") // BOREAL_DIALER_v831_DIALER_POLISH
+                do {
+                    try BackgroundSender.shared.enqueue(id: item.id.uuidString, request: request, body: item.body ?? Data())
+                    items[index].handedAt = Date()
+                } catch {
+                    continue
+                }
             }
         }
-        if changed { save(items) }
     }
 
     /// Reads back what iOS sent while the app was closed.
     func reconcileBackground() {
         let results = BackgroundSender.shared.results()
         guard !results.isEmpty else { return }
-        lock.lock()
-        defer { lock.unlock() }
-        var items = load()
-        for (id, status) in results {
-            guard let index = items.firstIndex(where: { $0.id.uuidString == id }) else { continue }
-            switch BackgroundSender.outcome(for: status) {
-            case .sent, .refused:
-                items.remove(at: index)
-            case .retry:
-                items[index].handedAt = nil
+        mutate { items in
+            for (id, status) in results {
+                guard let index = items.firstIndex(where: { $0.id.uuidString == id }) else { continue }
+                switch BackgroundSender.outcome(for: status) {
+                case .sent:
+                    items.remove(at: index)
+                case .refused:
+                    // BOREAL_DIALER_v831_DIALER_POLISH - was dropped without a word.
+                    items[index].handedAt = nil
+                    items[index].failure = status == 409
+                        ? nil
+                        : APIError.http(status: status, code: nil, message: nil).localizedDescription
+                case .retry:
+                    items[index].handedAt = nil
+                }
             }
         }
-        save(items)
         BackgroundSender.shared.acknowledge(Array(results.keys))
     }
 }

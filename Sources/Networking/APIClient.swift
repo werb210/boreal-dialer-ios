@@ -24,6 +24,9 @@ extension APIError: LocalizedError {
         "call_setup_failed": "The call couldn't be set up. Try again.",
         "forbidden": "You don't have access to that.",
         "not_found": "That item no longer exists.",
+        // BOREAL_DIALER_v831_DIALER_POLISH
+        "not_staff": "This number isn't set up as a Boreal staff account. Ask an admin to add it.",
+        "request_in_progress": "That change is already being saved.",
     ]
 
     var errorDescription: String? {
@@ -73,6 +76,8 @@ extension APIError: LocalizedError {
 final class APIClient {
 
     static let shared = APIClient()
+    /// BOREAL_DIALER_v831_DIALER_POLISH
+    static let requestTimeout: TimeInterval = 20
 
     private init() {}
 
@@ -100,6 +105,9 @@ final class APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.httpBody = body
+        // BOREAL_DIALER_v831_DIALER_POLISH - 60 s (the default) of silence on a weak signal before a request gave up;
+        // the screen just spun. This is the wait between bytes, so long uploads still work.
+        request.timeoutInterval = APIClient.requestTimeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         // BOREAL_DIALER_SDK_AND_ISOLATION_v5 - read the silo from APIConfig,
         // which LineManager keeps current. Reaching into LineManager here

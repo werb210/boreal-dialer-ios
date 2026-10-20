@@ -275,7 +275,20 @@ extension TwilioVoiceManager: @preconcurrency CallDelegate {
         VoiceEngine.shared.setReconnecting(false)
     }
 
+    // BOREAL_DIALER_v831_DIALER_POLISH - Twilio's "disconnected" for a call staff already hung up can arrive after the
+    // next call has started (calls are no longer refused in the moment after one ends). That late callback must not
+    // end, or clear, the new call.
+    private func isLateCallback(_ call: Call) -> Bool {
+        guard let uuid = call.uuid, let current = VoiceEngine.shared.currentCallUUID else { return false }
+        return uuid != current
+    }
+
     func callDidDisconnect(call: Call, error: Error?) {
+        if isLateCallback(call) {
+            VoiceEngine.shared.publishFinishedCall(callSid: call.sid, endedEarlier: true)
+            Telemetry.event("late_disconnect_ignored", callRef: call.sid)
+            return
+        }
         appendCallLog()
 
         // BOREAL_DIALER_PRESENT_DISPOSITION_v224
@@ -300,6 +313,7 @@ extension TwilioVoiceManager: @preconcurrency CallDelegate {
     }
 
     func callDidFailToConnect(call: Call, error: Error) {
+        if isLateCallback(call) { return } // BOREAL_DIALER_v831_DIALER_POLISH
         // BOREAL_DIALER_v829_RELIABILITY - the Twilio error code (31xxx / 20xxx) says why; it is also shown to staff.
         let code = (error as NSError).code
         Telemetry.event("call_failed", metadata: ["error": error.localizedDescription, "code": "\(code)"], callRef: call.sid)
@@ -348,6 +362,12 @@ extension TwilioVoiceManager: @preconcurrency NotificationDelegate {
         }
         if decision == .rejectBusy {
             inviteLedger.finish(callInvite.callSid)
+            // BOREAL_DIALER_v831_DIALER_POLISH - one call at a time, but the second caller is no longer turned away
+            // without a trace: a "Missed while you were on a call" alert with Call back. (The caller goes on to the
+            // rest of the ring group or voicemail, as before.)
+            let card = CallerCard.fromInviteParameters(callInvite.customParameters)
+            MissedCallNotification.post(handle: callInvite.from ?? "", name: card?.callKitName, whileOnCall: true)
+            Telemetry.event("call_waiting_missed", callRef: callInvite.callSid)
         }
     }
 

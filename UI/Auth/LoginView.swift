@@ -27,6 +27,15 @@ struct LoginView: View {
             .cornerRadius(12)
     }
 
+    // BOREAL_DIALER_v831_DIALER_POLISH - a number that isn't staff is told so, not "That code didn't work".
+    nonisolated static func codeErrorMessage(_ error: Error) -> String {
+        if case APIError.http(_, let code, _) = error, code == "not_staff" {
+            return APIError.knownCodes["not_staff"] ?? "This number isn't set up as a Boreal staff account."
+        }
+        if OfflineQueue.isOffline(error) { return "No signal. Try again when you're back online." }
+        return "That code didn't work. Please try again."
+    }
+
     private func submitCode(_ code: String) {
         Task {
             busy = true
@@ -34,7 +43,7 @@ struct LoginView: View {
             do {
                 try await auth.login(phone: phone, otp: code)
             } catch {
-                errorMessage = "That code didn't work. Please try again."
+                errorMessage = LoginView.codeErrorMessage(error)
             }
             busy = false
         }

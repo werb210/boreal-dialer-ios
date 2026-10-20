@@ -183,7 +183,7 @@ final class CarPlayController: NSObject, CPTabBarTemplateDelegate {
             alert(CarPlayRows.signedOutMessage)
             return false
         }
-        guard VoiceEngine.shared.isIdle else {
+        guard !VoiceEngine.shared.isOnCall else { // BOREAL_DIALER_v831_DIALER_POLISH - not refused in the pause after a call
             alert("Finish your current call first.")
             return false
         }

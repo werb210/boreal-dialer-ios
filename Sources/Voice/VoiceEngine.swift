@@ -119,6 +119,15 @@ final class VoiceEngine: NSObject, ObservableObject {
     private var calleeWatch: Task<Void, Never>?
     /// The number of the call in progress, kept for the call log (Twilio's copy is cleared on hang-up).
     private var currentNumber: String?
+    // BOREAL_DIALER_v831_DIALER_POLISH
+    /// "inbound" or "outbound", for the call log.
+    private var currentDirection = "outbound"
+    /// When the call connected (audio up, or the customer answered); nil while it rings.
+    private var connectedAt: Date?
+    /// Name and length of the call that just ended, kept for its outcome sheet (the call's state is cleared first).
+    private var endedDetails: (name: String?, seconds: Int)?
+    /// Outcome sheets waiting behind the one on screen: a second call no longer replaces an unsaved outcome.
+    private var outcomeQueue: [FinishedCall] = []
     /// How long an answered call may take to connect before it is ended with a reason.
     static let connectTimeoutSeconds: UInt64 = 12
     // BOREAL_DIALER_v830_DIALER_CONTROLS
@@ -197,8 +206,21 @@ final class VoiceEngine: NSObject, ObservableObject {
         return false
     }
 
+    // BOREAL_DIALER_v831_DIALER_POLISH - a call is ringing, being placed, or up. The 1.5 s "ended" pause after a call
+    // is not a call: taps to call were ignored in it and a call arriving in it was turned away.
+    var isOnCall: Bool { liveCallUUID != nil }
+    /// The CallKit id of the call in progress.
+    var currentCallUUID: UUID? { liveCallUUID }
+
+    private var readyForNewCall: Bool {
+        switch state {
+        case .idle, .ended, .failed: return true
+        default: return false
+        }
+    }
+
     func startCall(to rawNumber: String, uuid: UUID = UUID()) {
-        guard case .idle = state else { return }
+        guard readyForNewCall else { return } // BOREAL_DIALER_v831_DIALER_POLISH
         // BOREAL_DIALER_v830_DIALER_CONTROLS - "403-555-0142 ext 123": dial the number, send 123 once connected.
         let parts = DialString.split(rawNumber)
         // BOREAL_DIALER_v817_CALLS - Twilio dials E.164 only.
@@ -212,6 +234,7 @@ final class VoiceEngine: NSObject, ObservableObject {
         state = .dialing(uuid)
         pendingTones = parts.extensionDigits // BOREAL_DIALER_v830_DIALER_CONTROLS
         currentNumber = number // BOREAL_DIALER_v829_RELIABILITY
+        beginCallRecord(direction: "outbound") // BOREAL_DIALER_v831_DIALER_POLISH
 
         currentHandle = PhoneFormat.display(number)
         CallerCardStore.shared.clear() // BOREAL_DIALER_v821 - the in-call screen fetches this call's card.
@@ -246,7 +269,7 @@ final class VoiceEngine: NSObject, ObservableObject {
     // BOREAL_DIALER_JOIN_CONFERENCE_v46 - create and join an internal call,
     // while also reporting the initiating leg to CallKit.
     func startInternalCall(staffIdentity: String, displayName: String) {
-        guard case .idle = state else { return }
+        guard readyForNewCall else { return } // BOREAL_DIALER_v831_DIALER_POLISH
         // BOREAL_DIALER_v817_CALLS - same microphone gate as startCall.
         guard microphoneReady(retry: {
             VoiceEngine.shared.startInternalCall(staffIdentity: staffIdentity, displayName: displayName)
@@ -255,6 +278,8 @@ final class VoiceEngine: NSObject, ObservableObject {
 
         let uuid = UUID()
         state = .dialing(uuid)
+        currentNumber = nil
+        beginCallRecord(direction: "outbound") // BOREAL_DIALER_v831_DIALER_POLISH
 
         currentHandle = displayName
         pendingOutgoing[uuid] = .internalCall(staffIdentity: staffIdentity, displayName: displayName)
@@ -354,7 +379,7 @@ final class VoiceEngine: NSObject, ObservableObject {
         // BOREAL_DIALER_CALLKIT_REPORTER_v789 - this used to return silently
         // when not idle (including the 1.5 s cooldown after a call), which is a
         // VoIP push with no reported call. Report it and end it at once.
-        guard case .idle = state else {
+        guard readyForNewCall else { // BOREAL_DIALER_v831_DIALER_POLISH - the pause after a call is not busy
             CallKitReporter.shared.reportPlaceholder(handle: handle, reason: .unanswered)
             onResult?(false)
             return
@@ -390,6 +415,7 @@ final class VoiceEngine: NSObject, ObservableObject {
             if succeeded {
                 self.state = .ringing(uuid)
                 self.currentNumber = handle // BOREAL_DIALER_v829_RELIABILITY
+                self.beginCallRecord(direction: "inbound") // BOREAL_DIALER_v831_DIALER_POLISH
                 // BOREAL_DIALER_v821 - the Watch shows the name and the stage (WatchEvent.preview) when known.
                 WatchBridge.shared.send(WatchEvent(kind: .incomingCall,
                                                    callId: uuid.uuidString,
@@ -719,10 +745,61 @@ final class VoiceEngine: NSObject, ObservableObject {
     // BOREAL_DIALER_PRESENT_DISPOSITION_v224
     // VoiceEngine owns call state but not the Twilio Call instance. The SDK
     // delegate publishes its stable CallSid through this UI-neutral hook.
-    func publishFinishedCall(callSid: String?) {
-        finishedCall = callSid.map { FinishedCall(callSid: $0, endedAt: Date()) }
+    // BOREAL_DIALER_v831_DIALER_POLISH - the sheet now names the caller and says how long the call was, and a call
+    // that ends while another call's outcome is still unsaved waits its turn instead of replacing it.
+    /// `endedEarlier`: the call already finished here (a late Twilio callback), so the details kept at its end apply,
+    /// not the call now on screen.
+    func publishFinishedCall(callSid: String?, endedEarlier: Bool = false) {
+        guard let callSid, !callSid.isEmpty else { return }
+        let details: (name: String?, seconds: Int)
+        if endedEarlier {
+            details = endedDetails ?? (name: nil, seconds: 0)
+        } else {
+            details = liveCallUUID != nil ? outcomeDetails() : (endedDetails ?? outcomeDetails())
+        }
+        let call = FinishedCall(callSid: callSid, endedAt: Date(), contactName: details.name, durationSeconds: details.seconds)
         // BOREAL_DIALER_v821 - Calls > Recents offers this call's summary after the outcome sheet is closed.
-        AfterCallSummaryStore.shared.record(finishedCall)
+        AfterCallSummaryStore.shared.record(call)
+        if finishedCall?.callSid == callSid || outcomeQueue.contains(where: { $0.callSid == callSid }) { return }
+        if finishedCall == nil, outcomeQueue.isEmpty {
+            finishedCall = call
+        } else {
+            outcomeQueue.append(call)
+            if finishedCall == nil { finishedCall = outcomeQueue.removeFirst() }
+        }
+    }
+
+    /// The outcome sheet closed (saved, skipped or swiped away): the next one waiting, unless a call is up.
+    func outcomeSheetClosed() {
+        finishedCall = nil
+        guard !outcomeQueue.isEmpty, !isOnCall else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self, self.finishedCall == nil, !self.isOnCall, !self.outcomeQueue.isEmpty else { return }
+            self.finishedCall = self.outcomeQueue.removeFirst()
+        }
+    }
+
+    /// Sign-out: the next person must not get this person's outcome sheets.
+    func clearOutcomes() {
+        outcomeQueue.removeAll()
+        finishedCall = nil
+        endedDetails = nil
+    }
+
+    /// Outcome sheets still waiting (tests and diagnostics).
+    var waitingOutcomes: [FinishedCall] { outcomeQueue }
+
+    private func beginCallRecord(direction: String) {
+        currentDirection = direction
+        connectedAt = nil
+        callDuration = 0
+        endedDetails = nil
+    }
+
+    private func outcomeDetails() -> (name: String?, seconds: Int) {
+        let number = TwilioVoiceManager.shared.activeNumber ?? currentNumber
+        let name = CallerCardStore.shared.card(for: number)?.callKitName ?? (currentHandle.isEmpty ? nil : currentHandle)
+        return (name, connectedAt == nil ? 0 : callDuration)
     }
 
     func endReportedCall(uuid: UUID, reason: CXCallEndedReason = .remoteEnded) {
@@ -763,20 +840,31 @@ final class VoiceEngine: NSObject, ObservableObject {
         // (the CallKit UUID) is nil once the state is ended: calls staff ended themselves were never logged.
         let number = TwilioVoiceManager.shared.activeNumber ?? currentNumber
         let sid = TwilioVoiceManager.shared.lastCallSid ?? activeCallSid
+        // BOREAL_DIALER_v831_DIALER_POLISH - the outcome sheet's name and length, before the call's state is cleared.
+        endedDetails = outcomeDetails()
+        let seconds = connectedAt == nil ? 0 : callDuration
+        let direction = currentDirection
+        // An incoming call this phone didn't answer is not this phone's to log: the server knows whether someone else
+        // took it, and logging it from every phone that rang put a "call" on the timeline per phone.
+        let shouldLog = !(direction == "inbound" && connectedAt == nil)
+        connectedAt = nil
         currentNumber = nil
-        let seconds = callDuration
+        let key = UUID()
+        let statusText = "\(status)"
         Task {
+            guard shouldLog else { return }
             // BOREAL_DIALER_OFFLINE_v303 - a call that ends with no signal is logged when it returns.
+            // BOREAL_DIALER_v831_DIALER_POLISH - so is one the server couldn't take just then; the same key both times.
             do {
-                try await API.logCall(
-                    duration: seconds,
-                    status: "\(status)",
-                    number: number,
-                    callSid: sid
-                )
+                try await API.logCall(duration: seconds, status: statusText, number: number, callSid: sid,
+                                      direction: direction, key: key)
             } catch {
-                if OfflineQueue.isOffline(error) {
-                    API.queueCallLog(duration: seconds, status: "\(status)", number: number, callSid: sid)
+                switch OfflineQueue.classify(error) {
+                case .stop, .retry:
+                    API.queueCallLog(duration: seconds, status: statusText, number: number, callSid: sid,
+                                     direction: direction, key: key)
+                case .sent, .refused:
+                    break
                 }
             }
         }
@@ -790,20 +878,30 @@ final class VoiceEngine: NSObject, ObservableObject {
             default:
                 break
             }
+            // BOREAL_DIALER_v831_DIALER_POLISH - an outcome that waited out this call is shown now.
+            if self.finishedCall == nil, !self.isOnCall, !self.outcomeQueue.isEmpty {
+                self.finishedCall = self.outcomeQueue.removeFirst()
+            }
             // BOREAL_DIALER_v817_CALLS - push registration is skipped while a
             // call is up; retry it now so the phone keeps ringing.
             VoiceManager.shared.retryRegistrationAfterCall()
         }
     }
 
+    // BOREAL_DIALER_v831_DIALER_POLISH - the timer stopped while the screen was being scrolled (it ran in the default
+    // run-loop mode only) and counted ticks, so it fell behind. It now runs in every mode and reads the clock.
     private func startTimer() {
         callDuration = 0
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            guard let self else { return }
+        let started = Date()
+        connectedAt = started
+        let ticker = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                self.callDuration += 1
+                guard let self, self.connectedAt == started else { return }
+                self.callDuration = max(0, Int(Date().timeIntervalSince(started)))
             }
         }
+        RunLoop.main.add(ticker, forMode: .common)
+        timer = ticker
     }
 
     private func stopTimer() {

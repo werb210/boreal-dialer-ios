@@ -24,7 +24,7 @@ enum WatchPhoneCallDecision: Equatable {
 enum WatchPhoneCallBridge {
     static func place(_ request: WatchPhoneCallRequest) -> WatchPhoneCallReply {
         let signedIn = AuthService.shared.isAuthenticated && TokenStorage.shared.getToken() != nil
-        switch WatchPhoneCallDecision.evaluate(signedIn: signedIn, idle: VoiceEngine.shared.isIdle,
+        switch WatchPhoneCallDecision.evaluate(signedIn: signedIn, idle: !VoiceEngine.shared.isOnCall, // BOREAL_DIALER_v831_DIALER_POLISH
                                                destination: request.destination) {
         case .refuse(let reason):
             return WatchPhoneCallReply(accepted: false, reason: reason)

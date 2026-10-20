@@ -58,8 +58,13 @@ struct BorealSiloFocusFilter: SetFocusFilterIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        if let target = VoiceEngine.Line(rawValue: line.rawValue) {
-            VoiceEngine.shared.setActiveLine(target)
+        // BOREAL_DIALER_v831_DIALER_POLISH - through LineManager, the one place the line changes, so the server
+        // requests, the calling token and the call screen all follow it. Setting VoiceEngine's line on its own moved
+        // only texts and the token to the Focus's silo. A line this app doesn't offer is left alone.
+        // Switching lines ends the call in progress, so a Focus that turns on mid-call leaves the line as it is.
+        if !VoiceEngine.shared.isOnCall,
+           let target = LineManager.shared.availableLines.first(where: { $0.silo.rawValue == line.rawValue }) {
+            LineManager.shared.switchLine(to: target)
         }
         FocusAlertPolicy.currentMode = alerts.mode // BOREAL_DIALER_v821 - read by willPresent
         return .result()

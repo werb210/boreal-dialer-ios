@@ -5,12 +5,13 @@ import AppIntents
 // BOREAL_DIALER_v593_FOCUS_FILTER
 @available(iOS 16.0, *)
 enum BorealFocusSilo: String, AppEnum {
-    case bf, bi, slf
+    case bf, bi, slf, ks // DIALER_v850_KS_CRM
     static var typeDisplayRepresentation: TypeDisplayRepresentation = "Boreal line"
     static var caseDisplayRepresentations: [BorealFocusSilo: DisplayRepresentation] = [
         .bf: "Boreal Financial",
         .bi: "Boreal Insurance",
         .slf: "Site Level Financial",
+        .ks: "Keystone", // DIALER_v850_KS_CRM - only switches for staff who have the Keystone line
     ]
 }
 

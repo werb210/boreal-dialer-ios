@@ -45,6 +45,14 @@ extension Theme {
     static let greenDeep = Color(hex: 0x236F49)
 }
 
+// DIALER_v850_KS_CRM - Keystone violet, matching the portal.
+extension Theme {
+    /// Fill (#6D28D9); white text on it is 7.1:1.
+    static let keystone = Color(hex: KeystoneAccess.accentHex)
+    /// Text on the dark surfaces (#C4B5FD, 10.7:1 on the background).
+    static let keystoneText = Color(hex: KeystoneAccess.textHex)
+}
+
 // The mockup's .bub: 74% max width, 18pt radius with a 5pt tail corner on the
 // sender's side. SwiftUI has no per-corner radius on RoundedRectangle, so the
 // tail is drawn as a small square patched into that corner.

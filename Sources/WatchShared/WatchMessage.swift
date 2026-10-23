@@ -70,10 +70,20 @@ public struct WatchEvent: Codable, Sendable, Equatable {
 }
 
 public enum BorealLine: String, Codable, CaseIterable, Sendable {
-    case BF, BI, SLF
+    case BF, BI, SLF, KS // DIALER_v850_KS_CRM - KS: a Keystone call decodes instead of failing the whole list
     // BOREAL_DIALER_SINGLE_LINE_v1 - lines actually in use. One entry => pickers
     // auto-select it. Add BI/SLF here to bring the line pickers back.
     public static let enabled: [BorealLine] = [.BF]
+
+    // DIALER_v850_KS_CRM - the silo's name for labels.
+    public var displayName: String {
+        switch self {
+        case .BF: return "Boreal Financial"
+        case .BI: return "Boreal Insurance"
+        case .SLF: return "Site Level Financial"
+        case .KS: return "Keystone"
+        }
+    }
 }
 public enum WatchCallDirection: String, Codable, Sendable { case incoming, outgoing, missed }
 public enum WatchCallStatus: String, Codable, Sendable {

@@ -10,7 +10,9 @@ struct BorealCallLiveActivity: Widget {
                 Image(systemName: "phone.fill").foregroundStyle(.green)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(context.attributes.handle).font(.headline).lineLimit(1)
-                    Text(context.state.status).font(.caption).foregroundStyle(.secondary)
+                    // DIALER_v850_KS_CRM - "Keystone \u{00B7} Connected" on the Keystone line; BF unchanged.
+                    Text(SiloLabel.callStatus(context.state.status, line: context.attributes.line))
+                        .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Text(context.state.startedAt, style: .timer).monospacedDigit().font(.headline)
@@ -20,7 +22,10 @@ struct BorealCallLiveActivity: Widget {
                 DynamicIslandExpandedRegion(.leading) { Image(systemName: "phone.fill").foregroundStyle(.green) }
                 DynamicIslandExpandedRegion(.trailing) { Text(context.state.startedAt, style: .timer).monospacedDigit() }
                 DynamicIslandExpandedRegion(.center) { Text(context.attributes.handle).font(.headline).lineLimit(1) }
-                DynamicIslandExpandedRegion(.bottom) { Text(context.state.status).font(.caption).foregroundStyle(.secondary) }
+                DynamicIslandExpandedRegion(.bottom) { // DIALER_v850_KS_CRM
+                    Text(SiloLabel.callStatus(context.state.status, line: context.attributes.line))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             } compactLeading: {
                 Image(systemName: "phone.fill").foregroundStyle(.green)
             } compactTrailing: {

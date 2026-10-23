@@ -34,6 +34,7 @@ struct APIConfig {
         case .bf:  return "BF"
         case .bi:  return "BI"
         case .slf: return "SLF"
+        case .ks:  return "KS" // DIALER_v850_KS_CRM
         }
     }
 }

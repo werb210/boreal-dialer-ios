@@ -132,13 +132,30 @@ struct AccountSheet: View {
                     // Calling, SMS, messages, team and calendar are BF. Only the
                     // Contacts tab reads across silos, and it has its own picker,
                     // so this is stated rather than offered as a choice.
-                    HStack {
-                        Text("Calling line").rowSubtitle()
-                        Spacer()
-                        Text(lineManager.activeLine.name)
-                            .font(.system(size: 14, weight: .medium))
+                    // DIALER_v850_KS_CRM - Admin and Marketing staff also have the Keystone line: picking it moves
+                    // calling, texts, contacts and call history to Keystone (X-Silo: KS). Everyone else sees BF only.
+                    if lineManager.availableLines.count > 1 {
+                        NavigationLink {
+                            LineSwitcherView()
+                        } label: {
+                            HStack {
+                                Text("Calling line").rowSubtitle()
+                                Spacer()
+                                Text(lineManager.activeLine.name)
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(lineManager.activeLine.silo == .ks ? Theme.keystoneText : nil)
+                            }
+                        }
+                        .listRowBackground(Color.clear)
+                    } else {
+                        HStack {
+                            Text("Calling line").rowSubtitle()
+                            Spacer()
+                            Text(lineManager.activeLine.name)
+                                .font(.system(size: 14, weight: .medium))
+                        }
+                        .listRowBackground(Color.clear)
                     }
-                    .listRowBackground(Color.clear)
                 } header: {
                     SectionLabel(text: "Line")
                 }

@@ -24,10 +24,22 @@ struct RootTabView: View {
     @ObservedObject private var alerts = AlertNavigator.shared
     // BOREAL_DIALER_v823_ACTIONS - Voice Note / Next Follow-up from the controls, Action Button and Siri.
     @ObservedObject private var actions = StaffActionRouter.shared
+    // DIALER_v850_KS_CRM
+    @ObservedObject private var lineManager = LineManager.shared
 
     var body: some View {
         VStack(spacing: 0) {
             OfflineStatusBar() // BOREAL_DIALER_OFFLINE_v303
+            // DIALER_v850_KS_CRM - on the Keystone line every tab shows Keystone's contacts, texts and calls.
+            if lineManager.activeLine.silo == .ks {
+                Text("Keystone line")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 4)
+                    .background(Theme.keystone)
+                    .accessibilityLabel(Text("Keystone line: contacts, texts and calls are Keystone's"))
+            }
             // BOREAL_DIALER_MOCKUP_LAYOUT_v60 - mockup tab strip: pills sized to their
             // text, 8 pt apart, semibold.
             // BOREAL_DIALER_v803_UI - just the six pills, horizontally scrollable,
@@ -85,6 +97,8 @@ struct RootTabView: View {
         }
         // Signed out: RootTabView goes away, and so does the socket.
         .onDisappear { TeamStore.shared.disconnect() }
+        // DIALER_v850_KS_CRM - a Keystone line saved by another sign-in goes back to BF.
+        .onAppear { lineManager.enforceAccess() }
         // BOREAL_DIALER_v823_ACTIONS
         .sheet(item: $actions.voiceNote) { target in
             VoiceNoteSheet(target: target)

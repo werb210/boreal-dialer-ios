@@ -74,6 +74,8 @@ enum WatchTheme {
     static let green = Color(red: 47.0 / 255.0, green: 168.0 / 255.0, blue: 106.0 / 255.0)       // #2FA86A
     static let greenBright = Color(red: 84.0 / 255.0, green: 208.0 / 255.0, blue: 138.0 / 255.0) // #54D08A
     static let neutral = Color.gray.opacity(0.28)
+    // DIALER_v850_KS_CRM - Keystone violet for text on the Watch's black (#C4B5FD, 11.4:1).
+    static let keystoneText = Color(red: 196.0 / 255.0, green: 181.0 / 255.0, blue: 253.0 / 255.0)
 }
 
 // BOREAL_DIALER_v804_WATCH - initials circle + green phone glyph for call rows.
@@ -307,7 +309,9 @@ struct WatchRecentsView: View {
                 NavigationLink(destination: PrefilledDialView(number: recent.number)) {
                     // BOREAL_DIALER_v804_WATCH
                     WatchCallRowLabel(title: recent.name ?? recent.number,
-                                      subtitle: recent.name != nil ? recent.number : nil)
+                                      subtitle: recent.name != nil ? recent.number : nil,
+                                      detail: recent.line == .KS ? recent.line.displayName : nil, // DIALER_v850_KS_CRM
+                                      detailColor: WatchTheme.keystoneText)
                 }
             }
         }

@@ -116,7 +116,8 @@ final class ContactsViewModel: ObservableObject {
 
     // BOREAL_DIALER_CONTACTS_SILO_v39 - contacts only. Calling, SMS, messages,
     // team and calendar stay on BF; this does not touch them.
-    @Published var silo: Silo = .bf
+    // DIALER_v850_KS_CRM - opens on Keystone while the Keystone line is in use.
+    @Published var silo: Silo = APIConfig.activeSilo == .ks ? .ks : .bf
 
     var totalCount: Int { contacts.count + companies.count }
 
@@ -247,12 +248,13 @@ struct ContactsView: View {
 
             // BOREAL_DIALER_CONTACTS_SILO_v39
             SegmentedBar(
-                options: [Silo.bf, Silo.bi, Silo.slf],
+                options: KeystoneAccess.contactSilos(role: KeystoneAccess.currentRole()), // DIALER_v850_KS_CRM
                 title: { silo in
                     switch silo {
                     case .bf: return "Financial"
                     case .bi: return "Insurance"
                     case .slf: return "SLF"
+                    case .ks: return "Keystone" // DIALER_v850_KS_CRM
                     }
                 },
                 selection: $viewModel.silo

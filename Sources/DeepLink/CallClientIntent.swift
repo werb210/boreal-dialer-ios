@@ -33,7 +33,9 @@ enum BorealClientLookup {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 2,
               let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return [] }
-        let request = try APIClient.shared.makeRequest(path: "/crm/contacts?pageSize=10&q=\(encoded)", silo: .bf)
+        // DIALER_v850_KS_CRM - Keystone's contacts while the Keystone line is in use, otherwise BF's.
+        let request = try APIClient.shared.makeRequest(path: "/crm/contacts?pageSize=10&q=\(encoded)",
+                                                       silo: KeystoneAccess.searchSilo(active: APIConfig.activeSilo))
         let data = try await APIClient.shared.makeAuthorizedRequest(request)
         return try JSONDecoder().decode(ContactsListEnvelope.self, from: data).data
     }

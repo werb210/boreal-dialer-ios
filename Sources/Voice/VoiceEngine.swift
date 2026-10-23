@@ -89,6 +89,7 @@ final class VoiceEngine: NSObject, ObservableObject {
         case bf
         case bi
         case slf
+        case ks // DIALER_v850_KS_CRM - Keystone
 
         var backendLineId: String {
             rawValue.uppercased()

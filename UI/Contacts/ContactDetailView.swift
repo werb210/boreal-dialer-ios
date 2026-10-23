@@ -65,8 +65,11 @@ final class ContactDetailViewModel: ObservableObject {
             if silo == .bi {
                 entries = try await BIDirectory.activity(contactId: contactId)
             } else {
+                // DIALER_v850_KS_CRM - a Keystone contact opened from the Contacts tab is read under KS even while
+                // the line in use is BF; every other silo keeps the active line, as before.
                 let request = try APIClient.shared.makeRequest(
-                    path: "/crm/contacts/\(contactId)/timeline"
+                    path: "/crm/contacts/\(contactId)/timeline",
+                    silo: silo == .ks ? .ks : nil
                 )
                 let data = try await APIClient.shared.makeAuthorizedRequest(request)
                 entries = try JSONDecoder().decode(TimelineEnvelope.self, from: data).data

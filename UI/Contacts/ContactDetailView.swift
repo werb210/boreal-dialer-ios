@@ -54,6 +54,15 @@ final class ContactDetailViewModel: ObservableObject {
     @Published var loading = false
     @Published var error: String?
 
+    // DIALER_v850_KS_CRM - injectable transport for silo-scoping regression tests.
+    private let fetchTimeline: (URLRequest) async throws -> Data
+
+    init(fetchTimeline: @escaping (URLRequest) async throws -> Data = {
+        try await APIClient.shared.makeAuthorizedRequest($0)
+    }) {
+        self.fetchTimeline = fetchTimeline
+    }
+
     // BOREAL_DIALER_BI_ACTIVITY_v52 - a BI contact's activity lives in
     // bi_contact_activity on bi-pg01, so BF-Server's timeline endpoint returns
     // nothing for it. Calls and SMS placed from this app still log to
@@ -65,13 +74,12 @@ final class ContactDetailViewModel: ObservableObject {
             if silo == .bi {
                 entries = try await BIDirectory.activity(contactId: contactId)
             } else {
-                // DIALER_v850_KS_CRM - a Keystone contact opened from the Contacts tab is read under KS even while
-                // the line in use is BF; every other silo keeps the active line, as before.
+                // DIALER_v850_KS_CRM - the timeline follows the contact's directory, even when the calling line differs.
                 let request = try APIClient.shared.makeRequest(
                     path: "/crm/contacts/\(contactId)/timeline",
-                    silo: silo == .ks ? .ks : nil
+                    silo: silo
                 )
-                let data = try await APIClient.shared.makeAuthorizedRequest(request)
+                let data = try await fetchTimeline(request)
                 entries = try JSONDecoder().decode(TimelineEnvelope.self, from: data).data
             }
             self.error = nil
@@ -84,9 +92,8 @@ final class ContactDetailViewModel: ObservableObject {
 
 struct ContactDetailView: View {
     let contact: CRMContact
-    // BOREAL_DIALER_BI_ACTIVITY_v52 - defaulted so the BF call sites are
-    // unchanged; the Contacts list passes its own selection through.
-    var silo: Silo = .bf
+    // DIALER_v850_KS_CRM - call surfaces use the calling line; Contacts passes its directory selection explicitly.
+    var silo: Silo = APIConfig.activeSilo
     var onMessage: () -> Void
 
     @StateObject private var viewModel = ContactDetailViewModel()

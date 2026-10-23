@@ -55,6 +55,38 @@ final class KeystoneSiloV850Tests: XCTestCase {
         XCTAssertEqual(KeystoneAccess.searchSilo(active: .bi), .bf)
     }
 
+    @MainActor
+    func testContactTimelineKeepsItsDirectoryWhenCallingLineDiffers() async {
+        let previous = APIConfig.activeSilo
+        defer { APIConfig.activeSilo = previous }
+
+        for active: Silo in [.bf, .ks] {
+            APIConfig.activeSilo = active
+            for directory: Silo in [.bf, .slf, .ks] {
+                var captured: URLRequest?
+                let model = ContactDetailViewModel { request in
+                    captured = request
+                    return Data(#"{"data":[]}"#.utf8)
+                }
+                await model.load(contactId: "contact-850", silo: directory)
+                XCTAssertEqual(captured?.url?.path, "/api/crm/contacts/contact-850/timeline")
+                XCTAssertEqual(captured?.value(forHTTPHeaderField: "X-Silo"), directory.rawValue.uppercased())
+                XCTAssertNil(model.error)
+            }
+        }
+    }
+
+    @MainActor
+    func testContactOpenedFromCallsUsesTheCallingLine() {
+        let previous = APIConfig.activeSilo
+        defer { APIConfig.activeSilo = previous }
+        APIConfig.activeSilo = .ks
+        let contact = CRMContact(id: "contact-850", name: "Pat", firstName: nil, lastName: nil,
+                                 email: nil, phone: nil, companyName: nil, leadStatus: nil)
+        XCTAssertEqual(ContactDetailView(contact: contact, onMessage: {}).silo, .ks)
+        XCTAssertEqual(ContactDetailView(contact: contact, silo: .bf, onMessage: {}).silo, .bf)
+    }
+
     func testKeystoneColoursAreReadable() {
         // White text on the violet fill (the "Keystone line" banner).
         XCTAssertGreaterThanOrEqual(KeystoneAccess.contrastRatio(0xFFFFFF, KeystoneAccess.accentHex), 4.5)

@@ -80,6 +80,8 @@ struct RootTabView: View {
                 case .calendar: CalendarView()
                 }
             }
+            // DIALER_v850_KS_CRM - discard loaded rows and navigation from the previous line before reloading.
+            .id(lineManager.activeLine.silo)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onChange(of: deepLinks.pending) { link in

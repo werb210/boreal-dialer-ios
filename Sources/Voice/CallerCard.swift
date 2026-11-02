@@ -64,6 +64,17 @@ struct CallerCard: Decodable, Equatable, Sendable {
                           stage: value("callerStage"))
     }
 
+    /// BOREAL_DIALER_v871_CALL_QUEUES - a call-queue offer is placed from Boreal's own number, with the waiting caller's
+    /// number in the "callerNumber" parameter (and "queueCall" set). Missed-call alerts and "Call back" use the caller's
+    /// number; every other call keeps the invite's own from.
+    static func handleForInvite(from: String?, parameters: [String: String]?) -> String? {
+        if let parameters, parameters["queueCall"] != nil,
+           let number = parameters["callerNumber"].map(decodedParameter)?.trimmingCharacters(in: .whitespaces), !number.isEmpty {
+            return number
+        }
+        return from
+    }
+
     /// Twilio carries custom parameters through SIP headers; depending on the path they can arrive form-encoded
     /// ("Tanya%20Voss" or "Tanya+Voss"). Only a value that actually contains a percent escape is decoded, so a company
     /// called "A+ Lending" with no escapes is left alone.

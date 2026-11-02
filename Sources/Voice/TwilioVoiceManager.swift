@@ -46,6 +46,12 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
         }
     }
 
+    // BOREAL_DIALER_v877_NO_NUMBER_CALL - a call needs a number to dial or a conference to join.
+    static func hasCallTarget(dialled: String, conferenceFriendly: String?) -> Bool {
+        if !dialled.trimmingCharacters(in: .whitespaces).isEmpty { return true }
+        return !(conferenceFriendly ?? "").trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
     // BOREAL_DIALER_JOIN_CONFERENCE_v46 - `conferenceFriendly` makes the SDK
     // leg join the conference the server built instead of placing a second call.
     func startCall(uuid: UUID, to number: String, line: VoiceEngine.Line? = nil,
@@ -60,6 +66,14 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
 
         // BOREAL_DIALER_v817_CALLS - Twilio dials E.164 only.
         let dialled = PhoneFormat.e164(number)
+        // BOREAL_DIALER_v877_NO_NUMBER_CALL - a call with no number and no conference reached the server, which could
+        // only hang up on it without a word. End it here and say why.
+        guard Self.hasCallTarget(dialled: dialled, conferenceFriendly: conferenceFriendly) else {
+            Telemetry.event("call_failed", metadata: ["error": "no number to call"])
+            VoiceEngine.shared.handleFailure()
+            VoiceEngine.shared.callError = "There was no number to call."
+            return
+        }
         lastCallSid = nil // BOREAL_DIALER_v829_RELIABILITY
         CallStateManager.shared.transition(to: .connecting)
         activeUUID = uuid
@@ -371,7 +385,8 @@ extension TwilioVoiceManager: @preconcurrency NotificationDelegate {
             // without a trace: a "Missed while you were on a call" alert with Call back. (The caller goes on to the
             // rest of the ring group or voicemail, as before.)
             let card = CallerCard.fromInviteParameters(callInvite.customParameters)
-            MissedCallNotification.post(handle: callInvite.from ?? "", name: card?.callKitName, whileOnCall: true)
+            let handle = CallerCard.handleForInvite(from: callInvite.from, parameters: callInvite.customParameters) // BOREAL_DIALER_v871_CALL_QUEUES
+            MissedCallNotification.post(handle: handle ?? "", name: card?.callKitName, whileOnCall: true)
             Telemetry.event("call_waiting_missed", callRef: callInvite.callSid)
         }
     }
@@ -381,7 +396,8 @@ extension TwilioVoiceManager: @preconcurrency NotificationDelegate {
     func cancelledCallInviteReceived(cancelledCallInvite: CancelledCallInvite, error: any Error) {
         guard pendingCallInvite?.callSid == cancelledCallInvite.callSid else { return }
         let uuid = pendingCallInvite?.uuid
-        let missedHandle = pendingCallInvite?.from // BOREAL_DIALER_MISSED_CALL_ACTIONS_v239
+        // BOREAL_DIALER_MISSED_CALL_ACTIONS_v239; BOREAL_DIALER_v871_CALL_QUEUES - a queue offer names the waiting caller.
+        let missedHandle = CallerCard.handleForInvite(from: pendingCallInvite?.from, parameters: pendingCallInvite?.customParameters)
         pendingCallInvite = nil
         inviteLedger.finish(cancelledCallInvite.callSid)
         Telemetry.event("call_invite_cancelled")

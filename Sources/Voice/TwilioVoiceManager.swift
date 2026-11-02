@@ -47,7 +47,7 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
     }
 
     // BOREAL_DIALER_v877_NO_NUMBER_CALL - a call needs a number to dial or a conference to join.
-    static func hasCallTarget(dialled: String, conferenceFriendly: String?) -> Bool {
+    nonisolated static func hasCallTarget(dialled: String, conferenceFriendly: String?) -> Bool {
         if !dialled.trimmingCharacters(in: .whitespaces).isEmpty { return true }
         return !(conferenceFriendly ?? "").trimmingCharacters(in: .whitespaces).isEmpty
     }

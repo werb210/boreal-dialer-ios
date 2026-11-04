@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- BOREAL_ANDROID_DIALER_v1 - app_name is set per build in app/build.gradle. Plain words, no brand names. -->
+<resources>
+    <string name="tab_keypad">Keypad</string>
+    <string name="tab_recents">Recents</string>
+    <string name="tab_contacts">Contacts</string>
+    <string name="tab_messages">Messages</string>
+    <string name="tab_voicemail">Voicemail</string>
+
+    <string name="sign_in_title">Sign in</string>
+    <string name="sign_in_phone_hint">Your mobile number</string>
+    <string name="sign_in_phone_help">Use the mobile number on your staff account. We will text you a code.</string>
+    <string name="sign_in_send_code">Text me a code</string>
+    <string name="sign_in_code_hint">6-digit code</string>
+    <string name="sign_in_verify">Sign in</string>
+    <string name="sign_in_change_number">Use a different number</string>
+    <string name="sign_in_company_code">Enter a company code instead</string>
+    <string name="sign_in_company_code_hint">Company code</string>
+    <string name="sign_in_pick_company">Which company are you signing in to?</string>
+
+    <string name="call">Call</string>
+    <string name="text_message">Text</string>
+    <string name="send">Send</string>
+    <string name="refresh">Refresh</string>
+    <string name="search_hint">Search by name, number or email</string>
+    <string name="message_hint">Write a text message</string>
+    <string name="sign_out">Sign out</string>
+    <string name="loading">Loading…</string>
+    <string name="nothing_here">Nothing here yet.</string>
+    <string name="mic_needed">Calls need the microphone. Allow it in Settings, then try again.</string>
+    <string name="calls_ready">Ready for calls</string>
+    <string name="calls_not_ready">Incoming calls are not set up on this phone yet</string>
+
+    <string name="channel_incoming_calls">Incoming calls</string>
+    <string name="channel_incoming_calls_description">Rings when someone calls you</string>
+    <string name="channel_ongoing_calls">Current call</string>
+    <string name="channel_missed_calls">Missed calls and voicemail</string>
+    <string name="channel_messages">Texts and messages</string>
+    <string name="channel_tasks">Tasks</string>
+
+    <string name="incoming_call">Incoming call</string>
+    <string name="calling">Calling…</string>
+    <string name="on_call">On a call</string>
+    <string name="call_ended">Call ended</string>
+    <string name="answer">Answer</string>
+    <string name="decline">Decline</string>
+    <string name="hang_up">Hang up</string>
+    <string name="mute">Mute</string>
+    <string name="unmute">Unmute</string>
+    <string name="speaker">Speaker</string>
+    <string name="speaker_off">Speaker off</string>
+    <string name="keypad">Keypad</string>
+    <string name="call_back">Call back</string>
+    <string name="open_app">Open the dialler</string>
+</resources>

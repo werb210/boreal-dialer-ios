@@ -1,0 +1,111 @@
+// BOREAL_ANDROID_DIALER_v1 - the Android dialler (phones and tablets).
+//
+// Calls: Twilio Voice Android SDK. Incoming calls arrive as Twilio FCM messages and ring through Android Telecom (a
+// self-managed ConnectionService) with a full-screen call screen over the lock screen. Staff alerts (missed calls,
+// voicemail, texts) arrive as data-only FCM messages from the server.
+//
+// Everything that differs between the Boreal app and the Keystone app (KS-Dialer android/) is in the `brand` block below.
+plugins {
+    id 'com.android.application'
+}
+
+def brand = [
+    applicationId : 'com.boreal.dialer',
+    appName       : 'Boreal Dialer',
+    // Every Boreal line is on BF-Server; the line travels as the X-Silo header.
+    apiBaseUrl    : 'https://server.boreal.financial/api',
+    opsUrl        : '',
+    // The link the staff portal opens to start a call here (CROSS_PLATFORM_DIALER_CONTRACT.md).
+    deepLinkScheme: 'borealdialer',
+    // X-Silo lines staff can call from, as on the iPhone (VoiceEngine.Line).
+    lines         : 'BF,BI,SLF,KS',
+    lineNames     : 'Boreal Financial,Boreal Insurance,SLF,Keystone',
+]
+
+android {
+    namespace = 'com.boreal.dialer'
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId brand.applicationId
+        // Self-managed calling through Android Telecom needs Android 8.0 (API 26).
+        minSdk = 26
+        targetSdk = 36
+        // Google Play needs a higher versionCode for every upload: 1000 + the workflow run number in CI, 1 locally.
+        versionCode(System.getenv('GITHUB_RUN_NUMBER') ? 1000 + System.getenv('GITHUB_RUN_NUMBER').toInteger() : 1)
+        versionName '1.0'
+        resValue 'string', 'app_name', brand.appName
+        manifestPlaceholders = [deepLinkScheme: brand.deepLinkScheme]
+        buildConfigField 'String', 'API_BASE_URL', "\"${brand.apiBaseUrl}\""
+        buildConfigField 'String', 'OPS_URL', "\"${brand.opsUrl}\""
+        buildConfigField 'String', 'DEEP_LINK_SCHEME', "\"${brand.deepLinkScheme}\""
+        buildConfigField 'String', 'LINES', "\"${brand.lines}\""
+        buildConfigField 'String', 'LINE_NAMES', "\"${brand.lineNames}\""
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    // Release signing: the Android workflow writes the upload key from secrets and passes its location in the
+    // environment (ANDROID_KEYSTORE_FILE, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD). Without
+    // them the release bundle is built unsigned (the pull-request check), never signed with a made-up key.
+    signingConfigs {
+        upload {
+            def ks = System.getenv('ANDROID_KEYSTORE_FILE')
+            if (ks && file(ks).exists()) {
+                storeFile file(ks)
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            def ks = System.getenv('ANDROID_KEYSTORE_FILE')
+            if (ks && file(ks).exists()) signingConfig signingConfigs.upload
+        }
+    }
+
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
+
+    lint {
+        // Lint runs in Android Studio; the release build does not stop on it.
+        abortOnError true
+        checkReleaseBuilds false
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.7.1'
+    implementation 'androidx.core:core:1.17.0'
+    // The signed-in session is kept encrypted with a key held by the Android Keystore.
+    implementation 'androidx.security:security-crypto:1.0.0'
+    // Push: Twilio call messages and staff alerts. The BOM keeps the Firebase versions in step (same as BF-client).
+    implementation platform('com.google.firebase:firebase-bom:33.7.0')
+    implementation 'com.google.firebase:firebase-messaging'
+    // Calls. Twilio Voice Android 6.x (the newest 6.x release; its API is the same across 6.x).
+    implementation 'com.twilio:voice-android:6.+'
+
+    testImplementation 'junit:junit:4.13.2'
+}
+
+// Push and incoming calls need the Firebase file for this application id. CI writes it from the GOOGLE_SERVICES_JSON
+// secret, or a build-only placeholder when there is none (the app builds and runs; it cannot ring while closed).
+if (file('google-services.json').exists()) {
+    apply plugin: 'com.google.gms.google-services'
+} else {
+    logger.warn('google-services.json not found: built without Firebase (no push alerts, no ringing while closed)')
+}

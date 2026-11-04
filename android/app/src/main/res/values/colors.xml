@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- BOREAL_ANDROID_DIALER_v1 - the iPhone dialler's colours (UI/Components/Theme.swift). Every text colour below is at least
+     4.5:1 against the background it is used on (WCAG AA): text 17.9:1, muted 7.6:1 on bg; onAccent 6.4:1 on accent;
+     white 6.0:1 on danger. -->
+<resources>
+    <color name="bg">#0A0B0D</color>
+    <color name="surface">#181B21</color>
+    <color name="surface2">#1F232B</color>
+    <color name="line">#2A2F38</color>
+    <color name="text">#F2F4F7</color>
+    <color name="muted">#A7ADB7</color>
+    <color name="accent">#2FA86A</color>
+    <color name="accent_text">#54D08A</color>
+    <color name="on_accent">#05130C</color>
+    <color name="danger">#B3261E</color>
+    <color name="danger_text">#FF8A80</color>
+    <color name="on_danger">#FFFFFF</color>
+    <color name="ic_launcher_background">#0A0B0D</color>
+</resources>

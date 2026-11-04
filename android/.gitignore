@@ -1,0 +1,14 @@
+# BOREAL_ANDROID_DIALER_v1
+.gradle/
+build/
+app/build/
+local.properties
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+# Written in CI from the GOOGLE_SERVICES_JSON secret (or a build-only placeholder); never committed.
+app/google-services.json
+*.jks
+*.keystore

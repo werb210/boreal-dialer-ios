@@ -68,16 +68,25 @@ if rg -n --glob '*.swift' '^\s*import\s+TwilioVoice\b' Watch Sources/WatchShared
   exit 1
 fi
 
-for path in Android android WearOS wearos wear-os; do
+# BOREAL_ANDROID_DIALER_v1 - android/ is the Android dialler (its own Gradle project, built by
+# .github/workflows/android.yml). It must stay that one native Gradle app: no Wear OS tree and no other Android tree.
+for path in Android WearOS wearos wear-os; do
   if [[ -e "$path" ]]; then
     echo "Unsupported native platform tree found: $path" >&2
     exit 1
   fi
 done
+if [[ -e android ]]; then
+  [[ -f android/settings.gradle && -f android/app/build.gradle ]] || { echo "android/ must be the Android dialler's Gradle project" >&2; exit 1; }
+  if [[ -e android/wear ]] || grep -q "include ':wear'" android/settings.gradle; then
+    echo "Wear OS is not supported" >&2
+    exit 1
+  fi
+fi
 
-if find .github/workflows -maxdepth 1 -type f \( -iname '*android*' -o -iname '*wear*' \) -print -quit | grep -q .; then
-  echo "Unsupported Android/Wear build workflow found" >&2
+if find .github/workflows -maxdepth 1 -type f \( -iname '*android*' -o -iname '*wear*' \) ! -name 'android.yml' -print -quit | grep -q .; then
+  echo "Unsupported Android/Wear build workflow found (the Android dialler is built by android.yml only)" >&2
   exit 1
 fi
 
-echo "Supported-platform configuration verified (iPhone + Apple Watch only)."
+echo "Supported-platform configuration verified (iPhone + Apple Watch, and the Android dialler in android/)."

@@ -1,0 +1,5 @@
+// BOREAL_ANDROID_DIALER_v1 - same Android Gradle Plugin and Google services plugin versions as BF-client's Android app.
+plugins {
+    id 'com.android.application' version '8.13.0' apply false
+    id 'com.google.gms.google-services' version '4.4.4' apply false
+}

@@ -1,0 +1,18 @@
+// BOREAL_ANDROID_DIALER_v1 - the Android dialler: a native app (Java, no web view), the Android twin of the iPhone app in
+// this repo. Open this folder (android/) in Android Studio, or run ./gradlew assembleDebug.
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = 'BorealDialer'
+include ':app'

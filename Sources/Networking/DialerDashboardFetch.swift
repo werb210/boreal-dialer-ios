@@ -52,6 +52,12 @@ extension DialerDashboardStore {
                 guard let when = date(call.created_at) else { return false }
                 return Calendar.current.isDateInToday(when)
             }.count
+            // BOREAL_DIALER_v901_WIDGET_REFRESH - the Recent calls rows were only rewritten when the Recents screen
+            // was opened, so the widget kept showing old names. Every dashboard refresh now rewrites them too.
+            WidgetSnapshotStore.save(calls.compactMap { call in
+                guard let raw = call.phone_number, let number = DialerDeepLinkParser.normalizedPhone(raw) else { return nil }
+                return WidgetContact(name: call.contact_name ?? raw, number: number)
+            })
             dashboard.missed = calls.filter { missed(direction: $0.direction, status: $0.status) }.prefix(3).map { call in
                 let number = call.phone_number.flatMap { DialerDeepLinkParser.normalizedPhone($0) }
                 return DashboardItem(title: call.contact_name ?? call.phone_number ?? "Unknown", detail: time(date(call.created_at)), number: number)

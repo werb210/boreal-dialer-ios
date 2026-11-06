@@ -761,6 +761,8 @@ final class VoiceEngine: NSObject, ObservableObject {
         let call = FinishedCall(callSid: callSid, endedAt: Date(), contactName: details.name, durationSeconds: details.seconds)
         // BOREAL_DIALER_v821 - Calls > Recents offers this call's summary after the outcome sheet is closed.
         AfterCallSummaryStore.shared.record(call)
+        // BOREAL_DIALER_v901_WIDGET_REFRESH - the widget shows the call that just ended (and today's count) straight away.
+        Task { try? await Task.sleep(nanoseconds: 3_000_000_000); await DialerDashboardStore.refresh() }
         if finishedCall?.callSid == callSid || outcomeQueue.contains(where: { $0.callSid == callSid }) { return }
         if finishedCall == nil, outcomeQueue.isEmpty {
             finishedCall = call

@@ -68,7 +68,7 @@ struct BorealDialerWidgetView: View {
             if let contact = entry.contacts.first {
                 Link(destination: callURL(contact.number)) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Label("Call next recent", systemImage: "phone.fill").font(.headline)
+                        Label("Next recent", systemImage: "phone.fill").font(.headline)
                         Text(contact.name).lineLimit(1)
                     }.frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -360,11 +360,13 @@ struct BorealDialerWidgetView: View {
         .legacyWidgetPadding()
     }
 
+    // BOREAL_DIALER_v901_WIDGET_NO_AUTODIAL - a widget row only fills the keypad with the number; the call starts
+    // when the green Call button is pressed. A tap meant to open the app was landing on a row and dialling.
     private func callURL(_ number: String) -> URL {
         var components = URLComponents()
         components.scheme = "borealdialer"
         components.host = "call"
-        components.queryItems = [URLQueryItem(name: "number", value: number)]
+        components.queryItems = [URLQueryItem(name: "phone", value: number), URLQueryItem(name: "start", value: "false")]
         return components.url!
     }
 }

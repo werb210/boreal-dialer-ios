@@ -124,6 +124,7 @@ struct BorealDialerApp: App {
                 if phase == .background {
                     appLock.didEnterBackground()
                     OfflineQueue.shared.handOffToBackground() // BOREAL_DIALER_BACKGROUND_SEND_v309
+                    if auth.isAuthenticated { WidgetBackgroundRefresh.schedule() } // BOREAL_DIALER_v901_WIDGET_REFRESH
                     DialerEventLog.shared.flush() // BOREAL_DIALER_v829_RELIABILITY
                 }
                 if phase == .active {
@@ -169,6 +170,13 @@ struct BorealDialerApp: App {
 }
 
 final class DialerAppDelegate: NSObject, UIApplicationDelegate {
+    // BOREAL_DIALER_v901_WIDGET_REFRESH - background widget refresh must be registered before launch finishes.
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        WidgetBackgroundRefresh.register()
+        return true
+    }
+
     // BOREAL_DIALER_BACKGROUND_SEND_v309 - iOS relaunches the app to report finished background sends.
     func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String,
                      completionHandler: @escaping () -> Void) {

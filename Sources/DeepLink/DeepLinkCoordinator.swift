@@ -140,8 +140,19 @@ final class DeepLinkCoordinator: ObservableObject {
 
     @Published
     private(set) var pending: DialerDeepLink?
+    // BOREAL_DIALER_v901_WIDGET_NO_AUTODIAL - when the waiting link arrived. A link that sat waiting (signed out,
+    // Face ID lock, keypad not on screen) only fills the number; it never dials later on its own.
+    private var receivedAt: Date?
+    static let autoStartWindow: TimeInterval = 15
 
     private init() {}
+
+    /// Unit-tested rule: a link still dials only if it asked to and is fresh.
+    nonisolated static func settled(_ link: DialerDeepLink, receivedAt: Date?, now: Date = Date()) -> DialerDeepLink {
+        guard case .phone(let phone, true) = link else { return link }
+        guard let receivedAt, now.timeIntervalSince(receivedAt) <= autoStartWindow else { return .phone(phone, start: false) }
+        return link
+    }
 
     @discardableResult
     func receive(_ url: URL) -> Bool {
@@ -154,6 +165,7 @@ final class DeepLinkCoordinator: ObservableObject {
         }
 
         // Preserve the deep link while authentication/bootstrap completes.
+        receivedAt = Date()
         pending = link
         return true
     }
@@ -165,9 +177,10 @@ final class DeepLinkCoordinator: ObservableObject {
 
         defer {
             pending = nil
+            receivedAt = nil
         }
 
-        return pending
+        return pending.map { Self.settled($0, receivedAt: receivedAt) }
     }
 }
 

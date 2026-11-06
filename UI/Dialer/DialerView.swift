@@ -158,7 +158,8 @@ struct DialerView: View {
             number = ""
         case .phone(let phone, let start):
             number = phone
-            if start, isIdle { VoiceEngine.shared.startCall(to: phone) }
+            // BOREAL_DIALER_v901_WIDGET_NO_AUTODIAL - never dial behind the Face ID lock; the number waits on the keypad.
+            if start, isIdle, !AppLockController.shared.isLocked { VoiceEngine.shared.startCall(to: phone) }
         case .contact(let id, _):
             // No verified direct contact-by-id client contract exists. Preserve
             // the safe context without inventing a request or auto-dialling.

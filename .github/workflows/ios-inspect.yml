@@ -1,0 +1,92 @@
+# Builds the iPhone dialler exactly as "Upload iOS build" does but uploads nothing: it prints what the App Store file
+# is signed with (CarPlay permission, scene set-up). Run by hand only.
+name: Inspect iOS build
+on:
+  workflow_dispatch:
+concurrency:
+  group: ios-inspect
+  cancel-in-progress: false
+jobs:
+  inspect:
+    runs-on: macos-latest
+    timeout-minutes: 75
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+    steps:
+      - name: Check the App Store Connect key is set up
+        run: |
+          missing=""
+          [ -n "$ASC_KEY_ID" ] || missing="$missing ASC_KEY_ID"
+          [ -n "$ASC_ISSUER_ID" ] || missing="$missing ASC_ISSUER_ID"
+          [ -n "$ASC_KEY_P8" ] || missing="$missing ASC_KEY_P8"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing (Settings > Secrets and variables > Actions)"
+            exit 1
+          fi
+      - name: Build number (never uploaded)
+        run: echo "BUILD_NUMBER=1" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v5
+      - name: Use the newest released Xcode (App Store Connect refuses beta builds)
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - run: xcodebuild -version
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate
+      - name: Install the App Store Connect key
+        run: |
+          mkdir -p "$RUNNER_TEMP/asc"
+          printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey_${ASC_KEY_ID}.p8"
+          chmod 600 "$RUNNER_TEMP/asc/AuthKey_${ASC_KEY_ID}.p8"
+      # BOREAL_v833_CERT_CLEANUP - each cloud run makes Xcode create an "Apple Development" certificate ("Created via
+      # API") and Apple allows only a few, so archiving started failing. This deletes the leftover API-made development
+      # certificates from earlier runs (older than 75 minutes, in any of the three apps) and nothing else: the
+      # Distribution Managed certificate, Andrew Polturak's development certificate and the VoIP certificates are kept.
+      # It never fails the run.
+      - name: Delete leftover cloud development certificates
+        continue-on-error: true
+        run: node scripts/asc-cleanup-dev-certs.mjs
+      - name: Archive (signed with the company team)
+        run: >-
+          xcodebuild archive
+          -project BorealDialer.xcodeproj
+          -scheme BorealDialer
+          -configuration Release
+          -destination 'generic/platform=iOS'
+          -archivePath "$RUNNER_TEMP/BorealDialer.xcarchive"
+          -allowProvisioningUpdates
+          -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_${ASC_KEY_ID}.p8"
+          -authenticationKeyID "$ASC_KEY_ID"
+          -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          DEVELOPMENT_TEAM=76VAY7UJKJ
+          CODE_SIGN_STYLE=Automatic
+          CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
+      - name: What the archive holds (scene manifest and entitlements)
+        run: |
+          APP="$RUNNER_TEMP/BorealDialer.xcarchive/Products/Applications"
+          ls "$APP"
+          APP="$(ls -d "$APP"/*.app | head -1)"
+          echo "== UIApplicationSceneManifest"; /usr/libexec/PlistBuddy -c "Print :UIApplicationSceneManifest" "$APP/Info.plist" || echo "MISSING"
+          echo "== archive entitlements"; codesign -d --entitlements - "$APP" 2>/dev/null | plutil -p - || true
+      - name: Export exactly as the App Store upload does, but keep the file
+        run: |
+          sed 's#<string>upload</string>#<string>export</string>#' Config/ci/ExportOptions.plist > "$RUNNER_TEMP/ExportLocal.plist"
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/BorealDialer.xcarchive" -exportOptionsPlist "$RUNNER_TEMP/ExportLocal.plist" -exportPath "$RUNNER_TEMP/export" -allowProvisioningUpdates -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_${ASC_KEY_ID}.p8" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+      - name: What the App Store file holds
+        run: |
+          cd "$RUNNER_TEMP/export"; ls
+          unzip -q *.ipa -d ipa
+          APP="$(ls -d ipa/Payload/*.app | head -1)"
+          echo "== App Store entitlements"; codesign -d --entitlements - "$APP" 2>/dev/null | plutil -p - || true
+          echo "== profile entitlements"; security cms -D -i "$APP/embedded.mobileprovision" 2>/dev/null | plutil -extract Entitlements xml1 -o - - | plutil -p - || true
+          echo "== scene manifest"; /usr/libexec/PlistBuddy -c "Print :UIApplicationSceneManifest" "$APP/Info.plist" || echo "MISSING"
+          echo "== capabilities"; /usr/libexec/PlistBuddy -c "Print :UIRequiredDeviceCapabilities" "$APP/Info.plist" || true
+      - name: Remove the key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/asc"

@@ -161,6 +161,7 @@ targets:
       - target: BorealDialerLiveActivity
       - target: BorealDialerCallDirectory
       - target: BorealDialerNotificationService # BOREAL_DIALER_v822_CARPLAY
+      - target: BorealDialerIntents # BOREAL_DIALER_CARPLAY_INTENTS - without it iOS does not list the app in CarPlay
       # BOREAL_DIALER_EMBED_WATCH_v375 - the Watch app ships inside the iPhone app.
       # Side-loaded separately, iOS never registered it as this app's companion:
       # WCSession.isWatchAppInstalled read false on a Watch running Boreal, the
@@ -412,6 +413,39 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.borealfinancial.dialer.notificationservice
+        SWIFT_VERSION: 5.9
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: NO
+
+  # BOREAL_DIALER_CARPLAY_INTENTS - the Intents extension iOS requires before it lists a CarPlay communication app on
+  # the car screen: it supports starting a call and searching the call history, and hands both to the app.
+  BorealDialerIntents:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Intents
+        excludes:
+          - PrivacyInfo.xcprivacy
+      - path: Intents/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    info:
+      path: Intents/Info.plist
+      properties:
+        CFBundleDisplayName: Boreal Calls
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.intents-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).IntentHandler
+          NSExtensionAttributes:
+            IntentsSupported:
+              - INStartCallIntent
+              - INSearchCallHistoryIntent
+            IntentsRestrictedWhileLocked: []
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.borealfinancial.dialer.intents
         SWIFT_VERSION: 5.9
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic

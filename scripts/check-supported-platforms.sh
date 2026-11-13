@@ -57,6 +57,7 @@ allowed = {
     "BorealDialerLiveActivity",
     "BorealDialerCallDirectory",
     "BorealDialerNotificationService",  # BOREAL_DIALER_v822_CARPLAY - texts read aloud by Siri in CarPlay
+    "BorealDialerIntents",  # BOREAL_DIALER_CARPLAY_INTENTS - required for iOS to list the app in CarPlay
 }
 unexpected = sorted(set(declared) - allowed)
 if unexpected:

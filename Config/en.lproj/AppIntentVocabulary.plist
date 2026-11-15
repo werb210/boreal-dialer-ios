@@ -16,6 +16,26 @@
 				<string>Reply to the client with Boreal Dialer</string>
 			</array>
 		</dict>
+		<!-- ITMS-90626 again after the CarPlay Intents extension: the two call intents need example phrases too. -->
+		<dict>
+			<key>IntentName</key>
+			<string>INStartCallIntent</string>
+			<key>IntentExamples</key>
+			<array>
+				<string>Call Jane with Boreal Dialer</string>
+				<string>Make a call to Walter using Boreal Dialer</string>
+				<string>Call the client back with Boreal Dialer</string>
+			</array>
+		</dict>
+		<dict>
+			<key>IntentName</key>
+			<string>INSearchCallHistoryIntent</string>
+			<key>IntentExamples</key>
+			<array>
+				<string>Show my missed calls in Boreal Dialer</string>
+				<string>Show my recent calls with Boreal Dialer</string>
+			</array>
+		</dict>
 	</array>
 </dict>
 </plist>

@@ -47,6 +47,16 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
     }
 
     // BOREAL_DIALER_v877_NO_NUMBER_CALL - a call needs a number to dial or a conference to join.
+    /// BOREAL_DIALER_LINE_PER_BUSINESS_v1 - what the SDK call sends: the number, the conference when there is one,
+    /// and the line (business) it is on, so the person called sees that business's number (BI, KS, SLF).
+    nonisolated static func connectParams(dialled: String, conferenceFriendly: String?, line: VoiceEngine.Line) -> [String: String] {
+        var params: [String: String] = ["To": dialled, "silo": line.rawValue.uppercased()]
+        if let conferenceFriendly, !conferenceFriendly.isEmpty {
+            params["conferenceFriendly"] = conferenceFriendly
+        }
+        return params
+    }
+
     nonisolated static func hasCallTarget(dialled: String, conferenceFriendly: String?) -> Bool {
         if !dialled.trimmingCharacters(in: .whitespaces).isEmpty { return true }
         return !(conferenceFriendly ?? "").trimmingCharacters(in: .whitespaces).isEmpty
@@ -87,14 +97,12 @@ final class TwilioVoiceManager: NSObject, ObservableObject {
             do {
                 // Capture the selected line when the call is created; a later UI
                 // selection cannot change this call's attribution/token.
-                let token = try await API.getTwilioToken(line: line ?? VoiceEngine.shared.activeLine)
+                let callLine = line ?? VoiceEngine.shared.activeLine
+                let token = try await API.getTwilioToken(line: callLine)
                 // BOREAL_DIALER_v817_CALLS - the call was hung up or failed while
                 // the token was being fetched: do not connect a call nobody wants.
                 guard self.activeUUID == uuid else { return }
-                var connectParams: [String: String] = ["To": dialled]
-                if let conferenceFriendly, !conferenceFriendly.isEmpty {
-                    connectParams["conferenceFriendly"] = conferenceFriendly
-                }
+                let connectParams = Self.connectParams(dialled: dialled, conferenceFriendly: conferenceFriendly, line: callLine)
                 let options = ConnectOptions(accessToken: token) { builder in
                     builder.params = connectParams
                     // BOREAL_DIALER_v817_CALLS - the SDK call must carry the
